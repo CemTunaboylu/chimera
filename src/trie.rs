@@ -1,55 +1,173 @@
 use trie_rs::{
-    inc_search::Answer,
+    inc_search::IncSearch,
     map::{Trie, TrieBuilder},
 };
 
-pub struct TokenTrie<'t, T> {
-    trie: Trie<char, usize>,
-    values: Box<[&'t T]>,
+use std::{
+    fmt::Debug,
+    iter::{Enumerate, Peekable},
+    ops::Range,
+    str::Chars,
+};
+
+#[derive(Debug, PartialEq)]
+pub struct MatchResult<'m, V>(Range<usize>, &'m V, &'m str);
+
+fn match_result_with<'m, V>(
+    program: &'m str,
+    range: Range<usize>,
+    value: &'m V,
+) -> MatchResult<'m, V> {
+    let lexeme = &program[range.clone()];
+    MatchResult(range, value, lexeme)
 }
 
-impl<'t, T> TokenTrie<'t, T> {
-    pub fn matches(&self, k: &'t str) -> Result<&T, usize> {
-        let chars: Vec<char> = k.chars().into_iter().collect();
-        let mut search = self.trie.inc_search();
-        let query_result = search.query_until(chars);
+struct FirstMatchFinder<'m> {
+    program: Peekable<Enumerate<Chars<'m>>>,
+    search: IncSearch<'m, char, usize>,
+    length: usize,
+}
 
-        let answer = match query_result {
-            Err(first_unmatch) => return Result::Err(first_unmatch),
-            Ok(i) => i,
-        };
-
-        let prefix_length = search.prefix_len();
-
-        let result = match answer {
-            Answer::Prefix => Result::Err(prefix_length),
-            Answer::Match => {
-                let index = search.value().unwrap();
-                Result::Ok(
-                    self.values
-                        .get(*index)
-                        .map(|opt_ref_ref| *opt_ref_ref)
-                        .unwrap(),
-                )
-            }
-            Answer::PrefixAndMatch => Result::Err(prefix_length),
-        };
-        return result;
+impl<'m> FirstMatchFinder<'m> {
+    pub fn new(program: &'m str, search: IncSearch<'m, char, usize>) -> Self {
+        Self {
+            program: program.chars().enumerate().peekable(),
+            search: search,
+            length: program.len(),
+        }
     }
 }
 
-pub struct TokenTrieBuilder<'t, T> {
+impl<'m> Iterator for FirstMatchFinder<'m> {
+    type Item = (Range<usize>, &'m usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.search.reset();
+
+        let mut first_ix_of_match: Option<usize> = None;
+        let mut candidate: Option<Self::Item> = None;
+        let mut consume_program_char;
+        let mut query_the_char;
+
+        while let Some((index, ch)) = self.program.peek().map(|t| *t) {
+            (consume_program_char, query_the_char) = (true, true);
+            match (first_ix_of_match, self.search.peek(&ch)) {
+                // haven't seen any matched chars and next search query also does NOT match
+                (None, None) => {
+                    query_the_char = false; // do NOT query the char, since it will be None
+                }
+                // haven't seen any matched chars BUT next search query matches, i.e. a match is starting
+                (None, Some(_)) => {
+                    first_ix_of_match = Some(index);
+                }
+                // have started a match on the trie BUT next search query does NOT match, i.e. match is ending
+                (Some(start_index), None) => {
+                    match self.search.value() {
+                        // if a FULL match, search must have a value
+                        Some(v) => {
+                            candidate =
+                                Some((start_index..start_index + self.search.prefix_len(), v));
+                            break;
+                        }
+                        // have a partial match , thus search needs to be reset to 'forget' the past
+                        None => {
+                            self.search.reset();
+                            // since next search query does NOT match, disable the query
+                            query_the_char = false;
+                        }
+                    };
+                }
+                // started a match on the trie and next search query ALSO matches
+                // thus the peeked program char needs to be consumed, search must be queried to move on the trie
+                (Some(_), Some(_)) => { /* no need to do anything */ }
+            }
+            if query_the_char {
+                self.search.query(&ch);
+            }
+            if consume_program_char {
+                self.program.next();
+            }
+        }
+
+        let no_candidate_from_loop = candidate.is_none();
+        if no_candidate_from_loop {
+            candidate = Some((first_ix_of_match?..self.length, self.search.value()?));
+        }
+
+        candidate
+    }
+}
+
+pub trait TokeningTrie<'t, V: 't> {
+    fn first_match(&'t self, program: &'t str) -> impl Iterator<Item = MatchResult<'t, V>>;
+}
+
+pub struct IndexTrie {
+    trie: Trie<char, usize>,
+}
+
+pub struct IndexTrieIterator<'i>(FirstMatchFinder<'i>, &'i str);
+
+impl<'i> TokeningTrie<'i, usize> for IndexTrie {
+    fn first_match(&'i self, program: &'i str) -> impl Iterator<Item = MatchResult<'i, usize>> {
+        IndexTrieIterator(
+            FirstMatchFinder::new(program, self.trie.inc_search()),
+            program,
+        )
+    }
+}
+
+impl<'i> Iterator for IndexTrieIterator<'i> {
+    type Item = MatchResult<'i, usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (range, value) = self.0.next()?;
+        Some(match_result_with(self.1, range, value))
+    }
+}
+
+pub struct ArenaTrie<'a, V> {
+    trie: Trie<char, usize>,
+    values: Box<[&'a V]>,
+}
+pub struct ArenaTrieIterator<'i, V>(FirstMatchFinder<'i>, &'i str, Box<[&'i V]>);
+
+impl<'i, V: Debug> TokeningTrie<'i, V> for ArenaTrie<'i, V> {
+    fn first_match(&'i self, program: &'i str) -> impl Iterator<Item = MatchResult<'i, V>> {
+        ArenaTrieIterator(
+            FirstMatchFinder::new(program, self.trie.inc_search()),
+            program,
+            self.values.clone(),
+        )
+    }
+}
+
+impl<'i, V: 'i + Debug> Iterator for ArenaTrieIterator<'i, V> {
+    type Item = MatchResult<'i, V>;
+    fn next(&mut self) -> Option<Self::Item> {
+        let (range, value_index) = self.0.next()?;
+        let value = self.2.get(*value_index).map(|ref_ref_val| *ref_ref_val)?;
+        Some(match_result_with(self.1, range, value))
+    }
+}
+
+pub struct ArenaTrieBuilder<'t, T> {
     trie_builder: TrieBuilder<char, usize>,
     values: Vec<&'t T>,
 }
 
-impl<'t, T> TokenTrieBuilder<'t, T> {
-    pub fn new() -> Self {
-        let trie_builder = TrieBuilder::<char, usize>::new();
+impl<'t, T> Default for ArenaTrieBuilder<'t, T> {
+    fn default() -> Self {
         Self {
-            trie_builder: trie_builder,
+            trie_builder: TrieBuilder::<char, usize>::new(),
             values: vec![],
         }
+    }
+}
+
+impl<'t, T> ArenaTrieBuilder<'t, T> {
+    pub fn new() -> Self {
+        Self::default()
     }
     pub fn insert(&mut self, key: &'t str, value: &'t T) {
         let index_to_push = self.values.len();
@@ -57,9 +175,10 @@ impl<'t, T> TokenTrieBuilder<'t, T> {
         let chars: Vec<char> = key.chars().into_iter().collect();
         self.trie_builder.insert(chars, index_to_push);
     }
-    pub fn build(self) -> TokenTrie<'t, T> {
-        TokenTrie {
-            trie: self.trie_builder.build(),
+    pub fn build(self) -> ArenaTrie<'t, T> {
+        let trie = self.trie_builder.build();
+        ArenaTrie {
+            trie: trie,
             values: self.values.into_boxed_slice(),
         }
     }
@@ -67,18 +186,19 @@ impl<'t, T> TokenTrieBuilder<'t, T> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     enum Call<'t> {
         Insert {
             to_insert: &'t [&'t str],
         },
-        Matches {
+        FirstMatch {
             to_insert_first: &'t [&'t str],
-            disable_default_check: bool,
-            // usize because each insertion is tested by default
-            expected_matches_results: &'t [(&'t str, usize)],
+            expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
     }
+
+    fn test_tokening_trie_cast<'test, V: 'test>(_: &impl TokeningTrie<'test, V>) {}
 
     macro_rules! trie_tests {
     ($($name:ident: $value:expr,)*) => {
@@ -86,7 +206,7 @@ mod tests {
         #[test]
         fn $name() {
             let method_to_call = $value;
-            let mut ttb : TokenTrieBuilder<bool>= TokenTrieBuilder::new();
+            let mut ttb : ArenaTrieBuilder<bool>= ArenaTrieBuilder::new();
 
             match method_to_call {
                 super::tests::Call::Insert{to_insert}  => {
@@ -94,6 +214,8 @@ mod tests {
                         ttb.insert(i, &true);
                     }
                     let trie = ttb.build();
+                    // ensure it is cast properly
+                    test_tokening_trie_cast(&trie);
                     for (x, i) in to_insert.into_iter().enumerate() {
                         let chars: Vec<char> = i.chars().into_iter().collect();
                         let r = trie.trie.exact_match(chars);
@@ -101,24 +223,20 @@ mod tests {
                         assert_eq!(x, *r.unwrap());
                     }
                 },
-                super::tests::Call::Matches{to_insert_first,disable_default_check, expected_matches_results}  => {
+                super::tests::Call::FirstMatch{to_insert_first,expected_match_results}  => {
                     for i in to_insert_first {
                         ttb.insert(i, &true);
                     }
                     let trie = ttb.build();
-                    if !disable_default_check {
-                        for i in to_insert_first {
-                            let r = trie.matches(i);
-                            assert_eq!(&true, r.unwrap());
-                        }
-                    }
-                    for (key, expected) in expected_matches_results.into_iter() {
-                        let r = trie.matches(key);
-                        assert_eq!(true, r.is_err());
-                        if let Result::Err(v) = r {
-                            assert_eq!(*expected, v);
-                        } else {
-                            panic!();
+                    test_tokening_trie_cast(&trie);
+                    let mut matches = trie.first_match(expected_match_results.0);
+                    for expected in expected_match_results.1.into_iter() {
+                        let item = matches.next();
+                        assert_eq!(*expected, item);
+                        if expected.is_some() {
+                            let MatchResult(_, _, lexeme) = item.unwrap();
+                            let MatchResult(_, _, key) = expected.as_ref().unwrap();
+                            assert_eq!(*key, lexeme)
                         }
                     }
                 },
@@ -136,13 +254,59 @@ mod tests {
         insert_averylongvariablename: Call::Insert{to_insert: &["averylongvariablename"]},
         insert_i_i16_i32: Call::Insert{to_insert: &["i", "i16", "i32"]},
         insert_space: Call::Insert{to_insert: &[" "]},
-        matches_a_1_b_0: Call::Matches {
-            to_insert_first: &["ab", "aa"],
-            disable_default_check: false,
-            expected_matches_results: &[("a", 1), ("b", 0)] },
-        matches_aa_2_aaa_3: Call::Matches {
-            to_insert_first: &["aaab", "aaa", "aa"],
-            disable_default_check: true,
-            expected_matches_results: &[("aa", 2), ("aaa", 3)] },
+        first_match_equals_in_between: Call::FirstMatch {
+            to_insert_first: &["="],
+            expected_match_results: ("let var = 5;", &[Some(MatchResult(8..9, &true, "="))]) },
+
+        first_match_plus_in_between: Call::FirstMatch {
+            to_insert_first: &["+"],
+            expected_match_results:
+            ("chi+=mera;", &[Some(MatchResult(3..4, &true, "+"))]) },
+
+        first_match_impl_at_0: Call::FirstMatch {
+            to_insert_first: &["impl"],
+            expected_match_results: ("impl Chimeratic", &[Some(MatchResult(0..4, &true, "impl"))]) },
+
+        first_match_at_the_end: Call::FirstMatch {
+            to_insert_first: &[" ", "+", ";"],
+            expected_match_results:
+                (" chi+=mera;",
+                &[
+                    Some(MatchResult(0..1, &true, " ")),
+                    Some(MatchResult(4..5, &true, "+")),
+                    Some(MatchResult(10..11, &true, ";")),
+                ])
+                },
+
+        first_match_whitespaces: Call::FirstMatch {
+            to_insert_first: &[" ", "  "],
+            expected_match_results:
+                ("   ",
+                &[
+                    Some(MatchResult(0..2, &true, "  ")),
+                    Some(MatchResult(2..3, &true, " ")),
+                ])
+                },
+
+        first_match_bbbaa: Call::FirstMatch {
+            to_insert_first: &["a", "bb", "ba"],
+            expected_match_results:
+                ("bbbaa",
+                &[
+                    Some(MatchResult(0..2, &true, "bb")),
+                    Some(MatchResult(2..4, &true, "ba")),
+                    Some(MatchResult(4..5, &true, "a")),
+                ])
+                },
+        first_match_bbbaa_insertion_order_does_not_matter: Call::FirstMatch {
+            to_insert_first: &["ba", "bb", "a"],
+            expected_match_results:
+                ("bbbaa",
+                &[
+                    Some(MatchResult(0..2, &true, "bb")),
+                    Some(MatchResult(2..4, &true, "ba")),
+                    Some(MatchResult(4..5, &true, "a")),
+                ])
+                },
     }
 }
