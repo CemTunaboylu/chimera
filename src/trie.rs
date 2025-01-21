@@ -22,18 +22,35 @@ fn match_result_with<'m, V>(
     MatchResult(range, value, lexeme)
 }
 
+type Expectation = fn(ch: char) -> bool;
 struct FirstMatchFinder<'m> {
     program: Peekable<Enumerate<Chars<'m>>>,
     search: IncSearch<'m, char, usize>,
     length: usize,
+    expects: Option<Expectation>,
 }
 
 impl<'m> FirstMatchFinder<'m> {
-    pub fn new(program: &'m str, search: IncSearch<'m, char, usize>) -> Self {
+    // I might be bored a little
+    pub fn vanilla(program: &'m str, search: IncSearch<'m, char, usize>) -> Self {
         Self {
             program: program.chars().enumerate().peekable(),
             search: search,
             length: program.len(),
+            expects: None,
+        }
+    }
+
+    pub fn expecting(
+        program: &'m str,
+        search: IncSearch<'m, char, usize>,
+        expects: Expectation,
+    ) -> Self {
+        Self {
+            program: program.chars().enumerate().peekable(),
+            search: search,
+            length: program.len(),
+            expects: Some(expects),
         }
     }
 }
@@ -51,35 +68,38 @@ impl<'m> Iterator for FirstMatchFinder<'m> {
 
         while let Some((index, ch)) = self.program.peek().map(|t| *t) {
             (consume_program_char, query_the_char) = (true, true);
-            match (first_ix_of_match, self.search.peek(&ch)) {
+            let ch_is_matched = self.search.peek(&ch).is_some();
+
+            match (first_ix_of_match, ch_is_matched) {
                 // haven't seen any matched chars and next search query also does NOT match
-                (None, None) => {
+                (None, false) => {
                     query_the_char = false; // do NOT query the char, since it will be None
                 }
                 // haven't seen any matched chars BUT next search query matches, i.e. a match is starting
-                (None, Some(_)) => {
+                (None, true) => {
                     first_ix_of_match = Some(index);
                 }
                 // have started a match on the trie BUT next search query does NOT match, i.e. match is ending
-                (Some(start_index), None) => {
-                    match self.search.value() {
-                        // if a FULL match, search must have a value
-                        Some(v) => {
-                            candidate =
-                                Some((start_index..start_index + self.search.prefix_len(), v));
-                            break;
-                        }
-                        // have a partial match , thus search needs to be reset to 'forget' the past
-                        None => {
-                            self.search.reset();
-                            // since next search query does NOT match, disable the query
-                            query_the_char = false;
-                        }
-                    };
+                (Some(start_index), false) => {
+                    let value_opt = self.search.value();
+                    // if a FULL match, search must have a value AND if there is any expectation(s), all must be met
+                    if value_opt.is_some() && self.expects.is_none_or(|f| f(ch)) {
+                        candidate = Some((
+                            start_index..start_index + self.search.prefix_len(),
+                            value_opt.unwrap(),
+                        ));
+                        break;
+                    }
+                    // have a partial match, OR if any, min. one expectation failed
+                    // thus search needs to be reset to 'forget' the past
+                    self.search.reset();
+                    first_ix_of_match = None;
+                    // since next search query does NOT match, disable the query
+                    query_the_char = false;
                 }
                 // started a match on the trie and next search query ALSO matches
                 // thus the peeked program char needs to be consumed, search must be queried to move on the trie
-                (Some(_), Some(_)) => { /* no need to do anything */ }
+                (Some(_), true) => { /* no need to do anything */ }
             }
             if query_the_char {
                 self.search.query(&ch);
@@ -91,7 +111,13 @@ impl<'m> Iterator for FirstMatchFinder<'m> {
 
         let no_candidate_from_loop = candidate.is_none();
         if no_candidate_from_loop {
-            candidate = Some((first_ix_of_match?..self.length, self.search.value()?));
+            let value = self.search.value()?;
+            // At this point, we started a match BUT could NOT finish it (search.peek() didn't hit None),
+            // at best, it's a full match BUT expectation cannot be met since there is NO preceding character
+            // TODO: this can be proplematic after, thus we need to be able to control this behavior
+            if self.expects.is_none() {
+                candidate = Some((first_ix_of_match?..self.length, value));
+            }
         }
 
         candidate
@@ -100,6 +126,11 @@ impl<'m> Iterator for FirstMatchFinder<'m> {
 
 pub trait TokeningTrie<'t, V: 't> {
     fn first_match(&'t self, program: &'t str) -> impl Iterator<Item = MatchResult<'t, V>>;
+    fn first_match_if(
+        &'t self,
+        program: &'t str,
+        expects: Expectation,
+    ) -> impl Iterator<Item = MatchResult<'t, V>>;
 }
 
 pub struct IndexTrie {
@@ -111,7 +142,18 @@ pub struct IndexTrieIterator<'i>(FirstMatchFinder<'i>, &'i str);
 impl<'i> TokeningTrie<'i, usize> for IndexTrie {
     fn first_match(&'i self, program: &'i str) -> impl Iterator<Item = MatchResult<'i, usize>> {
         IndexTrieIterator(
-            FirstMatchFinder::new(program, self.trie.inc_search()),
+            FirstMatchFinder::vanilla(program, self.trie.inc_search()),
+            program,
+        )
+    }
+
+    fn first_match_if(
+        &'i self,
+        program: &'i str,
+        expects: Expectation,
+    ) -> impl Iterator<Item = MatchResult<'i, usize>> {
+        IndexTrieIterator(
+            FirstMatchFinder::expecting(program, self.trie.inc_search(), expects),
             program,
         )
     }
@@ -135,7 +177,19 @@ pub struct ArenaTrieIterator<'i, V>(FirstMatchFinder<'i>, &'i str, Box<[&'i V]>)
 impl<'i, V: Debug> TokeningTrie<'i, V> for ArenaTrie<'i, V> {
     fn first_match(&'i self, program: &'i str) -> impl Iterator<Item = MatchResult<'i, V>> {
         ArenaTrieIterator(
-            FirstMatchFinder::new(program, self.trie.inc_search()),
+            FirstMatchFinder::vanilla(program, self.trie.inc_search()),
+            program,
+            self.values.clone(),
+        )
+    }
+
+    fn first_match_if(
+        &'i self,
+        program: &'i str,
+        expects: Expectation,
+    ) -> impl Iterator<Item = MatchResult<'i, V>> {
+        ArenaTrieIterator(
+            FirstMatchFinder::expecting(program, self.trie.inc_search(), expects),
             program,
             self.values.clone(),
         )
@@ -196,6 +250,26 @@ mod tests {
             to_insert_first: &'t [&'t str],
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
+        FirstMatchIf {
+            to_insert_first: &'t [&'t str],
+            expects: Expectation,
+            expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
+        },
+    }
+
+    fn has_space_at_the_end(ch: char) -> bool {
+        ch == ' '
+    }
+
+    fn first_match_if_space_follows<'t>(
+        to_insert_first: &'t [&'t str],
+        expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
+    ) -> Call<'t> {
+        Call::FirstMatchIf {
+            to_insert_first: to_insert_first,
+            expects: has_space_at_the_end,
+            expected_match_results: expected_match_results,
+        }
     }
 
     fn test_tokening_trie_cast<'test, V: 'test>(_: &impl TokeningTrie<'test, V>) {}
@@ -240,6 +314,23 @@ mod tests {
                         }
                     }
                 },
+                super::tests::Call::FirstMatchIf{to_insert_first, expects, expected_match_results}  => {
+                    for i in to_insert_first {
+                        ttb.insert(i, &true);
+                    }
+                    let trie = ttb.build();
+                    test_tokening_trie_cast(&trie);
+                    let mut matches = trie.first_match_if(expected_match_results.0, expects);
+                    for expected in expected_match_results.1.into_iter() {
+                        let item = matches.next();
+                        assert_eq!(*expected, item);
+                        if expected.is_some() {
+                            let MatchResult(_, _, lexeme) = item.unwrap();
+                            let MatchResult(_, _, key) = expected.as_ref().unwrap();
+                            assert_eq!(*key, lexeme)
+                        }
+                    }
+                },
             };
         }
     )*
@@ -257,11 +348,6 @@ mod tests {
         first_match_equals_in_between: Call::FirstMatch {
             to_insert_first: &["="],
             expected_match_results: ("let var = 5;", &[Some(MatchResult(8..9, &true, "="))]) },
-
-        first_match_plus_in_between: Call::FirstMatch {
-            to_insert_first: &["+"],
-            expected_match_results:
-            ("chi+=mera;", &[Some(MatchResult(3..4, &true, "+"))]) },
 
         first_match_impl_at_0: Call::FirstMatch {
             to_insert_first: &["impl"],
@@ -308,5 +394,37 @@ mod tests {
                     Some(MatchResult(4..5, &true, "a")),
                 ])
                 },
+
+        first_match_if_equals_in_between_with_space: first_match_if_space_follows(
+            &["="],
+            ("let var = 5;", &[Some(MatchResult(8..9, &true, "="))])
+        ),
+
+        first_match_if_impl_none_since_no_space: first_match_if_space_follows(
+            &["impl"],
+            ("impl", &[None])),
+        first_match_if_impl: first_match_if_space_follows(
+            &["impl"],
+            ("impl Chimeratic", &[Some(MatchResult(0..4, &true, "impl"))])),
+
+        first_match_if_at_the_end_spaced:
+            first_match_if_space_follows(
+                &[" ", "+", ";"],
+                (" chi+=mera; ",
+                &[
+                    Some(MatchResult(10..11, &true, ";")),
+                ])
+            ),
+
+        first_match_if_whitespaces:
+            first_match_if_space_follows(
+                &[" ", "  "],
+                ("   ",
+                &[
+                    Some(MatchResult(0..2, &true, "  ")),
+                    None,
+                ])
+            ),
+
     }
 }
