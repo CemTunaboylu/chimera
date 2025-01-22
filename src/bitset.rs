@@ -1,32 +1,57 @@
+use std::ops::{BitAnd, BitAndAssign, BitOrAssign, Not};
+
 use crate::set::{Indexable, Set};
 
-pub(crate) struct BitSet {
-    set: Vec<u64>,
+pub(crate) struct BitSet<I: Copy + Default> {
+    set: Vec<I>,
 }
 
-impl BitSet {
-    #[inline]
-    pub fn mod_bits() -> usize {
-        64
-    }
+#[inline]
+pub fn mod_bits<E>() -> usize {
+    // now that this may not yield the correct number of bits all the time
+    // but for now that's fine
+    size_of::<E>() * 8
+}
+
+impl<
+        I: BitAnd<Output = I>
+            + BitAndAssign
+            + BitOrAssign
+            + Copy
+            + Default
+            + From<u64>
+            + Not<Output = I>
+            + PartialOrd,
+    > BitSet<I>
+{
     pub fn new(size: usize) -> Self {
-        let num_rows = size / Self::mod_bits() as usize + 1;
+        let num_rows = size / mod_bits::<I>() as usize + 1;
         Self {
-            set: vec![0; num_rows],
+            set: vec![I::default(); num_rows],
         }
     }
 
     #[inline]
-    pub fn get_row_and_bit(item: impl Indexable) -> (u64, usize) {
+    pub fn get_row_and_bit(item: impl Indexable) -> (I, usize) {
         let idx = item.index();
-        let bits = Self::mod_bits();
-        let bit: u64 = 1 << (idx % bits) as u64;
+        let bits = mod_bits::<I>();
+        let bit = 1 << (idx % bits);
         let row = idx / bits;
-        (bit, row)
+        (bit.into(), row)
     }
 }
 
-impl Set for BitSet {
+impl<
+        I: BitAnd<Output = I>
+            + BitAndAssign
+            + BitOrAssign
+            + Copy
+            + Default
+            + From<u64>
+            + Not<Output = I>
+            + PartialOrd,
+    > Set for BitSet<I>
+{
     fn add(&mut self, item: impl Indexable) {
         let (bit, row) = Self::get_row_and_bit(item);
         self.set[row] |= bit;
@@ -34,12 +59,13 @@ impl Set for BitSet {
 
     fn del(&mut self, item: impl Indexable) {
         let (bit, row) = Self::get_row_and_bit(item);
-        self.set[row] &= &!bit;
+        self.set[row] &= !bit;
     }
 
-    fn has(self, item: impl Indexable) -> bool {
+    fn has(&self, item: impl Indexable) -> bool {
         let (bit, row) = Self::get_row_and_bit(item);
-        self.set[row] & bit > 0
+        let res = self.set[row] & bit;
+        res > I::default()
     }
 }
 
@@ -59,7 +85,7 @@ mod tests {
         #[test]
         fn $name() {
             let (size, input, call_del) = $value;
-            let mut set = BitSet::new(size);
+            let mut set = BitSet::<u64>::new(size);
                 set.add(input);
             if call_del{
                 set.del(input);
