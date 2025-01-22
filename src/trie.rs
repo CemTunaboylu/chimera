@@ -1,5 +1,5 @@
 use trie_rs::{
-    inc_search::IncSearch,
+    inc_search::{Answer, IncSearch},
     map::{Trie, TrieBuilder},
 };
 
@@ -10,22 +10,35 @@ use std::{
     str::Chars,
 };
 
-type PostMatchCondition = fn(ch: char) -> bool;
+type Validator = fn(ch: char) -> bool;
 
-trait SelfInjecting<'i, V> {
-    fn inject_into<'a>(self, node: Node<'a, V>) -> Node<'a, V>;
+enum ValidatorType {
+    PostMatchCondition(Validator),
+    MatchExtender(Validator),
 }
 
-impl<'p, V> SelfInjecting<'p, V> for PostMatchCondition {
-    fn inject_into<'a>(self, mut node: Node<'a, V>) -> Node<'a, V> {
-        node.post_match_condition = Some(self);
+trait SelfInjecting<'i, V> {
+    fn inject_into(self, node: Node<'i, V>) -> Node<'i, V>;
+}
+
+impl<'p, V> SelfInjecting<'p, V> for ValidatorType {
+    fn inject_into(self, mut node: Node<'p, V>) -> Node<'p, V> {
+        match self {
+            ValidatorType::PostMatchCondition(pmc) => {
+                node.post_match_condition = Some(pmc);
+            }
+            ValidatorType::MatchExtender(me) => {
+                node.match_extender = Some(me);
+            }
+        }
         node
     }
 }
 
 pub struct Node<'v, V> {
     value: &'v V,
-    post_match_condition: Option<PostMatchCondition>,
+    post_match_condition: Option<Validator>,
+    match_extender: Option<Validator>,
 }
 
 impl<'v, V> Node<'v, V> {
@@ -33,13 +46,18 @@ impl<'v, V> Node<'v, V> {
         Self {
             value: value,
             post_match_condition: None,
+            match_extender: None,
         }
     }
-    pub fn post_match_validation(&self, ch: char) -> bool {
-        match self.post_match_condition {
+
+    fn validate(&self, ch: char, validator: Option<Validator>) -> bool {
+        match validator {
             Some(f) => f(ch),
             None => true,
         }
+    }
+    pub fn post_match_validation(&self, ch: char) -> bool {
+        self.validate(ch, self.post_match_condition)
     }
 }
 
@@ -75,10 +93,81 @@ impl<'m, V> FirstMatchFinder<'m, V> {
             length: program.len(),
         }
     }
+
+    fn peek(&mut self) -> Option<(usize, char)> {
+        self.program.peek().map(|ix_and_ch_tuple| *ix_and_ch_tuple)
+    }
+
+    fn consume(&mut self) -> Option<(usize, char)> {
+        self.program.next()
+    }
+
+    fn does_trie_node_have_branch_to(&mut self, ch: char) -> bool {
+        self.search.peek(&ch).is_some()
+    }
+
+    fn proceed_on_trie_towards(&mut self, ch: char) -> Option<Answer> {
+        self.search.query(&ch)
+    }
+
+    fn get_current_node(&self) -> Option<&'m Node<'m, V>> {
+        // if a FULL match, search must have a value
+        let node_ix = self.search.value()?;
+        self.nodes.get(*node_ix)
+    }
+
+    fn move_back_to_root_of_the_trie(&mut self) {
+        self.search.reset();
+    }
+
+    fn process_index_for_node(
+        &mut self,
+        mut unmatched_ix: usize,
+        mut unmatched_ch: char,
+    ) -> Option<(usize, &'m V)> {
+        let node = self.get_current_node()?;
+
+        let mut consumed_all = false;
+
+        if let Some(match_extender) = node.match_extender {
+            loop {
+                (unmatched_ix, unmatched_ch) = match self.peek() {
+                    Some(ixch) => ixch,
+                    None => {
+                        consumed_all = true;
+                        (self.length, ' ')
+                    }
+                };
+                if consumed_all {
+                    break;
+                }
+                if match_extender(unmatched_ch) {
+                    self.consume();
+                } else {
+                    break;
+                }
+            }
+        }
+
+        // At this point, we started a match BUT could NOT finish it either because:
+        //  i. search.peek() didn't hit None, or ii. we extended the match all the way to the end
+        // it's a full match (we have a value) BUT can't validate post-match since
+        // NO more characters left preceeding the match
+        let result = (unmatched_ix, node.value);
+        if consumed_all {
+            Some(result)
+        } else if node.post_match_validation(unmatched_ch) {
+            Some(result)
+        } else {
+            None
+        }
+    }
 }
 
+type FirstMatch<'m, V> = (Range<usize>, &'m V);
+
 impl<'m, V> Iterator for FirstMatchFinder<'m, V> {
-    type Item = (Range<usize>, &'m V);
+    type Item = FirstMatch<'m, V>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.search.reset();
@@ -88,11 +177,10 @@ impl<'m, V> Iterator for FirstMatchFinder<'m, V> {
         let mut consume_program_char;
         let mut query_the_char;
 
-        while let Some((index, ch)) = self.program.peek().map(|t| *t) {
+        while let Some((index, ch)) = self.peek() {
             (consume_program_char, query_the_char) = (true, true);
-            let ch_is_matched = self.search.peek(&ch).is_some();
 
-            match (first_ix_of_match, ch_is_matched) {
+            match (first_ix_of_match, self.does_trie_node_have_branch_to(ch)) {
                 // haven't seen any matched chars and next search query also does NOT match
                 (None, false) => {
                     query_the_char = false; // do NOT query the char, since it will be None
@@ -103,26 +191,17 @@ impl<'m, V> Iterator for FirstMatchFinder<'m, V> {
                 }
                 // have started a match on the trie BUT next search query does NOT match, i.e. match is ending
                 (Some(start_index), false) => {
-                    let node_opt = self.search.value();
-                    // if a FULL match, search must have a value AND if there is any expectation(s), all must be met
-                    if node_opt.is_some_and(|node_index| {
-                        self.nodes.get(*node_index).is_some_and(|node| {
-                            if node.post_match_validation(ch) {
-                                candidate = Some((
-                                    start_index..start_index + self.search.prefix_len(),
-                                    node.value,
-                                ));
-                                return true;
-                            }
-                            false
-                        })
-                    }) {
-                        break;
+                    match self.process_index_for_node(index, ch) {
+                        // if there are is post match validation or/and match extension, all must performed and valid
+                        Some((end_index, value)) => {
+                            candidate = Some((start_index..end_index, value));
+                            break;
+                        }
+                        None => {}
                     }
-
                     // have a partial match, OR if any, min. one expectation failed
                     // thus search needs to be reset to 'forget' the past
-                    self.search.reset();
+                    self.move_back_to_root_of_the_trie();
                     first_ix_of_match = None;
                     // since next search query does NOT match, disable the query
                     query_the_char = false;
@@ -132,20 +211,20 @@ impl<'m, V> Iterator for FirstMatchFinder<'m, V> {
                 (Some(_), true) => { /* no need to do anything */ }
             }
             if query_the_char {
-                self.search.query(&ch);
+                self.proceed_on_trie_towards(ch);
             }
             if consume_program_char {
-                self.program.next();
+                self.consume();
             }
         }
 
         let no_candidate_from_loop = candidate.is_none();
         if no_candidate_from_loop {
-            let node_index = self.search.value()?;
-            let node = self.nodes.get(*node_index)?;
-            // At this point, we started a match BUT could NOT finish it (search.peek() didn't hit None),
-            // at best, it's a full match BUT expectation cannot be met since there is NO preceding character
-            // TODO: this can be proplematic after, thus we need to be able to control this behavior
+            let node = self.get_current_node()?;
+            // At this point, we started a match BUT could NOT finish it either because:
+            //  i. search.peek() didn't hit None, or ii. we extended the match all the way to the end
+            // it's a full match (we have a value) BUT can't validate post-match since
+            // NO more characters left preceeding the match
             if node.post_match_condition.is_none() {
                 candidate = Some((first_ix_of_match?..self.length, node.value));
             }
@@ -228,8 +307,12 @@ mod tests {
             to_insert_first: &'t [&'t str],
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
-        FirstMatchIf {
-            to_insert_first: Vec<(&'t str, PostMatchCondition)>,
+        FirstMatchPostMatchConditioned {
+            to_insert_first: Vec<(&'t str, ValidatorType)>,
+            expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
+        },
+        FirstMatchExtendedMatches {
+            to_insert_first: Vec<(&'t str, ValidatorType)>,
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
     }
@@ -242,10 +325,27 @@ mod tests {
         to_insert_first: &'t [&'t str],
         expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
     ) -> Call<'t> {
-        Call::FirstMatchIf {
+        Call::FirstMatchPostMatchConditioned {
             to_insert_first: to_insert_first
                 .iter()
-                .map(|s| (*s, has_space_at_the_end as PostMatchCondition))
+                .map(|s| (*s, ValidatorType::PostMatchCondition(has_space_at_the_end)))
+                .collect(),
+            expected_match_results,
+        }
+    }
+
+    fn extend_to_white_space(ch: char) -> bool {
+        ch.is_whitespace()
+    }
+
+    fn first_match_if_extend_to_following_whitespaces<'t>(
+        to_insert_first: &'t [&'t str],
+        expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
+    ) -> Call<'t> {
+        Call::FirstMatchExtendedMatches {
+            to_insert_first: to_insert_first
+                .iter()
+                .map(|s| (*s, ValidatorType::MatchExtender(extend_to_white_space)))
                 .collect(),
             expected_match_results,
         }
@@ -288,7 +388,24 @@ mod tests {
                         }
                     }
                 },
-                super::tests::Call::FirstMatchIf{to_insert_first, expected_match_results}  => {
+                super::tests::Call::FirstMatchPostMatchConditioned{to_insert_first, expected_match_results}  => {
+                    for i in to_insert_first {
+                        ttb.insert_with(i.0, &true, i.1);
+                    }
+                    let trie = ttb.build();
+                    let mut matches = trie.first_match(expected_match_results.0);
+                    for expected in expected_match_results.1.into_iter() {
+                        let item = matches.next();
+                        assert_eq!(*expected, item);
+                        if expected.is_some() {
+                            let MatchResult(_, _, lexeme) = item.unwrap();
+                            let MatchResult(_, _, key) = expected.as_ref().unwrap();
+                            assert_eq!(*key, lexeme)
+                        }
+                    }
+                },
+
+                super::tests::Call::FirstMatchExtendedMatches{to_insert_first, expected_match_results}  => {
                     for i in to_insert_first {
                         ttb.insert_with(i.0, &true, i.1);
                     }
@@ -396,6 +513,22 @@ mod tests {
                 &[
                     Some(MatchResult(0..2, &true, "  ")),
                     None,
+                ])
+            ),
+
+        first_match_if_space_is_not_extended:
+        first_match_if_extend_to_following_whitespaces(
+            &[" "],
+            ("let var", &[Some(MatchResult(3..4, &true, " "))])
+        ),
+
+        first_match_if_spaces_are_extended:
+            first_match_if_extend_to_following_whitespaces(
+                &[" "],
+                ("   three_each   ",
+                &[
+                    Some(MatchResult(0..3, &true, "   ")),
+                    Some(MatchResult(13..16, &true, "   ")),
                 ])
             ),
 
