@@ -6,10 +6,42 @@ use trie_rs::{
 use std::{
     fmt::Debug,
     iter::{Enumerate, Peekable},
-    marker::PhantomData,
     ops::Range,
     str::Chars,
 };
+
+type PostMatchCondition = fn(ch: char) -> bool;
+
+trait SelfInjecting<'i, V> {
+    fn inject_into<'a>(self, node: Node<'a, V>) -> Node<'a, V>;
+}
+
+impl<'p, V> SelfInjecting<'p, V> for PostMatchCondition {
+    fn inject_into<'a>(self, mut node: Node<'a, V>) -> Node<'a, V> {
+        node.post_match_condition = Some(self);
+        node
+    }
+}
+
+pub struct Node<'v, V> {
+    value: &'v V,
+    post_match_condition: Option<PostMatchCondition>,
+}
+
+impl<'v, V> Node<'v, V> {
+    pub fn new(value: &'v V) -> Self {
+        Self {
+            value: value,
+            post_match_condition: None,
+        }
+    }
+    pub fn post_match_validation(&self, ch: char) -> bool {
+        match self.post_match_condition {
+            Some(f) => f(ch),
+            None => true,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct MatchResult<'m, V>(Range<usize>, &'m V, &'m str);
@@ -23,41 +55,30 @@ fn match_result_with<'m, V>(
     MatchResult(range, value, lexeme)
 }
 
-type Expectation = fn(ch: char) -> bool;
-struct FirstMatchFinder<'m> {
+struct FirstMatchFinder<'m, V> {
     program: Peekable<Enumerate<Chars<'m>>>,
     search: IncSearch<'m, char, usize>,
+    nodes: &'m [Node<'m, V>],
     length: usize,
-    expects: Option<Expectation>,
 }
 
-impl<'m> FirstMatchFinder<'m> {
-    // I might be bored a little
-    pub fn vanilla(program: &'m str, search: IncSearch<'m, char, usize>) -> Self {
-        Self {
-            program: program.chars().enumerate().peekable(),
-            search: search,
-            length: program.len(),
-            expects: None,
-        }
-    }
-
-    pub fn expecting(
+impl<'m, V> FirstMatchFinder<'m, V> {
+    pub fn new(
         program: &'m str,
         search: IncSearch<'m, char, usize>,
-        expects: Expectation,
+        nodes: &'m [Node<'m, V>],
     ) -> Self {
         Self {
             program: program.chars().enumerate().peekable(),
             search: search,
+            nodes: nodes,
             length: program.len(),
-            expects: Some(expects),
         }
     }
 }
 
-impl<'m> Iterator for FirstMatchFinder<'m> {
-    type Item = (Range<usize>, &'m usize);
+impl<'m, V> Iterator for FirstMatchFinder<'m, V> {
+    type Item = (Range<usize>, &'m V);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.search.reset();
@@ -82,15 +103,23 @@ impl<'m> Iterator for FirstMatchFinder<'m> {
                 }
                 // have started a match on the trie BUT next search query does NOT match, i.e. match is ending
                 (Some(start_index), false) => {
-                    let value_opt = self.search.value();
+                    let node_opt = self.search.value();
                     // if a FULL match, search must have a value AND if there is any expectation(s), all must be met
-                    if value_opt.is_some() && self.expects.is_none_or(|f| f(ch)) {
-                        candidate = Some((
-                            start_index..start_index + self.search.prefix_len(),
-                            value_opt.unwrap(),
-                        ));
+                    if node_opt.is_some_and(|node_index| {
+                        self.nodes.get(*node_index).is_some_and(|node| {
+                            if node.post_match_validation(ch) {
+                                candidate = Some((
+                                    start_index..start_index + self.search.prefix_len(),
+                                    node.value,
+                                ));
+                                return true;
+                            }
+                            false
+                        })
+                    }) {
                         break;
                     }
+
                     // have a partial match, OR if any, min. one expectation failed
                     // thus search needs to be reset to 'forget' the past
                     self.search.reset();
@@ -112,12 +141,13 @@ impl<'m> Iterator for FirstMatchFinder<'m> {
 
         let no_candidate_from_loop = candidate.is_none();
         if no_candidate_from_loop {
-            let value = self.search.value()?;
+            let node_index = self.search.value()?;
+            let node = self.nodes.get(*node_index)?;
             // At this point, we started a match BUT could NOT finish it (search.peek() didn't hit None),
             // at best, it's a full match BUT expectation cannot be met since there is NO preceding character
             // TODO: this can be proplematic after, thus we need to be able to control this behavior
-            if self.expects.is_none() {
-                candidate = Some((first_ix_of_match?..self.length, value));
+            if node.post_match_condition.is_none() {
+                candidate = Some((first_ix_of_match?..self.length, node.value));
             }
         }
 
@@ -125,143 +155,63 @@ impl<'m> Iterator for FirstMatchFinder<'m> {
     }
 }
 
-pub trait TokeningTrie<'t, V: 't> {
-    fn first_match(&'t self, program: &'t str) -> impl Iterator<Item = MatchResult<'t, V>>;
-    fn first_match_if(
-        &'t self,
-        program: &'t str,
-        expects: Expectation,
-    ) -> impl Iterator<Item = MatchResult<'t, V>>;
-}
-
-pub struct IndexTrie {
+pub struct TokenTrie<'a, V> {
     trie: Trie<char, usize>,
+    nodes: Box<[Node<'a, V>]>,
 }
+pub struct TokenTrieIterator<'i, V>(FirstMatchFinder<'i, V>, &'i str);
 
-pub struct IndexTrieIterator<'i>(FirstMatchFinder<'i>, &'i str);
-
-impl<'i> TokeningTrie<'i, usize> for IndexTrie {
-    fn first_match(&'i self, program: &'i str) -> impl Iterator<Item = MatchResult<'i, usize>> {
-        IndexTrieIterator(
-            FirstMatchFinder::vanilla(program, self.trie.inc_search()),
-            program,
-        )
-    }
-
-    fn first_match_if(
-        &'i self,
-        program: &'i str,
-        expects: Expectation,
-    ) -> impl Iterator<Item = MatchResult<'i, usize>> {
-        IndexTrieIterator(
-            FirstMatchFinder::expecting(program, self.trie.inc_search(), expects),
+impl<'i, V: Debug> TokenTrie<'i, V> {
+    fn first_match(&'i self, program: &'i str) -> impl Iterator<Item = MatchResult<'i, V>> {
+        TokenTrieIterator(
+            FirstMatchFinder::new(program, self.trie.inc_search(), self.nodes.as_ref()),
             program,
         )
     }
 }
 
-impl<'i> Iterator for IndexTrieIterator<'i> {
-    type Item = MatchResult<'i, usize>;
-
+impl<'i, V: 'i + Debug> Iterator for TokenTrieIterator<'i, V> {
+    type Item = MatchResult<'i, V>;
     fn next(&mut self) -> Option<Self::Item> {
         let (range, value) = self.0.next()?;
         Some(match_result_with(self.1, range, value))
     }
 }
 
-pub struct ArenaTrie<'a, V> {
-    trie: Trie<char, usize>,
-    values: Box<[&'a V]>,
-}
-pub struct ArenaTrieIterator<'i, V>(FirstMatchFinder<'i>, &'i str, Box<[&'i V]>);
-
-impl<'i, V: Debug> TokeningTrie<'i, V> for ArenaTrie<'i, V> {
-    fn first_match(&'i self, program: &'i str) -> impl Iterator<Item = MatchResult<'i, V>> {
-        ArenaTrieIterator(
-            FirstMatchFinder::vanilla(program, self.trie.inc_search()),
-            program,
-            self.values.clone(),
-        )
-    }
-
-    fn first_match_if(
-        &'i self,
-        program: &'i str,
-        expects: Expectation,
-    ) -> impl Iterator<Item = MatchResult<'i, V>> {
-        ArenaTrieIterator(
-            FirstMatchFinder::expecting(program, self.trie.inc_search(), expects),
-            program,
-            self.values.clone(),
-        )
-    }
-}
-
-impl<'i, V: 'i + Debug> Iterator for ArenaTrieIterator<'i, V> {
-    type Item = MatchResult<'i, V>;
-    fn next(&mut self) -> Option<Self::Item> {
-        let (range, value_index) = self.0.next()?;
-        let value = self.2.get(*value_index).map(|ref_ref_val| *ref_ref_val)?;
-        Some(match_result_with(self.1, range, value))
-    }
-}
-
-enum Index {}
-enum Arena {}
-
-trait State {}
-
-impl State for Index {}
-impl State for Arena {}
-
-pub struct TokeningTrieBuilder<'t, T, S: State> {
+pub struct TokeningTrieBuilder<'t, T> {
     trie_builder: TrieBuilder<char, usize>,
-    values: Option<Vec<&'t T>>,
-    __marker: PhantomData<S>,
+    nodes: Vec<Node<'t, T>>,
 }
-impl<'t, T, S: State> TokeningTrieBuilder<'t, T, S> {
-    pub fn indexed() -> Self {
+
+impl<'t, T> TokeningTrieBuilder<'t, T> {
+    pub fn new() -> Self {
         Self {
             trie_builder: TrieBuilder::<char, usize>::new(),
-            values: None,
-            __marker: PhantomData,
+            nodes: vec![],
         }
     }
-    pub fn arena() -> Self {
-        Self {
-            trie_builder: TrieBuilder::<char, usize>::new(),
-            values: Some(vec![]),
-            __marker: PhantomData,
-        }
-    }
-}
-
-impl<'t> TokeningTrieBuilder<'t, usize, Index> {
-    pub fn insert(&mut self, key: &'t str, value: &'t usize) {
-        let chars: Vec<char> = key.chars().into_iter().collect();
-        self.trie_builder.insert(chars, *value);
-    }
-
-    pub fn build(self) -> IndexTrie {
-        let trie = self.trie_builder.build();
-        IndexTrie { trie: trie }
-    }
-}
-
-impl<'t, T> TokeningTrieBuilder<'t, T, Arena> {
     pub fn insert(&mut self, key: &'t str, value: &'t T) {
-        let v = self.values.as_mut().unwrap();
-        let index_to_push = v.len();
-        v.push(value);
+        let index_to_push = self.nodes.len();
+        let mut node = Node::new(value);
+        self.nodes.push(node);
         let chars: Vec<char> = key.chars().into_iter().collect();
         self.trie_builder.insert(chars, index_to_push);
     }
 
-    pub fn build(self) -> ArenaTrie<'t, T> {
+    pub fn insert_with(&mut self, key: &'t str, value: &'t T, with: impl SelfInjecting<'t, T>) {
+        let index_to_push = self.nodes.len();
+        let mut node = Node::new(value);
+        node = with.inject_into(node);
+        self.nodes.push(node);
+        let chars: Vec<char> = key.chars().into_iter().collect();
+        self.trie_builder.insert(chars, index_to_push);
+    }
+
+    pub fn build(self) -> TokenTrie<'t, T> {
         let trie = self.trie_builder.build();
-        ArenaTrie {
+        TokenTrie {
             trie: trie,
-            values: self.values.unwrap().into_boxed_slice(),
+            nodes: self.nodes.into_boxed_slice(),
         }
     }
 }
@@ -279,8 +229,7 @@ mod tests {
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
         FirstMatchIf {
-            to_insert_first: &'t [&'t str],
-            expects: Expectation,
+            to_insert_first: Vec<(&'t str, PostMatchCondition)>,
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
     }
@@ -294,13 +243,13 @@ mod tests {
         expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
     ) -> Call<'t> {
         Call::FirstMatchIf {
-            to_insert_first: to_insert_first,
-            expects: has_space_at_the_end,
-            expected_match_results: expected_match_results,
+            to_insert_first: to_insert_first
+                .iter()
+                .map(|s| (*s, has_space_at_the_end as PostMatchCondition))
+                .collect(),
+            expected_match_results,
         }
     }
-
-    fn test_tokening_trie_cast<'test, V: 'test>(_: &impl TokeningTrie<'test, V>) {}
 
     macro_rules! trie_tests {
     ($($name:ident: $value:expr,)*) => {
@@ -308,7 +257,7 @@ mod tests {
         #[test]
         fn $name() {
             let method_to_call = $value;
-            let mut ttb : TokeningTrieBuilder<bool, Arena> = TokeningTrieBuilder::arena();
+            let mut ttb : TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
 
             match method_to_call {
                 super::tests::Call::Insert{to_insert}  => {
@@ -316,8 +265,6 @@ mod tests {
                         ttb.insert(i, &true);
                     }
                     let trie = ttb.build();
-                    // ensure it is cast properly
-                    test_tokening_trie_cast(&trie);
                     for (x, i) in to_insert.into_iter().enumerate() {
                         let chars: Vec<char> = i.chars().into_iter().collect();
                         let r = trie.trie.exact_match(chars);
@@ -330,7 +277,6 @@ mod tests {
                         ttb.insert(i, &true);
                     }
                     let trie = ttb.build();
-                    test_tokening_trie_cast(&trie);
                     let mut matches = trie.first_match(expected_match_results.0);
                     for expected in expected_match_results.1.into_iter() {
                         let item = matches.next();
@@ -342,13 +288,12 @@ mod tests {
                         }
                     }
                 },
-                super::tests::Call::FirstMatchIf{to_insert_first, expects, expected_match_results}  => {
+                super::tests::Call::FirstMatchIf{to_insert_first, expected_match_results}  => {
                     for i in to_insert_first {
-                        ttb.insert(i, &true);
+                        ttb.insert_with(i.0, &true, i.1);
                     }
                     let trie = ttb.build();
-                    test_tokening_trie_cast(&trie);
-                    let mut matches = trie.first_match_if(expected_match_results.0, expects);
+                    let mut matches = trie.first_match(expected_match_results.0);
                     for expected in expected_match_results.1.into_iter() {
                         let item = matches.next();
                         assert_eq!(*expected, item);
