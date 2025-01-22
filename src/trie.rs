@@ -6,6 +6,7 @@ use trie_rs::{
 use std::{
     fmt::Debug,
     iter::{Enumerate, Peekable},
+    marker::PhantomData,
     ops::Range,
     str::Chars,
 };
@@ -205,35 +206,62 @@ impl<'i, V: 'i + Debug> Iterator for ArenaTrieIterator<'i, V> {
     }
 }
 
-pub struct ArenaTrieBuilder<'t, T> {
-    trie_builder: TrieBuilder<char, usize>,
-    values: Vec<&'t T>,
-}
+enum Index {}
+enum Arena {}
 
-impl<'t, T> Default for ArenaTrieBuilder<'t, T> {
-    fn default() -> Self {
+trait State {}
+
+impl State for Index {}
+impl State for Arena {}
+
+pub struct TokeningTrieBuilder<'t, T, S: State> {
+    trie_builder: TrieBuilder<char, usize>,
+    values: Option<Vec<&'t T>>,
+    __marker: PhantomData<S>,
+}
+impl<'t, T, S: State> TokeningTrieBuilder<'t, T, S> {
+    pub fn indexed() -> Self {
         Self {
             trie_builder: TrieBuilder::<char, usize>::new(),
-            values: vec![],
+            values: None,
+            __marker: PhantomData,
+        }
+    }
+    pub fn arena() -> Self {
+        Self {
+            trie_builder: TrieBuilder::<char, usize>::new(),
+            values: Some(vec![]),
+            __marker: PhantomData,
         }
     }
 }
 
-impl<'t, T> ArenaTrieBuilder<'t, T> {
-    pub fn new() -> Self {
-        Self::default()
+impl<'t> TokeningTrieBuilder<'t, usize, Index> {
+    pub fn insert(&mut self, key: &'t str, value: &'t usize) {
+        let chars: Vec<char> = key.chars().into_iter().collect();
+        self.trie_builder.insert(chars, *value);
     }
+
+    pub fn build(self) -> IndexTrie {
+        let trie = self.trie_builder.build();
+        IndexTrie { trie: trie }
+    }
+}
+
+impl<'t, T> TokeningTrieBuilder<'t, T, Arena> {
     pub fn insert(&mut self, key: &'t str, value: &'t T) {
-        let index_to_push = self.values.len();
-        self.values.push(value);
+        let v = self.values.as_mut().unwrap();
+        let index_to_push = v.len();
+        v.push(value);
         let chars: Vec<char> = key.chars().into_iter().collect();
         self.trie_builder.insert(chars, index_to_push);
     }
+
     pub fn build(self) -> ArenaTrie<'t, T> {
         let trie = self.trie_builder.build();
         ArenaTrie {
             trie: trie,
-            values: self.values.into_boxed_slice(),
+            values: self.values.unwrap().into_boxed_slice(),
         }
     }
 }
@@ -280,7 +308,7 @@ mod tests {
         #[test]
         fn $name() {
             let method_to_call = $value;
-            let mut ttb : ArenaTrieBuilder<bool>= ArenaTrieBuilder::new();
+            let mut ttb : TokeningTrieBuilder<bool, Arena> = TokeningTrieBuilder::arena();
 
             match method_to_call {
                 super::tests::Call::Insert{to_insert}  => {
