@@ -307,11 +307,7 @@ mod tests {
             to_insert_first: &'t [&'t str],
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
-        FirstMatchPostMatchConditioned {
-            to_insert_first: Vec<(&'t str, ValidatorType)>,
-            expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
-        },
-        FirstMatchExtendedMatches {
+        FirstMatchWithValidators {
             to_insert_first: Vec<(&'t str, ValidatorType)>,
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
@@ -321,11 +317,15 @@ mod tests {
         ch == ' '
     }
 
+    fn does_not_have_colon(ch: char) -> bool {
+        ch != ':'
+    }
+
     fn first_match_if_space_follows<'t>(
         to_insert_first: &'t [&'t str],
         expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
     ) -> Call<'t> {
-        Call::FirstMatchPostMatchConditioned {
+        Call::FirstMatchWithValidators {
             to_insert_first: to_insert_first
                 .iter()
                 .map(|s| (*s, ValidatorType::PostMatchCondition(has_space_at_the_end)))
@@ -338,11 +338,19 @@ mod tests {
         ch.is_whitespace()
     }
 
+    fn extend_to_newline(ch: char) -> bool {
+        ch == '\n'
+    }
+
+    fn extend_to_space(ch: char) -> bool {
+        ch == ' '
+    }
+
     fn first_match_if_extend_to_following_whitespaces<'t>(
         to_insert_first: &'t [&'t str],
         expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
     ) -> Call<'t> {
-        Call::FirstMatchExtendedMatches {
+        Call::FirstMatchWithValidators {
             to_insert_first: to_insert_first
                 .iter()
                 .map(|s| (*s, ValidatorType::MatchExtender(extend_to_white_space)))
@@ -359,7 +367,7 @@ mod tests {
             let method_to_call = $value;
             let mut ttb : TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
 
-            match method_to_call {
+            let expected_match_results = match method_to_call {
                 super::tests::Call::Insert{to_insert}  => {
                     for i in to_insert {
                         ttb.insert(i, &true);
@@ -371,57 +379,33 @@ mod tests {
                         assert_eq!(true, r.is_some());
                         assert_eq!(x, *r.unwrap());
                     }
+                    return;
                 },
                 super::tests::Call::FirstMatch{to_insert_first,expected_match_results}  => {
                     for i in to_insert_first {
                         ttb.insert(i, &true);
                     }
-                    let trie = ttb.build();
-                    let mut matches = trie.first_match(expected_match_results.0);
-                    for expected in expected_match_results.1.into_iter() {
-                        let item = matches.next();
-                        assert_eq!(*expected, item);
-                        if expected.is_some() {
-                            let MatchResult(_, _, lexeme) = item.unwrap();
-                            let MatchResult(_, _, key) = expected.as_ref().unwrap();
-                            assert_eq!(*key, lexeme)
-                        }
-                    }
+                    expected_match_results
                 },
-                super::tests::Call::FirstMatchPostMatchConditioned{to_insert_first, expected_match_results}  => {
+                super::tests::Call::FirstMatchWithValidators{to_insert_first, expected_match_results}  => {
                     for i in to_insert_first {
                         ttb.insert_with(i.0, &true, i.1);
                     }
-                    let trie = ttb.build();
-                    let mut matches = trie.first_match(expected_match_results.0);
-                    for expected in expected_match_results.1.into_iter() {
-                        let item = matches.next();
-                        assert_eq!(*expected, item);
-                        if expected.is_some() {
-                            let MatchResult(_, _, lexeme) = item.unwrap();
-                            let MatchResult(_, _, key) = expected.as_ref().unwrap();
-                            assert_eq!(*key, lexeme)
-                        }
-                    }
-                },
-
-                super::tests::Call::FirstMatchExtendedMatches{to_insert_first, expected_match_results}  => {
-                    for i in to_insert_first {
-                        ttb.insert_with(i.0, &true, i.1);
-                    }
-                    let trie = ttb.build();
-                    let mut matches = trie.first_match(expected_match_results.0);
-                    for expected in expected_match_results.1.into_iter() {
-                        let item = matches.next();
-                        assert_eq!(*expected, item);
-                        if expected.is_some() {
-                            let MatchResult(_, _, lexeme) = item.unwrap();
-                            let MatchResult(_, _, key) = expected.as_ref().unwrap();
-                            assert_eq!(*key, lexeme)
-                        }
-                    }
+                    expected_match_results
                 },
             };
+            let trie = ttb.build();
+            let mut matches = trie.first_match(expected_match_results.0);
+
+            for expected in expected_match_results.1.into_iter() {
+                let item = matches.next();
+                assert_eq!(*expected, item);
+                if expected.is_some() {
+                    let MatchResult(_, _, lexeme) = item.unwrap();
+                    let MatchResult(_, _, key) = expected.as_ref().unwrap();
+                    assert_eq!(*key, lexeme)
+                }
+            }
         }
     )*
     }
@@ -531,6 +515,28 @@ mod tests {
                     Some(MatchResult(13..16, &true, "   ")),
                 ])
             ),
+
+        first_match_if_realistic:
+            Call::FirstMatchWithValidators {
+            to_insert_first : vec![
+                (" ", ValidatorType::MatchExtender(extend_to_space)),
+                ("\n", ValidatorType::MatchExtender(extend_to_newline)),
+                ("trait", ValidatorType::PostMatchCondition(has_space_at_the_end)),
+                ("impl", ValidatorType::PostMatchCondition(has_space_at_the_end)),
+                (":", ValidatorType::PostMatchCondition(does_not_have_colon)),
+            ],
+            expected_match_results :
+                ("  trait S: impl Trait::Method",
+                &[
+                    Some(MatchResult(0..2, &true, "  ")),
+                    Some(MatchResult(2..7, &true, "trait")),
+                    Some(MatchResult(7..8, &true, " ")),
+                    Some(MatchResult(9..10, &true, ":")),
+                    Some(MatchResult(10..11, &true, " ")),
+                    Some(MatchResult(11..15, &true, "impl")),
+                    Some(MatchResult(15..16, &true, " ")),
+                ]),
+            },
 
     }
 }
