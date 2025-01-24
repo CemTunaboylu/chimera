@@ -1,297 +1,311 @@
 use trie_rs::{
-    inc_search::{Answer, IncSearch},
+    inc_search::IncSearch,
     map::{Trie, TrieBuilder},
 };
 
-use std::{
-    fmt::Debug,
-    iter::{Enumerate, Peekable},
-    ops::Range,
-    str::Chars,
-};
+use crate::{match_validator::*, program_text, range_indices::RangeIndices};
 
-type Validator = fn(ch: char) -> bool;
+use std::{fmt::Debug, iter::Peekable, marker::PhantomData, ops::Range};
 
-enum ValidatorType {
-    PostMatchCondition(Validator),
-    MatchExtender(Validator),
+#[derive(Debug)]
+pub struct TrieValue<Value> {
+    value: Value,
+    to_validate: Option<ToValidate>,
 }
 
-trait SelfInjecting<'i, V> {
-    fn inject_into(self, node: Node<'i, V>) -> Node<'i, V>;
-}
-
-impl<'p, V> SelfInjecting<'p, V> for ValidatorType {
-    fn inject_into(self, mut node: Node<'p, V>) -> Node<'p, V> {
-        match self {
-            ValidatorType::PostMatchCondition(pmc) => {
-                node.post_match_condition = Some(pmc);
-            }
-            ValidatorType::MatchExtender(me) => {
-                node.match_extender = Some(me);
-            }
-        }
-        node
-    }
-}
-
-pub struct Node<'v, V> {
-    value: &'v V,
-    post_match_condition: Option<Validator>,
-    match_extender: Option<Validator>,
-}
-
-impl<'v, V> Node<'v, V> {
-    pub fn new(value: &'v V) -> Self {
+impl<V> TrieValue<V> {
+    pub fn new(value: V) -> Self {
         Self {
             value: value,
-            post_match_condition: None,
-            match_extender: None,
+            to_validate: None,
         }
+    }
+}
+
+type TrieSearch<'s, V> = IncSearch<'s, char, TrieValue<V>>;
+type InnerTrie<V> = Trie<char, TrieValue<V>>;
+struct TrieNavigator<'t, V> {
+    search: TrieSearch<'t, V>,
+}
+
+impl<'t, V> TrieNavigator<'t, V> {
+    pub fn new(trie: &'t InnerTrie<V>) -> Self {
+        Self {
+            search: trie.inc_search(),
+        }
+    }
+    pub fn took_the_branch_of(&mut self, ch: char) -> bool {
+        self.search.query(&ch).is_some()
     }
 
-    fn validate(&self, ch: char, validator: Option<Validator>) -> bool {
-        match validator {
-            Some(f) => f(ch),
-            None => true,
-        }
+    pub fn move_back_to_root(&mut self) {
+        self.search.reset();
     }
-    pub fn post_match_validation(&self, ch: char) -> bool {
-        self.validate(ch, self.post_match_condition)
+
+    pub fn current_value(&self) -> Option<&'t TrieValue<V>> {
+        self.search.value()
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct MatchResult<'m, V>(Range<usize>, &'m V, &'m str);
-
-fn match_result_with<'m, V>(
-    program: &'m str,
-    range: Range<usize>,
-    value: &'m V,
-) -> MatchResult<'m, V> {
-    let lexeme = &program[range.clone()];
-    MatchResult(range, value, lexeme)
+pub enum MatchResult<'m, V> {
+    Unmatched(Range<usize>),
+    Full(Range<usize>, &'m V),
 }
 
-struct FirstMatchFinder<'m, V> {
-    program: Peekable<Enumerate<Chars<'m>>>,
-    search: IncSearch<'m, char, usize>,
-    nodes: &'m [Node<'m, V>],
-    length: usize,
+type Answer<'m, V> = (Range<usize>, Option<&'m V>);
+
+fn create_match_result<'m, V>(a: Answer<'m, V>) -> MatchResult<'m, V> {
+    let range = a.0;
+    match a.1 {
+        Some(val) => MatchResult::Full(range, val),
+        None => MatchResult::Unmatched(range),
+    }
 }
 
-impl<'m, V> FirstMatchFinder<'m, V> {
-    pub fn new(
-        program: &'m str,
-        search: IncSearch<'m, char, usize>,
-        nodes: &'m [Node<'m, V>],
-    ) -> Self {
+struct FirstMatchFinder<'m, V, MV: MatchValidator> {
+    program: program_text::Program<'m>,
+    trie_navigator: TrieNavigator<'m, V>,
+    indices: RangeIndices,
+    __match_validator: PhantomData<MV>,
+    saved: Option<Answer<'m, V>>,
+}
+
+impl<'m, V, MV: MatchValidator> FirstMatchFinder<'m, V, MV> {
+    pub fn new(program: &'m str, trie: &'m InnerTrie<V>) -> Self {
         Self {
-            program: program.chars().enumerate().peekable(),
-            search: search,
-            nodes: nodes,
-            length: program.len(),
+            program: program_text::Program::new(program),
+            trie_navigator: TrieNavigator::new(trie),
+            indices: RangeIndices::new(),
+            __match_validator: PhantomData,
+            saved: None,
         }
     }
 
-    fn peek(&mut self) -> Option<(usize, char)> {
-        self.program.peek().map(|ix_and_ch_tuple| *ix_and_ch_tuple)
-    }
-
-    fn consume(&mut self) -> Option<(usize, char)> {
-        self.program.next()
-    }
-
-    fn does_trie_node_have_branch_to(&mut self, ch: char) -> bool {
-        self.search.peek(&ch).is_some()
-    }
-
-    fn proceed_on_trie_towards(&mut self, ch: char) -> Option<Answer> {
-        self.search.query(&ch)
-    }
-
-    fn get_current_node(&self) -> Option<&'m Node<'m, V>> {
-        // if a FULL match, search must have a value
-        let node_ix = self.search.value()?;
-        self.nodes.get(*node_ix)
-    }
-
-    fn move_back_to_root_of_the_trie(&mut self) {
-        self.search.reset();
-    }
-
-    fn process_index_for_node(
-        &mut self,
-        mut unmatched_ix: usize,
-        mut unmatched_ch: char,
-    ) -> Option<(usize, &'m V)> {
-        let node = self.get_current_node()?;
+    fn validate_match_result(&mut self, mut next_ch: char) -> Option<&'m V> {
+        let trie_value = self.trie_navigator.current_value()?;
 
         let mut consumed_all = false;
-
-        if let Some(match_extender) = node.match_extender {
-            loop {
-                (unmatched_ix, unmatched_ch) = match self.peek() {
-                    Some(ixch) => ixch,
-                    None => {
-                        consumed_all = true;
-                        (self.length, ' ')
-                    }
-                };
-                if consumed_all {
-                    break;
-                }
-                if match_extender(unmatched_ch) {
-                    self.consume();
-                } else {
-                    break;
-                }
+        // Note: for Chimera, there is no case where match is extended iff
+        // post_match_condition is met thus the greed and simplicity of the consume_while
+        if let Some(extended_index) =
+            MV::extend_match(trie_value.to_validate.as_ref(), &mut self.program)
+        {
+            if self.program.at_end() {
+                consumed_all = true;
+                self.indices.end_match(self.program.len());
+            } else {
+                self.indices.end_match(extended_index);
+                next_ch = self.program.peek().unwrap().1;
             }
         }
-
         // At this point, we started a match BUT could NOT finish it either because:
         //  i. search.peek() didn't hit None, or ii. we extended the match all the way to the end
         // it's a full match (we have a value) BUT can't validate post-match since
         // NO more characters left preceeding the match
-        let result = (unmatched_ix, node.value);
+        let result = &trie_value.value;
         if consumed_all {
             Some(result)
-        } else if node.post_match_validation(unmatched_ch) {
+        } else if MV::is_match_valid(trie_value.to_validate.as_ref(), Some(next_ch)) {
             Some(result)
         } else {
             None
         }
     }
+
+    fn process_match_candidate(
+        &mut self,
+        peeked_index: usize,
+        peeked_ch: char,
+    ) -> Option<Answer<'m, V>> {
+        let mut candidate = None;
+        self.indices.end_match(peeked_index);
+        match self.validate_match_result(peeked_ch) {
+            // if there are is post match validation or/and match extension, all must performed and valid
+            Some(value) => {
+                let answer = (self.indices.form_answer_range(), Some(value));
+                // check if there is an unmatched str slice before this full match
+                let fully_matched = Some(answer);
+                if self.indices.has_an_unmatched_slice_before() {
+                    // case: |<-- unmatched -->||<--full match-->|...
+                    // save the candidate as the next result to be directly returned
+                    self.saved = fully_matched;
+                    candidate = Some((self.indices.form_unmatched_range(), None))
+                    // current state: candidate: |<-- unmatched -->| , saved: |<--full match-->|
+                } else {
+                    candidate = fully_matched;
+                }
+            }
+            None => {
+                self.indices.delete_match();
+            }
+        }
+        candidate
+    }
+
+    fn generate_result_for_no_candidate(&mut self) -> Option<Answer<'m, V>> {
+        let prog_len = self.program.len();
+        self.indices.end_match(prog_len);
+
+        match self.trie_navigator.current_value() {
+            None => Some((self.indices.form_unmatched_range(), None)),
+            Some(trie_value) => {
+                // At this point, we started a match BUT could NOT finish it either because:
+                //  i. search.peek() didn't hit None, or ii. we extended the match all the way to the end
+                // it's a full match (we have a value) BUT can't validate post-match since
+                // NO more characters left preceeding the match
+                let fully_matched =
+                    Some((self.indices.form_answer_range(), Some(&trie_value.value)));
+                if self.indices.has_an_unmatched_slice_before() {
+                    self.saved = fully_matched;
+                    Some((self.indices.form_unmatched_range(), None))
+                } else {
+                    fully_matched
+                }
+            }
+        }
+    }
 }
 
-type FirstMatch<'m, V> = (Range<usize>, &'m V);
+impl<'m, V: Debug, MV: MatchValidator> Iterator for FirstMatchFinder<'m, V, MV> {
+    type Item = Answer<'m, V>;
 
-impl<'m, V> Iterator for FirstMatchFinder<'m, V> {
-    type Item = FirstMatch<'m, V>;
-
+    // From the root of the trie, and the first character of the remaining program, we peek the first char and index.
+    // If, from the current trie node, we have a branch to that char, it means we started a match. We record this index as
+    // the starting index of the match, consume the char of the program and move to that branch of the trie.
+    // We repeat the above steps until a. no more chars to look at, b. we have an unmatching char i.e. we don't have a branch
+    // that follows this char from the current node of the trie.
+    //  a.  We exit the loop, check if the node we currently are at is a match by grabbing its value. If we cannot grab a value, it means
+    //      we could find any matces on the trie, thus we return an unmatch as the Answer.
+    //  b.  We check if the node we currently are at is a match by grabbing its value.
+    //          - If we cannot grab a value, it means
+    //              we could not find a match, thus we erase the start index that we saved earlier, move back to the root of the trie
+    //              and signal to the end of the loop that we don't want to consume this char, since we could not make use of it at this node.
+    //              We need to check again from the root since it well can be a matching char.
+    //          - If we can grab a value, we have strong candidate for a match. We first try to extend the match wrt. to the extension validator
+    //              on the node. As long as we extend, we consume the program. At the end of the extension, if we have consumed all chars meaning that
+    //              a post match condition cannot be even checked, we simply return the result we have found which is the new index that is moved to
+    //              to the extended index and the value of the node. If we can check on post match condition, we do and if it is ok, we return the result
+    //              else we return None.
+    //              If we did'nt return a result, we perform the same steps above, clean up and move back to the root of the trie.
+    //              If we returned a result, we additionally check if we have an unmatched chunk of chars before this match. If not, we return the result.
+    //                  If there is an unmatched chunk, we save this fresh result, and first return the unmatched chunk as an unmatch. We perform this step
+    //                  at this point, because we could not have know while starting a match if it will end up as a match.
+    //
     fn next(&mut self) -> Option<Self::Item> {
-        self.search.reset();
+        self.trie_navigator.move_back_to_root();
 
-        let mut first_ix_of_match: Option<usize> = None;
+        if self.saved.is_some() {
+            return self.saved.take();
+        }
+
         let mut candidate: Option<Self::Item> = None;
-        let mut consume_program_char;
-        let mut query_the_char;
 
-        while let Some((index, ch)) = self.peek() {
-            (consume_program_char, query_the_char) = (true, true);
+        self.indices.start_peeking(self.program.peek()?.0);
 
-            match (first_ix_of_match, self.does_trie_node_have_branch_to(ch)) {
+        while let Some((index, ch)) = self.program.peek() {
+            let (mut move_back_to_root, mut consume_program_char) = (true, true);
+            match (
+                self.indices.has_a_match_started(),
+                self.trie_navigator.took_the_branch_of(ch),
+            ) {
                 // haven't seen any matched chars and next search query also does NOT match
-                (None, false) => {
-                    query_the_char = false; // do NOT query the char, since it will be None
-                }
+                (false, false) => {}
                 // haven't seen any matched chars BUT next search query matches, i.e. a match is starting
-                (None, true) => {
-                    first_ix_of_match = Some(index);
+                (false, true) => {
+                    self.indices.start_match(index);
+                    move_back_to_root = false;
                 }
                 // have started a match on the trie BUT next search query does NOT match, i.e. match is ending
-                (Some(start_index), false) => {
-                    match self.process_index_for_node(index, ch) {
-                        // if there are is post match validation or/and match extension, all must performed and valid
-                        Some((end_index, value)) => {
-                            candidate = Some((start_index..end_index, value));
+                (true, false) => {
+                    match self.process_match_candidate(index, ch) {
+                        Some(answer) => {
+                            candidate = Some(answer);
                             break;
                         }
                         None => {}
                     }
                     // have a partial match, OR if any, min. one expectation failed
                     // thus search needs to be reset to 'forget' the past
-                    self.move_back_to_root_of_the_trie();
-                    first_ix_of_match = None;
-                    // since next search query does NOT match, disable the query
-                    query_the_char = false;
+                    // since next search query does NOT match, and we can still find a match with this char
+                    consume_program_char = false;
                 }
                 // started a match on the trie and next search query ALSO matches
                 // thus the peeked program char needs to be consumed, search must be queried to move on the trie
-                (Some(_), true) => { /* no need to do anything */ }
+                (true, true) => {
+                    move_back_to_root = false;
+                }
             }
-            if query_the_char {
-                self.proceed_on_trie_towards(ch);
+            if move_back_to_root {
+                self.trie_navigator.move_back_to_root();
             }
             if consume_program_char {
-                self.consume();
+                self.program.consume();
             }
         }
 
-        let no_candidate_from_loop = candidate.is_none();
-        if no_candidate_from_loop {
-            let node = self.get_current_node()?;
-            // At this point, we started a match BUT could NOT finish it either because:
-            //  i. search.peek() didn't hit None, or ii. we extended the match all the way to the end
-            // it's a full match (we have a value) BUT can't validate post-match since
-            // NO more characters left preceeding the match
-            if node.post_match_condition.is_none() {
-                candidate = Some((first_ix_of_match?..self.length, node.value));
-            }
+        let found_a_candidate_in_loop = candidate.is_some();
+        if found_a_candidate_in_loop {
+            return candidate;
+        } else {
+            candidate = self.generate_result_for_no_candidate();
         }
-
         candidate
     }
 }
 
-pub struct TokenTrie<'a, V> {
-    trie: Trie<char, usize>,
-    nodes: Box<[Node<'a, V>]>,
+#[derive(Debug)]
+pub struct TokenTrie<V> {
+    trie: InnerTrie<V>,
 }
-pub struct TokenTrieIterator<'i, V>(FirstMatchFinder<'i, V>, &'i str);
+pub struct TokenTrieIterator<'i, V>(FirstMatchFinder<'i, V, LazyMatchValidator>);
+pub type MatchingPeekable<'i, V> = Peekable<TokenTrieIterator<'i, V>>;
 
-impl<'i, V: Debug> TokenTrie<'i, V> {
-    fn first_match(&'i self, program: &'i str) -> impl Iterator<Item = MatchResult<'i, V>> {
-        TokenTrieIterator(
-            FirstMatchFinder::new(program, self.trie.inc_search(), self.nodes.as_ref()),
-            program,
-        )
+impl<'i, V: 'i + Debug> TokenTrie<V> {
+    pub fn first_match(&'i self, program: &'i str) -> MatchingPeekable<'i, V> {
+        TokenTrieIterator(FirstMatchFinder::new(program, &self.trie)).peekable()
     }
 }
 
 impl<'i, V: 'i + Debug> Iterator for TokenTrieIterator<'i, V> {
     type Item = MatchResult<'i, V>;
     fn next(&mut self) -> Option<Self::Item> {
-        let (range, value) = self.0.next()?;
-        Some(match_result_with(self.1, range, value))
+        let result = create_match_result(self.0.next()?);
+        Some(result)
     }
 }
 
-pub struct TokeningTrieBuilder<'t, T> {
-    trie_builder: TrieBuilder<char, usize>,
-    nodes: Vec<Node<'t, T>>,
+pub struct TokeningTrieBuilder<T> {
+    trie_builder: TrieBuilder<char, TrieValue<T>>,
 }
 
-impl<'t, T> TokeningTrieBuilder<'t, T> {
+impl<'t, T> TokeningTrieBuilder<T> {
     pub fn new() -> Self {
         Self {
-            trie_builder: TrieBuilder::<char, usize>::new(),
-            nodes: vec![],
+            trie_builder: TrieBuilder::<char, TrieValue<T>>::new(),
         }
     }
-    pub fn insert(&mut self, key: &'t str, value: &'t T) {
-        let index_to_push = self.nodes.len();
-        let mut node = Node::new(value);
-        self.nodes.push(node);
+    fn validate_str_slice(s: &'t str) {
+        assert!(s.len() > 0);
+    }
+    pub fn insert(&mut self, key: &'t str, value: T) {
+        Self::validate_str_slice(key);
+        let trie_value = TrieValue::new(value);
         let chars: Vec<char> = key.chars().into_iter().collect();
-        self.trie_builder.insert(chars, index_to_push);
+        self.trie_builder.insert(chars, trie_value);
     }
 
-    pub fn insert_with(&mut self, key: &'t str, value: &'t T, with: impl SelfInjecting<'t, T>) {
-        let index_to_push = self.nodes.len();
-        let mut node = Node::new(value);
-        node = with.inject_into(node);
-        self.nodes.push(node);
+    pub fn insert_with(&mut self, key: &'t str, value: T, with: ToValidate) {
+        Self::validate_str_slice(key);
+        let mut trie_value = TrieValue::new(value);
+        trie_value.to_validate = Some(with);
         let chars: Vec<char> = key.chars().into_iter().collect();
-        self.trie_builder.insert(chars, index_to_push);
+        self.trie_builder.insert(chars, trie_value);
     }
 
-    pub fn build(self) -> TokenTrie<'t, T> {
+    pub fn build(self) -> TokenTrie<T> {
         let trie = self.trie_builder.build();
-        TokenTrie {
-            trie: trie,
-            nodes: self.nodes.into_boxed_slice(),
-        }
+        TokenTrie { trie: trie }
     }
 }
 
@@ -308,55 +322,76 @@ mod tests {
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
         FirstMatchWithValidators {
-            to_insert_first: Vec<(&'t str, ValidatorType)>,
+            to_insert_first: Vec<(&'t str, ToValidate)>,
             expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
         },
     }
 
-    fn has_space_at_the_end(ch: char) -> bool {
-        ch == ' '
+    fn is_space(ch: &char) -> bool {
+        *ch == ' '
     }
 
-    fn does_not_have_colon(ch: char) -> bool {
-        ch != ':'
+    fn is_not_colon(ch: &char) -> bool {
+        *ch != ':'
     }
 
-    fn first_match_if_space_follows<'t>(
+    fn is_newline(ch: &char) -> bool {
+        *ch == '\n'
+    }
+
+    fn with_post_match(v: program_text::Validator) -> ToValidate {
+        ToValidate {
+            post_match_condition: Some(v),
+            match_extender: None,
+        }
+    }
+
+    fn with_match_extender(v: program_text::Validator) -> ToValidate {
+        ToValidate {
+            post_match_condition: None,
+            match_extender: Some(v),
+        }
+    }
+
+    fn all_with<'t>(
         to_insert_first: &'t [&'t str],
+        v: ToValidate,
         expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
     ) -> Call<'t> {
         Call::FirstMatchWithValidators {
-            to_insert_first: to_insert_first
-                .iter()
-                .map(|s| (*s, ValidatorType::PostMatchCondition(has_space_at_the_end)))
-                .collect(),
+            to_insert_first: to_insert_first.iter().map(|s| (*s, v.clone())).collect(),
             expected_match_results,
         }
     }
 
-    fn extend_to_white_space(ch: char) -> bool {
-        ch.is_whitespace()
-    }
-
-    fn extend_to_newline(ch: char) -> bool {
-        ch == '\n'
-    }
-
-    fn extend_to_space(ch: char) -> bool {
-        ch == ' '
-    }
-
-    fn first_match_if_extend_to_following_whitespaces<'t>(
+    fn first_match_post_match_space_follows<'t>(
         to_insert_first: &'t [&'t str],
         expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
     ) -> Call<'t> {
-        Call::FirstMatchWithValidators {
-            to_insert_first: to_insert_first
-                .iter()
-                .map(|s| (*s, ValidatorType::MatchExtender(extend_to_white_space)))
-                .collect(),
+        all_with(
+            to_insert_first,
+            with_post_match(is_space),
             expected_match_results,
-        }
+        )
+    }
+
+    fn first_match_match_extend_to_following_spaces<'t>(
+        to_insert_first: &'t [&'t str],
+        expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
+    ) -> Call<'t> {
+        all_with(
+            to_insert_first,
+            with_match_extender(is_space),
+            expected_match_results,
+        )
+    }
+
+    fn full(r: Range<usize>, b: &'static bool) -> MatchResult<'static, bool> {
+        MatchResult::Full(r, b)
+    }
+
+    fn unmatched(r: Range<usize>) -> MatchResult<'static, bool> {
+        MatchResult::Unmatched(r)
     }
 
     macro_rules! trie_tests {
@@ -369,72 +404,77 @@ mod tests {
 
             let expected_match_results = match method_to_call {
                 super::tests::Call::Insert{to_insert}  => {
-                    for i in to_insert {
-                        ttb.insert(i, &true);
+                let mut ttb : TokeningTrieBuilder<usize> = TokeningTrieBuilder::new();
+                    for (v,l) in to_insert.into_iter().enumerate() {
+                        ttb.insert(l, v);
                     }
                     let trie = ttb.build();
                     for (x, i) in to_insert.into_iter().enumerate() {
                         let chars: Vec<char> = i.chars().into_iter().collect();
                         let r = trie.trie.exact_match(chars);
                         assert_eq!(true, r.is_some());
-                        assert_eq!(x, *r.unwrap());
+                        assert_eq!(x, r.unwrap().value);
                     }
                     return;
                 },
                 super::tests::Call::FirstMatch{to_insert_first,expected_match_results}  => {
                     for i in to_insert_first {
-                        ttb.insert(i, &true);
+                        ttb.insert(i, true);
                     }
                     expected_match_results
                 },
                 super::tests::Call::FirstMatchWithValidators{to_insert_first, expected_match_results}  => {
                     for i in to_insert_first {
-                        ttb.insert_with(i.0, &true, i.1);
+                        ttb.insert_with(i.0, true, i.1);
                     }
                     expected_match_results
                 },
             };
             let trie = ttb.build();
+            let p = expected_match_results.0.char_indices();
             let mut matches = trie.first_match(expected_match_results.0);
 
             for expected in expected_match_results.1.into_iter() {
                 let item = matches.next();
                 assert_eq!(*expected, item);
-                if expected.is_some() {
-                    let MatchResult(_, _, lexeme) = item.unwrap();
-                    let MatchResult(_, _, key) = expected.as_ref().unwrap();
-                    assert_eq!(*key, lexeme)
-                }
             }
         }
     )*
     }
     }
 
-    trie_tests! {
-        insert_a: Call::Insert{to_insert: &["a"]},
-        insert_a_ab_abc: Call::Insert{to_insert: &["a", "ab", "abc"]},
-        insert_a_abcd_ab: Call::Insert{to_insert: &["a", "abcd", "ab"]},
-        insert_impl_fn_struct_for: Call::Insert{to_insert: &["impl", "fn", "struct", "for"]},
-        insert_averylongvariablename: Call::Insert{to_insert: &["averylongvariablename"]},
-        insert_i_i16_i32: Call::Insert{to_insert: &["i", "i16", "i32"]},
-        insert_space: Call::Insert{to_insert: &[" "]},
-        first_match_equals_in_between: Call::FirstMatch {
-            to_insert_first: &["="],
-            expected_match_results: ("let var = 5;", &[Some(MatchResult(8..9, &true, "="))]) },
+    #[test]
+    #[should_panic]
+    fn try_to_insert_empty_string() {
+        let mut ttb: TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
+        ttb.insert("", true);
+    }
 
-        first_match_impl_at_0: Call::FirstMatch {
-            to_insert_first: &["impl"],
-            expected_match_results: ("impl Chimeratic", &[Some(MatchResult(0..4, &true, "impl"))]) },
+    #[test]
+    #[should_panic]
+    fn try_to_insert_empty_string_with_validation() {
+        let mut ttb: TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
+        ttb.insert_with("", true, with_post_match(is_space));
+    }
+
+    trie_tests! {
+        insert_impl_fn_struct_for_i_i16_i32_and_space: Call::Insert{to_insert: &["impl", "fn", "struct", "for", "i", "i16", "i32", " "]},
+
+        first_match_empty_string: Call::FirstMatch {
+            to_insert_first: &["="],
+            expected_match_results: ("",&[ None])
+        },
 
         first_match_at_the_end: Call::FirstMatch {
             to_insert_first: &[" ", "+", ";"],
             expected_match_results:
                 (" chi+=mera;",
                 &[
-                    Some(MatchResult(0..1, &true, " ")),
-                    Some(MatchResult(4..5, &true, "+")),
-                    Some(MatchResult(10..11, &true, ";")),
+                    Some(full(0..1, &true)), // " "
+                    Some(unmatched(1..4)), // "chi"
+                    Some(full(4..5, &true)), // "+"
+                    Some(unmatched(5..10)), // "=mera"
+                    Some(full(10..11, &true)), // ";"
                 ])
                 },
 
@@ -443,8 +483,8 @@ mod tests {
             expected_match_results:
                 ("   ",
                 &[
-                    Some(MatchResult(0..2, &true, "  ")),
-                    Some(MatchResult(2..3, &true, " ")),
+                    Some(full(0..2, &true)), // "  "
+                    Some(full(2..3, &true)), // " "
                 ])
                 },
 
@@ -453,9 +493,9 @@ mod tests {
             expected_match_results:
                 ("bbbaa",
                 &[
-                    Some(MatchResult(0..2, &true, "bb")),
-                    Some(MatchResult(2..4, &true, "ba")),
-                    Some(MatchResult(4..5, &true, "a")),
+                    Some(full(0..2, &true)), // "bb"
+                    Some(full(2..4, &true)), // "ba"
+                    Some(full(4..5, &true)), // "a"
                 ])
                 },
         first_match_bbbaa_insertion_order_does_not_matter: Call::FirstMatch {
@@ -463,80 +503,112 @@ mod tests {
             expected_match_results:
                 ("bbbaa",
                 &[
-                    Some(MatchResult(0..2, &true, "bb")),
-                    Some(MatchResult(2..4, &true, "ba")),
-                    Some(MatchResult(4..5, &true, "a")),
+                    Some(full(0..2, &true)), // "bb"
+                    Some(full(2..4, &true)), // "ba"
+                    Some(full(4..5, &true)), // "a"
                 ])
                 },
 
-        first_match_if_equals_in_between_with_space: first_match_if_space_follows(
-            &["="],
-            ("let var = 5;", &[Some(MatchResult(8..9, &true, "="))])
+        first_match_post_match_equals_in_between_with_space: first_match_post_match_space_follows(
+            &["=", ";"],
+            (
+                "let var = 5;",
+                &[
+                    Some(MatchResult::Unmatched(0..8)), // "let var "
+                    Some(MatchResult::Full(8..9, &true)), // "="
+                    Some(MatchResult::Unmatched(9..11)), // " 5"
+                    Some(MatchResult::Full(11..12, &true)), // ";"
+                    ]
+            )
         ),
 
-        first_match_if_impl_none_since_no_space: first_match_if_space_follows(
-            &["impl"],
-            ("impl", &[None])),
-        first_match_if_impl: first_match_if_space_follows(
-            &["impl"],
-            ("impl Chimeratic", &[Some(MatchResult(0..4, &true, "impl"))])),
-
-        first_match_if_at_the_end_spaced:
-            first_match_if_space_follows(
-                &[" ", "+", ";"],
-                (" chi+=mera; ",
-                &[
-                    Some(MatchResult(10..11, &true, ";")),
-                ])
-            ),
-
-        first_match_if_whitespaces:
-            first_match_if_space_follows(
+        first_match_post_match_whitespaces:
+            first_match_post_match_space_follows(
                 &[" ", "  "],
                 ("   ",
                 &[
-                    Some(MatchResult(0..2, &true, "  ")),
-                    None,
+                    Some(MatchResult::Full(0..2, &true)), // "  "
+                    // since its at the end, post_match_condition is not performed
+                    Some(MatchResult::Full(2..3, &true)), // " "
                 ])
             ),
 
-        first_match_if_space_is_not_extended:
-        first_match_if_extend_to_following_whitespaces(
-            &[" "],
-            ("let var", &[Some(MatchResult(3..4, &true, " "))])
-        ),
-
-        first_match_if_spaces_are_extended:
-            first_match_if_extend_to_following_whitespaces(
+        first_match_extended_spaces_are_extended:
+            first_match_match_extend_to_following_spaces(
                 &[" "],
-                ("   three_each   ",
+                ("   three_each   one ",
                 &[
-                    Some(MatchResult(0..3, &true, "   ")),
-                    Some(MatchResult(13..16, &true, "   ")),
+                    Some(MatchResult::Full(0..3, &true)), // "   "
+                    Some(MatchResult::Unmatched(3..13)), // "three_each"
+                    Some(MatchResult::Full(13..16, &true)), // "   "
+                    Some(MatchResult::Unmatched(16..19)), // "one"
+                    Some(MatchResult::Full(19..20, &true)), // " "
                 ])
             ),
 
-        first_match_if_realistic:
+        first_match_extended_multiple_different:
             Call::FirstMatchWithValidators {
             to_insert_first : vec![
-                (" ", ValidatorType::MatchExtender(extend_to_space)),
-                ("\n", ValidatorType::MatchExtender(extend_to_newline)),
-                ("trait", ValidatorType::PostMatchCondition(has_space_at_the_end)),
-                ("impl", ValidatorType::PostMatchCondition(has_space_at_the_end)),
-                (":", ValidatorType::PostMatchCondition(does_not_have_colon)),
+                (" ", with_match_extender(is_space)),
+                ("trait", with_post_match(is_space)),
+                ("impl", with_post_match(is_space)),
+                (":", with_post_match(is_not_colon)),
             ],
             expected_match_results :
                 ("  trait S: impl Trait::Method",
                 &[
-                    Some(MatchResult(0..2, &true, "  ")),
-                    Some(MatchResult(2..7, &true, "trait")),
-                    Some(MatchResult(7..8, &true, " ")),
-                    Some(MatchResult(9..10, &true, ":")),
-                    Some(MatchResult(10..11, &true, " ")),
-                    Some(MatchResult(11..15, &true, "impl")),
-                    Some(MatchResult(15..16, &true, " ")),
+                    Some(MatchResult::Full(0..2, &true)), // "  "
+                    Some(MatchResult::Full(2..7, &true)), // "trait"
+                    Some(MatchResult::Full(7..8, &true)), // " "
+                    Some(MatchResult::Unmatched(8..9)), // "S"
+                    Some(MatchResult::Full(9..10, &true)), // ":"
+                    Some(MatchResult::Full(10..11, &true)), // " "
+                    Some(MatchResult::Full(11..15, &true)), // "impl"
+                    Some(MatchResult::Full(15..16, &true)), // " "
+                    Some(MatchResult::Unmatched(16..22)), // "Trait:"
+                    Some(MatchResult::Full(22..23, &true)), // ":"
+                    Some(MatchResult::Unmatched(23..29)), // "Method"
                 ]),
             },
 
+        first_match_rust_expression:
+            Call::FirstMatchWithValidators {
+            to_insert_first : vec![
+                (" ", with_match_extender(is_space)),
+                ("\n", with_match_extender(is_newline)),
+                ("let", with_post_match(is_space)),
+                ("=", with_post_match(is_space)),
+                (";", with_post_match(is_space)),
+            ],
+            expected_match_results :
+                ("let var = 2;",
+                &[
+                    Some(MatchResult::Full(0..3, &true)), // "let"
+                    Some(MatchResult::Full(3..4, &true)), // " "
+                    Some(MatchResult::Unmatched(4..7)), // "var"
+                    Some(MatchResult::Full(7..8, &true)), // " "
+                    Some(MatchResult::Full(8..9, &true)), // "="
+                    Some(MatchResult::Full(9..10, &true)), // " "
+                    Some(MatchResult::Unmatched(10..11)), // "2"
+                    Some(MatchResult::Full(11..12, &true)), // ";"
+                ]),
+            },
+        first_match_japanese:
+        Call::FirstMatchWithValidators {
+            to_insert_first: vec![
+                ("まだ", with_match_extender(is_ma_or_da)),
+            ],
+            expected_match_results : (
+                "まだまだ です また",
+                &[
+                    Some(MatchResult::Full(0..12, &true)), // "まだまだ",
+                    Some(MatchResult::Unmatched(12..26)), // " です また""
+                ]),
+        },
+
+
+    }
+    fn is_ma_or_da(ch: &char) -> bool {
+        *ch == 'ま' || *ch == 'だ'
     }
 }

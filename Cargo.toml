@@ -1,6 +1,11 @@
 [package]
 name = "chimera"
+description = "Chimera - a programming language that is a collage of interesting (to me) capabilities from various languages"
 version = "0.1.0"
+rust-version = "1.84.0"
 edition = "2021"
+readme = "README.md"
 
 [dependencies]
+ahash = "0.8.11"
+trie-rs = "0.4.2"
