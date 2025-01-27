@@ -7,5 +7,4 @@ edition = "2021"
 readme = "README.md"
 
 [dependencies]
-ahash = "0.8.11"
 trie-rs = "0.4.2"
