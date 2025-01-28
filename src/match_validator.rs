@@ -8,6 +8,19 @@ pub struct ToValidate {
     pub match_extender: Option<Validator>,
 }
 impl ToValidate {
+    pub fn with_match_extender(me: Validator) -> Self {
+        Self {
+            match_extender: Some(me),
+            post_match_condition: None,
+        }
+    }
+
+    pub fn with_post_match_condition(pmc: Validator) -> Self {
+        Self {
+            post_match_condition: Some(pmc),
+            match_extender: None,
+        }
+    }
     pub fn validate(&self, ch: &char, validator: Option<Validator>, default: bool) -> bool {
         match validator {
             Some(f) => f(&ch),
@@ -57,19 +70,7 @@ mod tests {
     fn is_newline(ch: &char) -> bool {
         *ch == '\n'
     }
-    fn with_post_match_cond(v: Validator) -> Option<ToValidate> {
-        Some(ToValidate {
-            post_match_condition: Some(v),
-            match_extender: None,
-        })
-    }
 
-    fn with_match_extender(v: Validator) -> Option<ToValidate> {
-        Some(ToValidate {
-            post_match_condition: None,
-            match_extender: Some(v),
-        })
-    }
     fn with_both(pmc: Validator, v: Validator) -> Option<ToValidate> {
         Some(ToValidate {
             post_match_condition: Some(pmc),
@@ -95,15 +96,15 @@ mod tests {
 
     match_validator_tests! {
         none_to_validate: ("does not matter", None, (None, true)),
-        extend_match_with_whitespaces: ("   three whitespaces as prefix", with_match_extender(is_space), (Some(3), true)),
+        extend_match_with_whitespaces: ("   three whitespaces as prefix", Some(ToValidate::with_match_extender(is_space)), (Some(3), true)),
         extend_match_with_whitespaces_till_the_end: ("    ", with_both(is_space, is_space), (Some(4), true)),
         cant_extend_match_with_whitespaces_because_post_match_fails: ( "   x", with_both(is_newline, is_space), (Some(3), false)),
         nothing_to_extend_the_match_to_and_post_match_fails: ( "x", with_both(is_newline, is_space), (Some(0), false)),
         nothing_to_extend_the_match_to_and_post_match_passes: ( "\n", with_both(is_newline, is_space), (Some(0), true)),
         empty_string: ( "", with_both(is_newline, is_space), (Some(0), true)),
-        none_match_extension_and_post_match_fails: ( " ", with_post_match_cond(is_newline,), (None, false)),
-        none_match_extension_and_post_match_passes: ( "\n", with_post_match_cond(is_newline), (None, true)),
-        none_match_extension_and_post_match_fails_inequality: ( ":", with_post_match_cond(does_not_have_colon), (None, false)),
-        none_match_extension_and_post_match_passes_inequality: ( ";", with_post_match_cond(does_not_have_colon), (None, true)),
+        none_match_extension_and_post_match_fails: ( " ", Some(ToValidate::with_post_match_condition(is_newline)), (None, false)),
+        none_match_extension_and_post_match_passes: ( "\n", Some(ToValidate::with_post_match_condition(is_newline)), (None, true)),
+        none_match_extension_and_post_match_fails_inequality: ( ":", Some(ToValidate::with_post_match_condition(does_not_have_colon)), (None, false)),
+        none_match_extension_and_post_match_passes_inequality: ( ";",Some(ToValidate::with_post_match_condition(does_not_have_colon)), (None, true)),
     }
 }
