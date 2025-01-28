@@ -7,4 +7,5 @@ edition = "2021"
 readme = "README.md"
 
 [dependencies]
+parameterized_test = "0.2.1"
 trie-rs = "0.4.2"

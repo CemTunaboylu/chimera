@@ -313,19 +313,7 @@ impl<'t, T> TokeningTrieBuilder<T> {
 mod tests {
 
     use super::*;
-    enum Call<'t> {
-        Insert {
-            to_insert: &'t [&'t str],
-        },
-        FirstMatch {
-            to_insert_first: &'t [&'t str],
-            expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
-        },
-        FirstMatchWithValidators {
-            to_insert_first: Vec<(&'t str, ToValidate)>,
-            expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
-        },
-    }
+    use parameterized_test::create;
 
     fn is_space(ch: &char) -> bool {
         *ch == ' '
@@ -339,53 +327,6 @@ mod tests {
         *ch == '\n'
     }
 
-    fn with_post_match(v: program_text::Validator) -> ToValidate {
-        ToValidate {
-            post_match_condition: Some(v),
-            match_extender: None,
-        }
-    }
-
-    fn with_match_extender(v: program_text::Validator) -> ToValidate {
-        ToValidate {
-            post_match_condition: None,
-            match_extender: Some(v),
-        }
-    }
-
-    fn all_with<'t>(
-        to_insert_first: &'t [&'t str],
-        v: ToValidate,
-        expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
-    ) -> Call<'t> {
-        Call::FirstMatchWithValidators {
-            to_insert_first: to_insert_first.iter().map(|s| (*s, v.clone())).collect(),
-            expected_match_results,
-        }
-    }
-
-    fn first_match_post_match_space_follows<'t>(
-        to_insert_first: &'t [&'t str],
-        expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
-    ) -> Call<'t> {
-        all_with(
-            to_insert_first,
-            with_post_match(is_space),
-            expected_match_results,
-        )
-    }
-
-    fn first_match_match_extend_to_following_spaces<'t>(
-        to_insert_first: &'t [&'t str],
-        expected_match_results: (&'t str, &'t [Option<MatchResult<'t, bool>>]),
-    ) -> Call<'t> {
-        all_with(
-            to_insert_first,
-            with_match_extender(is_space),
-            expected_match_results,
-        )
-    }
-
     fn full(r: Range<usize>, b: &'static bool) -> MatchResult<'static, bool> {
         MatchResult::Full(r, b)
     }
@@ -394,16 +335,8 @@ mod tests {
         MatchResult::Unmatched(r)
     }
 
-    macro_rules! trie_tests {
-    ($($name:ident: $value:expr,)*) => {
-    $(
-        #[test]
-        fn $name() {
-            let method_to_call = $value;
-            let mut ttb : TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
-
-            let expected_match_results = match method_to_call {
-                super::tests::Call::Insert{to_insert}  => {
+    create! {
+        insert_tests, (to_insert), {
                 let mut ttb : TokeningTrieBuilder<usize> = TokeningTrieBuilder::new();
                     for (v,l) in to_insert.into_iter().enumerate() {
                         ttb.insert(l, v);
@@ -415,21 +348,19 @@ mod tests {
                         assert_eq!(true, r.is_some());
                         assert_eq!(x, r.unwrap().value);
                     }
-                    return;
-                },
-                super::tests::Call::FirstMatch{to_insert_first,expected_match_results}  => {
-                    for i in to_insert_first {
-                        ttb.insert(i, true);
-                    }
-                    expected_match_results
-                },
-                super::tests::Call::FirstMatchWithValidators{to_insert_first, expected_match_results}  => {
-                    for i in to_insert_first {
-                        ttb.insert_with(i.0, true, i.1);
-                    }
-                    expected_match_results
-                },
-            };
+        }
+    }
+
+    create! {
+        first_match_tests_with_insert, (to_insert_with, expected_match_results), {
+            let mut ttb : TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
+            for (i, v) in to_insert_with {
+                if v.is_some() {
+                    ttb.insert_with(i, true, v.clone().unwrap());
+                } else {
+                    ttb.insert(i, true);
+                }
+            }
             let trie = ttb.build();
             let p = expected_match_results.0.char_indices();
             let mut matches = trie.first_match(expected_match_results.0);
@@ -439,8 +370,6 @@ mod tests {
                 assert_eq!(*expected, item);
             }
         }
-    )*
-    }
     }
 
     #[test]
@@ -454,63 +383,74 @@ mod tests {
     #[should_panic]
     fn try_to_insert_empty_string_with_validation() {
         let mut ttb: TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
-        ttb.insert_with("", true, with_post_match(is_space));
+        ttb.insert_with("", true, ToValidate::with_post_match_condition(is_space));
     }
 
-    trie_tests! {
-        insert_impl_fn_struct_for_i_i16_i32_and_space: Call::Insert{to_insert: &["impl", "fn", "struct", "for", "i", "i16", "i32", " "]},
-
-        first_match_empty_string: Call::FirstMatch {
-            to_insert_first: &["="],
-            expected_match_results: ("",&[ None])
-        },
-
-        first_match_at_the_end: Call::FirstMatch {
-            to_insert_first: &[" ", "+", ";"],
-            expected_match_results:
-                (" chi+=mera;",
+    insert_tests! {
+        insert_impl_fn_struct_for_i_i16_i32_and_space: &["impl", "fn", "struct", "for", "i", "i16", "i32", " "],
+    }
+    first_match_tests_with_insert! {
+        first_match_empty_string: (&[ ("=", None)], ("",&[ None])),
+        first_match_at_the_end: (
+            &[
+                (" ", None),
+                ("+", None),
+                (";", None)
+            ],
+            (   " chi+=mera;",
                 &[
                     Some(full(0..1, &true)), // " "
                     Some(unmatched(1..4)), // "chi"
                     Some(full(4..5, &true)), // "+"
                     Some(unmatched(5..10)), // "=mera"
                     Some(full(10..11, &true)), // ";"
-                ])
-                },
+                ]
+            ),
+        ),
 
-        first_match_whitespaces: Call::FirstMatch {
-            to_insert_first: &[" ", "  "],
-            expected_match_results:
-                ("   ",
+        first_match_whitespaces: (
+            &[
+                (" ", None),
+                ("  ", None)
+            ],
+            (   "   ",
                 &[
                     Some(full(0..2, &true)), // "  "
                     Some(full(2..3, &true)), // " "
-                ])
-                },
+                ]
+            ),
+        ),
 
-        first_match_bbbaa: Call::FirstMatch {
-            to_insert_first: &["a", "bb", "ba"],
-            expected_match_results:
-                ("bbbaa",
+        first_match_bbbaa: (
+            &[
+                ("a", None),
+                ("bb", None), ("ba", None)
+            ],
+            (   "bbbaa",
                 &[
                     Some(full(0..2, &true)), // "bb"
                     Some(full(2..4, &true)), // "ba"
                     Some(full(4..5, &true)), // "a"
                 ])
-                },
-        first_match_bbbaa_insertion_order_does_not_matter: Call::FirstMatch {
-            to_insert_first: &["ba", "bb", "a"],
-            expected_match_results:
-                ("bbbaa",
+        ),
+        first_match_bbbaa_insertion_order_does_not_matter:(
+            &[
+                ("ba", None),
+                ("bb", None),
+                ("a", None)
+            ],
+            (   "bbbaa",
                 &[
                     Some(full(0..2, &true)), // "bb"
                     Some(full(2..4, &true)), // "ba"
                     Some(full(4..5, &true)), // "a"
                 ])
-                },
-
-        first_match_post_match_equals_in_between_with_space: first_match_post_match_space_follows(
-            &["=", ";"],
+        ),
+        first_match_post_match_equals_in_between_with_space: (
+            &[
+                ("=", Some(ToValidate::with_post_match_condition(is_space))),
+                (";", Some(ToValidate::with_post_match_condition(is_space)))
+            ],
             (
                 "let var = 5;",
                 &[
@@ -518,14 +458,16 @@ mod tests {
                     Some(MatchResult::Full(8..9, &true)), // "="
                     Some(MatchResult::Unmatched(9..11)), // " 5"
                     Some(MatchResult::Full(11..12, &true)), // ";"
-                    ]
+                ]
             )
         ),
 
-        first_match_post_match_whitespaces:
-            first_match_post_match_space_follows(
-                &[" ", "  "],
-                ("   ",
+        first_match_post_match_whitespaces: (
+            &[
+                (" ", Some(ToValidate::with_post_match_condition(is_space))),
+                ("  ", Some(ToValidate::with_post_match_condition(is_space)))
+            ],
+            (   "   ",
                 &[
                     Some(MatchResult::Full(0..2, &true)), // "  "
                     // since its at the end, post_match_condition is not performed
@@ -534,8 +476,10 @@ mod tests {
             ),
 
         first_match_extended_spaces_are_extended:
-            first_match_match_extend_to_following_spaces(
-                &[" "],
+            (
+                &[
+                    (" ", Some(ToValidate::with_match_extender(is_space))),
+                ],
                 ("   three_each   one ",
                 &[
                     Some(MatchResult::Full(0..3, &true)), // "   "
@@ -546,16 +490,14 @@ mod tests {
                 ])
             ),
 
-        first_match_extended_multiple_different:
-            Call::FirstMatchWithValidators {
-            to_insert_first : vec![
-                (" ", with_match_extender(is_space)),
-                ("trait", with_post_match(is_space)),
-                ("impl", with_post_match(is_space)),
-                (":", with_post_match(is_not_colon)),
+        first_match_extended_multiple_different: (
+            vec![
+                (" ", Some(ToValidate::with_match_extender(is_space))),
+                ("trait", Some(ToValidate::with_post_match_condition(is_space))),
+                ("impl", Some(ToValidate::with_post_match_condition(is_space))),
+                (":", Some(ToValidate::with_post_match_condition(is_not_colon))),
             ],
-            expected_match_results :
-                ("  trait S: impl Trait::Method",
+            (   "  trait S: impl Trait::Method",
                 &[
                     Some(MatchResult::Full(0..2, &true)), // "  "
                     Some(MatchResult::Full(2..7, &true)), // "trait"
@@ -568,20 +510,19 @@ mod tests {
                     Some(MatchResult::Unmatched(16..22)), // "Trait:"
                     Some(MatchResult::Full(22..23, &true)), // ":"
                     Some(MatchResult::Unmatched(23..29)), // "Method"
-                ]),
-            },
+                ]
+            )
+        ),
 
-        first_match_rust_expression:
-            Call::FirstMatchWithValidators {
-            to_insert_first : vec![
-                (" ", with_match_extender(is_space)),
-                ("\n", with_match_extender(is_newline)),
-                ("let", with_post_match(is_space)),
-                ("=", with_post_match(is_space)),
-                (";", with_post_match(is_space)),
+        first_match_rust_expression: (
+             vec![
+                (" ", Some(ToValidate::with_match_extender(is_space))),
+                ("\n", Some(ToValidate::with_match_extender(is_newline))),
+                ("let", Some(ToValidate::with_post_match_condition(is_space))),
+                ("=", Some(ToValidate::with_post_match_condition(is_space))),
+                (";", Some(ToValidate::with_post_match_condition(is_space))),
             ],
-            expected_match_results :
-                ("let var = 2;",
+            (   "let var = 2;",
                 &[
                     Some(MatchResult::Full(0..3, &true)), // "let"
                     Some(MatchResult::Full(3..4, &true)), // " "
@@ -591,21 +532,20 @@ mod tests {
                     Some(MatchResult::Full(9..10, &true)), // " "
                     Some(MatchResult::Unmatched(10..11)), // "2"
                     Some(MatchResult::Full(11..12, &true)), // ";"
-                ]),
-            },
-        first_match_japanese:
-        Call::FirstMatchWithValidators {
-            to_insert_first: vec![
-                ("まだ", with_match_extender(is_ma_or_da)),
+                ]
+            ),
+            ),
+        first_match_japanese: (
+             vec![
+                ("まだ", Some(ToValidate::with_match_extender(is_ma_or_da))),
             ],
-            expected_match_results : (
+            (
                 "まだまだ です また",
                 &[
                     Some(MatchResult::Full(0..12, &true)), // "まだまだ",
                     Some(MatchResult::Unmatched(12..26)), // " です また""
                 ]),
-        },
-
+        ),
 
     }
     fn is_ma_or_da(ch: &char) -> bool {
