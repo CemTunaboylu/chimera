@@ -1,13 +1,13 @@
 use std::{fmt::Debug, iter::Peekable, str::CharIndices};
 
+use crate::validator::Validator;
+
 pub type PeekableCharsWithIndices<'m> = Peekable<CharIndices<'m>>;
 #[derive(Debug)]
 pub struct Program<'p> {
     length: usize,
     text: PeekableCharsWithIndices<'p>,
 }
-
-pub type Validator = fn(ch: &char) -> bool;
 
 impl<'p> Program<'p> {
     pub fn new(input: &'p str) -> Self {
