@@ -15,8 +15,8 @@ pub fn apply_post_match_condition(pmc: Chain, prog: &mut Program) -> (usize, usi
     if prog.peek().is_none() {
         return (0, before_index);
     }
-    let passed_chars_moved_index = consume_with_chain(pmc, prog);
-    (before_index, passed_chars_moved_index)
+    let moved_index = consume_with_chain(pmc, prog);
+    (before_index, moved_index)
 }
 
 type ValidatorIndexIter<'v> = Iter<'v, usize>;
@@ -51,7 +51,6 @@ impl<'v> Chain<'v> {
 pub mod tests {
 
     enum TestValidation {
-        None,
         Me((Vec<usize>, bool)),
         Pmc(Vec<usize>),
         Both(((Vec<usize>, bool), Vec<usize>)),
@@ -112,7 +111,6 @@ pub mod tests {
             let mut program = Program::new(program_str);
 
             match validation {
-                TestValidation::None => {return},
                 TestValidation::Me((ix_list, is_cycle)) => {
                     assert_for_me(&ix_list, is_cycle, exp.0, &mut program);
                 },
