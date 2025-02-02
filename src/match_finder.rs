@@ -105,17 +105,17 @@ where
         let trie_value = self.trie_navigator.current_value()?;
 
         let result = match &trie_value.to_validate {
-            crate::validator::Validate::None => true,
-            crate::validator::Validate::PostMatch(validator_chain) => {
+            crate::validator::PostMatchAction::None => true,
+            crate::validator::PostMatchAction::Validate(validator_chain) => {
                 self.validate_post_match_condition(&validator_chain)
             }
-            crate::validator::Validate::MatchExtender(validator_chain) => {
+            crate::validator::PostMatchAction::Extend(validator_chain) => {
                 self.extend_match(validator_chain)
             }
-            crate::validator::Validate::Both((
-                me_validator_chain,
-                post_match_condition_validator_chain,
-            )) => {
+            crate::validator::PostMatchAction::ExtendThenValidate {
+                me: me_validator_chain,
+                pmc: post_match_condition_validator_chain,
+            } => {
                 self.extend_match(me_validator_chain)
                     && self.validate_post_match_condition(post_match_condition_validator_chain)
             }

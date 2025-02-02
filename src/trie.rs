@@ -2,7 +2,7 @@ use trie_rs::map::{Trie, TrieBuilder};
 
 use crate::{
     match_finder::*,
-    validator::{Validate, Validator, ValidatorChain},
+    validator::{cycle, once, PostMatchAction, Validator, ValidatorChain},
 };
 
 use std::{fmt::Debug, iter::Peekable, ops::Range};
@@ -10,14 +10,14 @@ use std::{fmt::Debug, iter::Peekable, ops::Range};
 #[derive(Debug)]
 pub struct TrieValue<Value> {
     pub value: Value,
-    pub to_validate: Validate<usize>,
+    pub to_validate: PostMatchAction<usize>,
 }
 
 impl<V> TrieValue<V> {
     pub fn new(value: V) -> Self {
         Self {
             value: value,
-            to_validate: Validate::None,
+            to_validate: PostMatchAction::None,
         }
     }
 }
@@ -102,23 +102,28 @@ impl<'t, Value: Debug> ValidatingTrieBuilder<Value> {
     fn register_index_list(&mut self, list: List) -> ValidatorChain<usize> {
         let index_pushed = self.chain_indices.len();
         let (vec, validator_chain) = match list {
-            List::Once(vec) => (vec, ValidatorChain::Once(index_pushed)),
-            List::Cycled(vec) => (vec, ValidatorChain::Cycle(index_pushed)),
+            List::Once(vec) => (vec, once(index_pushed)),
+            List::Cycled(vec) => (vec, cycle(index_pushed)),
         };
         self.chain_indices.push(vec);
         validator_chain
     }
-    fn create_validation_from_validator_index(&mut self, v: ValidatorIndex) -> Validate<usize> {
+    fn create_validation_from_validator_index(
+        &mut self,
+        v: ValidatorIndex,
+    ) -> PostMatchAction<usize> {
         match v {
-            ValidatorIndex::None => Validate::None,
+            ValidatorIndex::None => PostMatchAction::None,
             ValidatorIndex::MatchExtender(vec) => {
-                Validate::MatchExtender(self.register_index_list(vec))
+                PostMatchAction::Extend(self.register_index_list(vec))
             }
-            ValidatorIndex::PostMatch(vec) => Validate::PostMatch(self.register_index_list(vec)),
-            ValidatorIndex::Both((me_vec, pmc_vec)) => Validate::Both((
-                self.register_index_list(me_vec),
-                self.register_index_list(pmc_vec),
-            )),
+            ValidatorIndex::PostMatch(vec) => {
+                PostMatchAction::Validate(self.register_index_list(vec))
+            }
+            ValidatorIndex::Both((me_vec, pmc_vec)) => PostMatchAction::ExtendThenValidate {
+                me: self.register_index_list(me_vec),
+                pmc: self.register_index_list(pmc_vec),
+            },
         }
     }
 

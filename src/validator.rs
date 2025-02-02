@@ -14,23 +14,25 @@ pub fn cycle(i: usize) -> ValidatorChain<usize> {
 }
 
 #[derive(Debug, Clone)]
-pub enum Validate<T> {
+pub enum PostMatchAction<T> {
     None,
-    MatchExtender(ValidatorChain<T>),
-    PostMatch(ValidatorChain<T>),
-    // (ME, PMC)
-    Both((ValidatorChain<T>, ValidatorChain<T>)),
+    Extend(ValidatorChain<T>),
+    Validate(ValidatorChain<T>),
+    ExtendThenValidate {
+        me: ValidatorChain<T>,
+        pmc: ValidatorChain<T>,
+    },
 }
 
-impl<T> Default for Validate<T> {
+impl<T> Default for PostMatchAction<T> {
     fn default() -> Self {
         Self::None
     }
 }
-impl<T> Validate<T> {
+impl<T> PostMatchAction<T> {
     pub fn is_none(&self) -> bool {
         match self {
-            Validate::None => true,
+            PostMatchAction::None => true,
             _ => false,
         }
     }
