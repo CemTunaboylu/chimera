@@ -1,33 +1,24 @@
 use trie_rs::map::{Trie, TrieBuilder};
 
-use crate::{match_finder::*, match_validator::*, validator::ToValidate};
+use crate::{
+    match_finder::*,
+    validator::{Validate, Validator, ValidatorChain},
+};
 
 use std::{fmt::Debug, iter::Peekable, ops::Range};
 
 #[derive(Debug)]
 pub struct TrieValue<Value> {
-    value: Value,
-    to_validate: Option<ToValidate<usize>>,
+    pub value: Value,
+    pub to_validate: Validate<usize>,
 }
 
 impl<V> TrieValue<V> {
     pub fn new(value: V) -> Self {
         Self {
             value: value,
-            to_validate: None,
+            to_validate: Validate::None,
         }
-    }
-}
-
-impl<V> HasValidationComponent<usize> for TrieValue<V> {
-    fn get_validation_component(&self) -> Option<&ToValidate<usize>> {
-        self.to_validate.as_ref()
-    }
-}
-
-impl<V> HasValue<V> for TrieValue<V> {
-    fn get_value(&self) -> &V {
-        &self.value
     }
 }
 
@@ -46,29 +37,30 @@ fn create_match_result<'m, V>(a: Answer<'m, V>) -> MatchResult<'m, V> {
 }
 
 #[derive(Debug)]
-pub struct TokenTrie<Value> {
+pub struct ValidatingTrie<Value> {
     trie: Trie<char, TrieValue<Value>>,
+    validators: &'static [Validator],
+    chain_indices: Vec<Vec<usize>>,
 }
-pub struct TokenTrieIterator<'i, V: Debug>(
-    FirstMatchFinder<'i, TrieValue<V>, V, ArenaMatchValidator>,
-);
+pub struct ValidatingTrieIterator<'i, V: Debug>(FirstMatchFinder<'i, V>);
+pub type PeekableValidatingMatchFinder<'i, V> = Peekable<ValidatingTrieIterator<'i, V>>;
 
-pub type MatchingPeekable<'i, V> = Peekable<TokenTrieIterator<'i, V>>;
-
-impl<'i, Value> TokenTrie<Value>
+impl<'i, Value> ValidatingTrie<Value>
 where
     Value: 'i + Debug,
 {
-    pub fn first_match(
-        &'i self,
-        program: &'i str,
-        match_validator: ArenaMatchValidator,
-    ) -> MatchingPeekable<'i, Value> {
-        TokenTrieIterator(FirstMatchFinder::new(program, &self.trie, match_validator)).peekable()
+    pub fn first_match(&'i self, program: &'i str) -> PeekableValidatingMatchFinder<'i, Value> {
+        ValidatingTrieIterator(FirstMatchFinder::new(
+            program,
+            &self.trie,
+            &self.validators,
+            &self.chain_indices,
+        ))
+        .peekable()
     }
 }
 
-impl<'i, V: 'i + Debug> Iterator for TokenTrieIterator<'i, V> {
+impl<'i, V: 'i + Debug> Iterator for ValidatingTrieIterator<'i, V> {
     type Item = MatchResult<'i, V>;
     fn next(&mut self) -> Option<Self::Item> {
         let result = create_match_result(self.0.next()?);
@@ -76,38 +68,76 @@ impl<'i, V: 'i + Debug> Iterator for TokenTrieIterator<'i, V> {
     }
 }
 
-#[derive(Debug)]
-pub struct TokeningTrieBuilder<Value> {
-    trie_builder: TrieBuilder<char, TrieValue<Value>>,
+#[derive(Debug, Clone)]
+pub enum List {
+    Once(Vec<usize>),
+    Cycled(Vec<usize>),
+}
+#[derive(Debug, Clone)]
+pub enum ValidatorIndex {
+    None,
+    MatchExtender(List),
+    PostMatch(List),
+    Both((List, List)),
 }
 
-impl<'t, Value: Debug> TokeningTrieBuilder<Value> {
-    pub fn new() -> Self {
+#[derive(Debug)]
+pub struct ValidatingTrieBuilder<Value> {
+    trie_builder: TrieBuilder<char, TrieValue<Value>>,
+    validators: &'static [Validator],
+    chain_indices: Vec<Vec<usize>>,
+}
+
+impl<'t, Value: Debug> ValidatingTrieBuilder<Value> {
+    pub fn new(validators: &'static [Validator]) -> Self {
         Self {
             trie_builder: TrieBuilder::<char, TrieValue<Value>>::new(),
+            validators: validators,
+            chain_indices: vec![],
         }
     }
     fn validate_str_slice(s: &'t str) {
         assert!(s.len() > 0);
     }
-    pub fn insert(&mut self, key: &'t str, value: Value) {
-        Self::validate_str_slice(key);
-        let trie_value = TrieValue::new(value);
-        let chars: Vec<char> = key.chars().into_iter().collect();
-        self.trie_builder.insert(chars, trie_value);
+    fn register_index_list(&mut self, list: List) -> ValidatorChain<usize> {
+        let index_pushed = self.chain_indices.len();
+        let (vec, validator_chain) = match list {
+            List::Once(vec) => (vec, ValidatorChain::Once(index_pushed)),
+            List::Cycled(vec) => (vec, ValidatorChain::Cycle(index_pushed)),
+        };
+        self.chain_indices.push(vec);
+        validator_chain
+    }
+    fn create_validation_from_validator_index(&mut self, v: ValidatorIndex) -> Validate<usize> {
+        match v {
+            ValidatorIndex::None => Validate::None,
+            ValidatorIndex::MatchExtender(vec) => {
+                Validate::MatchExtender(self.register_index_list(vec))
+            }
+            ValidatorIndex::PostMatch(vec) => Validate::PostMatch(self.register_index_list(vec)),
+            ValidatorIndex::Both((me_vec, pmc_vec)) => Validate::Both((
+                self.register_index_list(me_vec),
+                self.register_index_list(pmc_vec),
+            )),
+        }
     }
 
-    pub fn insert_with(&mut self, key: &'t str, value: Value, with: ToValidate<usize>) {
+    pub fn insert(&mut self, key: &'t str, value: Value, with: ValidatorIndex) {
         Self::validate_str_slice(key);
         let mut trie_value = TrieValue::new(value);
-        trie_value.to_validate = Some(with);
+        let validate = self.create_validation_from_validator_index(with);
+        trie_value.to_validate = validate;
         let chars: Vec<char> = key.chars().into_iter().collect();
         self.trie_builder.insert(chars, trie_value);
     }
 
-    pub fn build(self) -> TokenTrie<Value> {
+    pub fn build(self) -> ValidatingTrie<Value> {
         let trie = self.trie_builder.build();
-        TokenTrie { trie: trie }
+        ValidatingTrie {
+            trie: trie,
+            validators: self.validators,
+            chain_indices: self.chain_indices,
+        }
     }
 }
 
@@ -115,37 +145,14 @@ impl<'t, Value: Debug> TokeningTrieBuilder<Value> {
 mod tests {
 
     use super::*;
-    use crate::match_validator::tests::*;
-    use crate::validator::{ToValidate, ValidatorChain};
+    use crate::match_validation::tests::*;
     use parameterized_test::create;
-
-    fn create_to_validate(
-        pmc: Option<ValidatorChain<usize>>,
-        me: Option<ValidatorChain<usize>>,
-    ) -> Option<ToValidate<usize>> {
-        let mut to_validate = ToValidate::default();
-        to_validate.post_match_condition = pmc;
-        to_validate.match_extender = me;
-        Some(to_validate)
-    }
-
-    fn validation_tuple(
-        me: OptTupleForValChain,
-        pmc: OptTupleForValChain,
-    ) -> Option<(OptTupleForValChain, OptTupleForValChain)> {
-        Some((me, pmc))
-    }
-
-    pub type OptTupleForValChain = Option<(ValChainFunc, Vec<usize>)>;
-    const NONE_TUPLE: Option<(OptTupleForValChain, OptTupleForValChain)> = None;
-    const NONE_ME: OptTupleForValChain = None;
-    const NONE_PMC: OptTupleForValChain = None;
 
     create! {
         insert_tests, (to_insert), {
-                let mut ttb : TokeningTrieBuilder<usize> = TokeningTrieBuilder::new();
+                let mut ttb : ValidatingTrieBuilder<usize> = ValidatingTrieBuilder::new(&VALIDATORS);
                     for (v,l) in to_insert.into_iter().enumerate() {
-                        ttb.insert(l, v);
+                        ttb.insert(l, v, ValidatorIndex::None);
                     }
                     let trie = ttb.build();
                     for (x, i) in to_insert.into_iter().enumerate() {
@@ -159,37 +166,15 @@ mod tests {
 
     create! {
         first_match_tests_with_insert, (to_insert_with_me_pmc_tuples, expected_match_results), {
-            let mut ttb = TokeningTrieBuilder::new();
-            let mut match_validator = ArenaMatchValidator::new(&VALIDATORS);
+            let mut ttb = ValidatingTrieBuilder::new(&VALIDATORS);
 
-            for (i, me_pmc_tuple) in to_insert_with_me_pmc_tuples {
-                if me_pmc_tuple.is_none() {
-                    ttb.insert(i, true);
-                    continue;
-                }
-                let (match_extender_tuple, post_match_condition_tuple)= me_pmc_tuple.clone().unwrap();
-
-                let match_extender = match match_extender_tuple {
-                    None => None,
-                    Some((match_extender_f, me_ix_list)) => {
-                        match_extender_f(&mut match_validator, me_ix_list)
-                    }
-                };
-                let post_match_condition = match post_match_condition_tuple {
-                    None => None,
-                    Some((post_match_condition_f, pmc_ix_list)) => {
-                        post_match_condition_f(&mut match_validator, pmc_ix_list)
-                    }
-                };
-
-                let to_validate = create_to_validate(post_match_condition, match_extender);
-                ttb.insert_with(i, true, to_validate.unwrap());
-
+            for (key, validator_index) in to_insert_with_me_pmc_tuples {
+                ttb.insert(key, true, validator_index.clone());
             }
 
             let trie = ttb.build();
             let p = expected_match_results.0.char_indices();
-            let mut matches = trie.first_match(expected_match_results.0, match_validator);
+            let mut matches = trie.first_match(expected_match_results.0);
 
             for expected in expected_match_results.1.into_iter() {
                 let item = matches.next();
@@ -209,18 +194,18 @@ mod tests {
     #[test]
     #[should_panic]
     fn try_to_insert_empty_string() {
-        let mut ttb: TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
-        ttb.insert("", true);
+        let mut ttb: ValidatingTrieBuilder<bool> = ValidatingTrieBuilder::new(&VALIDATORS);
+        ttb.insert("", true, ValidatorIndex::None);
     }
 
     #[test]
     #[should_panic]
     fn try_to_insert_empty_string_with_validation() {
-        let mut ttb: TokeningTrieBuilder<bool> = TokeningTrieBuilder::new();
-        ttb.insert_with(
+        let mut ttb: ValidatingTrieBuilder<bool> = ValidatingTrieBuilder::new(&VALIDATORS);
+        ttb.insert(
             "",
             true,
-            ToValidate::with_post_match_condition(ValidatorChain::Once(0)),
+            ValidatorIndex::Both((List::Cycled(vec![0]), List::Once(vec![0]))),
         );
     }
 
@@ -229,12 +214,12 @@ mod tests {
     }
 
     first_match_tests_with_insert! {
-        first_match_empty_string: (&[ ("=", NONE_TUPLE)], ("",&[None])),
+        first_match_empty_string: (&[ ("=", ValidatorIndex::None)], ("",&[None])),
         first_match_at_the_end: (
             &[
-                (" ", NONE_TUPLE),
-                ("+", NONE_TUPLE),
-                (";", NONE_TUPLE)
+                (" ", ValidatorIndex::None),
+                ("+", ValidatorIndex::None),
+                (";", ValidatorIndex::None)
             ],
             (   " chi+=mera;",
                 &[
@@ -249,8 +234,8 @@ mod tests {
 
         first_match_whitespaces: (
             &[
-                (" ", NONE_TUPLE),
-                ("  ", NONE_TUPLE)
+                (" ", ValidatorIndex::None),
+                ("  ", ValidatorIndex::None)
             ],
             (   "   ",
                 &[
@@ -262,9 +247,9 @@ mod tests {
 
         first_match_bbbaa: (
             &[
-                ("a", NONE_TUPLE),
-                ("bb", NONE_TUPLE),
-                ("ba", NONE_TUPLE)
+                ("a", ValidatorIndex::None),
+                ("bb", ValidatorIndex::None),
+                ("ba", ValidatorIndex::None)
             ],
             (   "bbbaa",
                 &[
@@ -275,9 +260,9 @@ mod tests {
         ),
         first_match_bbbaa_insertion_order_does_not_matter:(
             &[
-                ("ba", NONE_TUPLE),
-                ("bb", NONE_TUPLE),
-                ("a", NONE_TUPLE)
+                ("ba", ValidatorIndex::None),
+                ("bb", ValidatorIndex::None),
+                ("a", ValidatorIndex::None)
             ],
             (   "bbbaa",
                 &[
@@ -288,8 +273,8 @@ mod tests {
         ),
         first_match_post_match_equals_in_between_with_space: (
             &[
-                ("=", validation_tuple(NONE_ME, Some((once_validator_chain, vec![IS_SPACE])))),
-                (";", validation_tuple(NONE_ME, Some((once_validator_chain, vec![IS_SPACE])))),
+                ("=", ValidatorIndex::PostMatch(List::Once(vec![IS_SPACE]))),
+                (";", ValidatorIndex::PostMatch(List::Once(vec![IS_SPACE]))),
             ],
             (
                 "let var = 5;",
@@ -304,8 +289,8 @@ mod tests {
 
         first_match_post_match_whitespaces: (
             &[
-                (" ", validation_tuple(Some((once_validator_chain, vec![IS_SPACE])), None)),
-                ("  ", validation_tuple(Some((once_validator_chain, vec![IS_NEWLINE])), None)),
+                (" ", ValidatorIndex::MatchExtender(List::Once(vec![IS_SPACE]))),
+                ("  ", ValidatorIndex::MatchExtender(List::Once(vec![IS_NEWLINE]))),
             ],
             (   "   ",
                 &[
@@ -317,8 +302,8 @@ mod tests {
 
         first_match_post_match_whitespaces_longer_match: (
             &[
-                (" ", validation_tuple(Some((once_validator_chain, vec![IS_SPACE])), None)),
-                ("  ", validation_tuple(Some((once_validator_chain, vec![IS_SPACE])), None)),
+                (" ", ValidatorIndex::MatchExtender(List::Cycled(vec![IS_SPACE]))),
+                ("  ", ValidatorIndex::MatchExtender(List::Once(vec![IS_SPACE]))),
             ],
             (   "   ",
                 &[
@@ -329,7 +314,7 @@ mod tests {
         first_match_extended_spaces_are_extended:
             (
                 &[
-                    (" ", validation_tuple(Some((cycled_validator_chain, vec![IS_SPACE])), NONE_PMC)),
+                    (" ", ValidatorIndex::MatchExtender(List::Cycled(vec![IS_SPACE]))),
                 ],
                 ("   three_each   one ",
                 &[
@@ -343,19 +328,19 @@ mod tests {
 
         first_match_extended_multiple_different: (
             vec![
-                // with the ValidatorChain, we consume the post match conditions now
-                (" ", validation_tuple( NONE_ME, Some((once_validator_chain, vec![IS_SPACE])) )),
-                ("trait", validation_tuple( NONE_ME, Some((once_validator_chain, vec![IS_SPACE])))),
-                ("impl", validation_tuple( Some((once_validator_chain, vec![IS_SPACE])), NONE_PMC )),
-                (":", validation_tuple( Some((once_validator_chain, vec![IS_DOUBLE_COLONS])), NONE_PMC )),
+                // with the ValidatorChain, we consume the post match conditions
+                (" ", ValidatorIndex::MatchExtender(List::Cycled(vec![IS_SPACE]))),
+                ("trait", ValidatorIndex::PostMatch(List::Cycled(vec![IS_SPACE]))),
+                ("impl", ValidatorIndex::PostMatch(List::Cycled(vec![IS_SPACE]))),
+                (":", ValidatorIndex::MatchExtender(List::Once(vec![IS_DOUBLE_COLONS]))),
             ],
             (   "  trait S: impl Trait::Method",
                 &[
-                    Some(MatchResult::Full(0..2, &true)), // " "
-                    Some(MatchResult::Full(2..8, &true)), // "trait"
+                    Some(MatchResult::Full(0..2, &true)), // "  "
+                    Some(MatchResult::Full(2..8, &true)), // "trait "
                     Some(MatchResult::Unmatched(8..9)), // "S"
                     Some(MatchResult::Full(9..10, &true)), // ":"
-                    Some(MatchResult::Unmatched(10..11)), // " "
+                    Some(MatchResult::Full(10..11, &true)), // " "
                     Some(MatchResult::Full(11..16, &true)), // "impl "
                     Some(MatchResult::Unmatched(16..21)), // "Trait"
                     Some(MatchResult::Full(21..23, &true)), // "::"
@@ -366,11 +351,11 @@ mod tests {
 
         first_match_rust_expression: (
              vec![
-                (" ", validation_tuple( Some((once_validator_chain, vec![IS_SPACE])), NONE_PMC )),
-                ("\n", validation_tuple( NONE_ME, Some((once_validator_chain, vec![IS_NEWLINE])) )),
-                ("let", validation_tuple( Some((once_validator_chain, vec![IS_SPACE])), NONE_PMC) ),
-                ("=", NONE_TUPLE ),
-                (";", validation_tuple( Some((once_validator_chain, vec![IS_SPACE])), NONE_PMC) ),
+                (" ", ValidatorIndex::MatchExtender(List::Cycled(vec![IS_SPACE]))),
+                ("\n", ValidatorIndex::MatchExtender(List::Cycled(vec![IS_NEWLINE]))),
+                ("let", ValidatorIndex::PostMatch(List::Cycled(vec![IS_SPACE]))),
+                ("=", ValidatorIndex::None),
+                (";", ValidatorIndex::PostMatch(List::Cycled(vec![IS_SPACE]))),
             ],
             (   "let var = 2;",
                 &[
@@ -386,9 +371,10 @@ mod tests {
             ),
         first_match_japanese: (
             vec![
-                ("まだ", validation_tuple(
-                        Some((once_validator_chain, vec![IS_MA, IS_DA])),
-                        Some((once_validator_chain, vec![IS_SPACE, IS_DE, IS_SU])))
+                ("まだ", ValidatorIndex::Both((
+                        List::Once(vec![IS_MA, IS_DA]),
+                        List::Once(vec![IS_SPACE, IS_DE, IS_SU]),
+                    ))
                 )
                 ],
             (

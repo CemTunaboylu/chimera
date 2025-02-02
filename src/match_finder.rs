@@ -1,32 +1,25 @@
-use std::{fmt::Debug, marker::PhantomData, ops::Range};
+use std::{fmt::Debug, ops::Range};
 
 use trie_rs::{inc_search::IncSearch, map::Trie};
 
 use crate::{
-    match_validator::MatchValidator, program_text::Program, range_indices::RangeIndices,
-    validator::ToValidate,
+    match_validation::{apply_post_match_condition, extend_match, Chain},
+    program_text::Program,
+    range_indices::RangeIndices,
+    trie::TrieValue,
+    validator::{Validator, ValidatorChain},
 };
 
 pub type Answer<'m, V> = (Range<usize>, Option<&'m V>);
 type TrieSearch<'s, V> = IncSearch<'s, char, V>;
-struct TrieNavigator<'t, Value, VldComp>
-where
-    Value: Debug,
-    VldComp: HasValidationComponent<usize> + HasValue<Value> + Debug,
-{
-    search: TrieSearch<'t, VldComp>,
-    __value: PhantomData<Value>,
+struct TrieNavigator<'t, V> {
+    search: TrieSearch<'t, TrieValue<V>>,
 }
 
-impl<'t, Value, VldComp> TrieNavigator<'t, Value, VldComp>
-where
-    Value: Debug,
-    VldComp: HasValidationComponent<usize> + HasValue<Value> + Debug,
-{
-    pub fn new(trie: &'t Trie<char, VldComp>) -> Self {
+impl<'t, V> TrieNavigator<'t, V> {
+    pub fn new(trie: &'t Trie<char, TrieValue<V>>) -> Self {
         Self {
             search: trie.inc_search(),
-            __value: PhantomData,
         }
     }
     pub fn took_the_branch_of(&mut self, ch: char) -> bool {
@@ -37,83 +30,98 @@ where
         self.search.reset();
     }
 
-    pub fn current_value(&self) -> Option<&'t VldComp> {
+    pub fn current_value(&self) -> Option<&'t TrieValue<V>> {
         self.search.value()
     }
 }
 
-pub trait HasValidationComponent<VC> {
-    fn get_validation_component(&self) -> Option<&ToValidate<VC>>;
-}
-
-pub trait HasValue<V> {
-    fn get_value(&self) -> &V;
-}
-pub struct FirstMatchFinder<'m, VldComp, Value, MV>
+pub struct FirstMatchFinder<'m, Value>
 where
     Value: Debug,
-    VldComp: HasValidationComponent<usize> + HasValue<Value> + Debug,
-    MV: MatchValidator<usize>,
 {
     program: Program<'m>,
-    trie_navigator: TrieNavigator<'m, Value, VldComp>,
+    trie_navigator: TrieNavigator<'m, Value>,
     indices: RangeIndices,
-    match_validator: MV,
+    validators: &'static [Validator],
+    chain_indices: &'m Vec<Vec<usize>>,
     saved: Option<Answer<'m, Value>>,
 }
 
-impl<'m, VldComp, Value, MV> FirstMatchFinder<'m, VldComp, Value, MV>
+impl<'m, Value> FirstMatchFinder<'m, Value>
 where
     Value: Debug,
-    VldComp: HasValidationComponent<usize> + HasValue<Value> + Debug,
-    MV: MatchValidator<usize>,
 {
-    pub fn new(program: &'m str, trie: &'m Trie<char, VldComp>, match_validator: MV) -> Self {
+    pub fn new(
+        program: &'m str,
+        trie: &'m Trie<char, TrieValue<Value>>,
+        validators: &'static [Validator],
+        chain_indices: &'m Vec<Vec<usize>>,
+    ) -> Self {
         Self {
             program: Program::new(program),
             trie_navigator: TrieNavigator::new(trie),
             indices: RangeIndices::new(),
-            match_validator: match_validator,
+            validators: validators,
+            chain_indices: chain_indices,
             saved: None,
+        }
+    }
+    pub fn prepare_validators_for(&self, vc: &ValidatorChain<usize>) -> Chain<'m> {
+        let (ix, is_cycle) = match vc {
+            ValidatorChain::Once(ix) => (ix, false),
+            ValidatorChain::Cycle(ix) => (ix, true),
+        };
+        let indices = self.chain_indices.get(*ix).unwrap();
+        let validators_ref = self.validators.as_ref();
+        match is_cycle {
+            false => Chain::once(validators_ref, &indices),
+            true => Chain::cycle(validators_ref, &indices),
+        }
+    }
+
+    fn validate_post_match_condition(&mut self, validator_chain: &ValidatorChain<usize>) -> bool {
+        let chain = self.prepare_validators_for(&validator_chain);
+        let (before, after) = apply_post_match_condition(chain, &mut self.program);
+        if before < after {
+            self.indices.end_match(after);
+            return true;
+        }
+        false
+    }
+
+    fn extend_match(&mut self, validator_chain: &ValidatorChain<usize>) -> bool {
+        let chain = self.prepare_validators_for(&validator_chain);
+        // Note: for Chimera, there is no case where match is extended iff
+        // post_match_condition is met thus the greed and simplicity of the consume_while
+        if let Some(moved_index) = extend_match(chain, &mut self.program) {
+            self.indices.end_match(moved_index);
+            true
+        } else {
+            false
         }
     }
 
     fn validate_match_result(&mut self) -> Option<&'m Value> {
         let trie_value = self.trie_navigator.current_value()?;
 
-        let mut consumed_all = false;
-        if trie_value.get_validation_component().is_none() {
-            return Some(trie_value.get_value());
-        }
-        let to_validate = trie_value.get_validation_component().unwrap();
-        // Note: for Chimera, there is no case where match is extended iff
-        // post_match_condition is met thus the greed and simplicity of the consume_while
-        if let Some(extended_index) = self
-            .match_validator
-            .extend_match(to_validate.match_extender.as_ref(), &mut self.program)
-        {
-            let end_index = if self.program.at_end() {
-                consumed_all = true;
-                self.program.len()
-            } else {
-                extended_index
-            };
-            self.indices.end_match(end_index);
-        }
-        // At this point, we started a match BUT could NOT finish it either because:
-        //  i. search.peek() didn't hit None, or ii. we extended the match all the way to the end
-        // it's a full match (we have a value) BUT can't validate post-match since
-        // NO more characters left preceeding the match
-        let result = &trie_value.get_value();
-        if consumed_all {
-            Some(result)
-        } else if self.match_validator.apply_post_match_condition(
-            to_validate.post_match_condition.as_ref(),
-            &mut self.program,
-        ) {
-            let moved_index = self.program.peek_index();
-            self.indices.end_match(moved_index);
-            Some(result)
+        let result = match &trie_value.to_validate {
+            crate::validator::Validate::None => true,
+            crate::validator::Validate::PostMatch(validator_chain) => {
+                self.validate_post_match_condition(&validator_chain)
+            }
+            crate::validator::Validate::MatchExtender(validator_chain) => {
+                self.extend_match(validator_chain)
+            }
+            crate::validator::Validate::Both((
+                me_validator_chain,
+                post_match_condition_validator_chain,
+            )) => {
+                self.extend_match(me_validator_chain)
+                    && self.validate_post_match_condition(post_match_condition_validator_chain)
+            }
+        };
+        if result {
+            Some(&trie_value.value)
         } else {
             None
         }
@@ -156,10 +164,8 @@ where
                 //  i. search.peek() didn't hit None, or ii. we extended the match all the way to the end
                 // it's a full match (we have a value) BUT can't validate post-match since
                 // NO more characters left preceeding the match
-                let fully_matched = Some((
-                    self.indices.form_answer_range(),
-                    Some(trie_value.get_value()),
-                ));
+                let fully_matched =
+                    Some((self.indices.form_answer_range(), Some(&trie_value.value)));
                 if self.indices.has_an_unmatched_slice_before() {
                     self.saved = fully_matched;
                     Some((self.indices.form_unmatched_range(), None))
@@ -171,11 +177,9 @@ where
     }
 }
 
-impl<'m, VldComp, Value, MV> Iterator for FirstMatchFinder<'m, VldComp, Value, MV>
+impl<'m, Value> Iterator for FirstMatchFinder<'m, Value>
 where
     Value: Debug,
-    VldComp: HasValidationComponent<usize> + HasValue<Value> + Debug,
-    MV: MatchValidator<usize>,
 {
     type Item = Answer<'m, Value>;
 
