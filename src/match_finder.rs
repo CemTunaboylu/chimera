@@ -61,8 +61,8 @@ where
             program: Program::new(program),
             trie_navigator: TrieNavigator::new(trie),
             indices: RangeIndices::new(),
-            validators: validators,
-            chain_indices: chain_indices,
+            validators,
+            chain_indices,
             saved: None,
         }
     }
@@ -72,15 +72,15 @@ where
             ValidatorChain::Cycle(ix) => (ix, true),
         };
         let indices = self.chain_indices.get(*ix).unwrap();
-        let validators_ref = self.validators.as_ref();
+        let validators = self.validators;
         match is_cycle {
-            false => Chain::once(validators_ref, &indices),
-            true => Chain::cycle(validators_ref, &indices),
+            false => Chain::once(validators, indices),
+            true => Chain::cycle(validators, indices),
         }
     }
 
     fn validate_post_match_condition(&mut self, validator_chain: &ValidatorChain<usize>) -> bool {
-        let chain = self.prepare_validators_for(&validator_chain);
+        let chain = self.prepare_validators_for(validator_chain);
         let (before, after) = apply_post_match_condition(chain, &mut self.program);
         if before < after {
             self.indices.end_match(after);
@@ -90,7 +90,7 @@ where
     }
 
     fn extend_match(&mut self, validator_chain: &ValidatorChain<usize>) -> bool {
-        let chain = self.prepare_validators_for(&validator_chain);
+        let chain = self.prepare_validators_for(validator_chain);
         // Note: for Chimera, there is no case where match is extended iff
         // post_match_condition is met thus the greed and simplicity of the consume_while
         if let Some(moved_index) = extend_match(chain, &mut self.program) {
@@ -107,7 +107,7 @@ where
         let result = match &trie_value.to_validate {
             crate::validator::PostMatchAction::None => true,
             crate::validator::PostMatchAction::Validate(validator_chain) => {
-                self.validate_post_match_condition(&validator_chain)
+                self.validate_post_match_condition(validator_chain)
             }
             crate::validator::PostMatchAction::Extend(validator_chain) => {
                 self.extend_match(validator_chain)
@@ -231,12 +231,9 @@ where
                 }
                 // have started a match on the trie BUT next search query does NOT match, i.e. match is ending
                 (true, false) => {
-                    match self.process_match_candidate(index) {
-                        Some(answer) => {
-                            candidate = Some(answer);
-                            break;
-                        }
-                        None => {}
+                    if let Some(answer) = self.process_match_candidate(index) {
+                        candidate = Some(answer);
+                        break;
                     }
                     // have a partial match, OR if any, min. one expectation failed
                     // thus search needs to be reset to 'forget' the past

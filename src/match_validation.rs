@@ -40,10 +40,10 @@ impl<'v> Iterator for Chain<'v> {
 }
 
 impl<'v> Chain<'v> {
-    pub fn once(v_arr: &'v [Validator], vec: &'v Vec<usize>) -> Self {
+    pub fn once(v_arr: &'v [Validator], vec: &'v [usize]) -> Self {
         Self::Once((v_arr, vec.iter()))
     }
-    pub fn cycle(v_arr: &'v [Validator], vec: &'v Vec<usize>) -> Self {
+    pub fn cycle(v_arr: &'v [Validator], vec: &'v [usize]) -> Self {
         Self::Cycle((v_arr, vec.iter().cycle()))
     }
 }

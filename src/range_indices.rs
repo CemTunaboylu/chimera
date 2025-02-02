@@ -46,11 +46,11 @@ impl RangeIndices {
         } else {
             self.end_of_match
         };
-        return if self.has_a_match_started() {
+        (if self.has_a_match_started() {
             self.start_of_first_match
         } else {
             if_no_match
-        } as usize;
+        }) as usize
     }
     pub fn form_answer_range(&self) -> Range<usize> {
         let s = self.ternary(true);

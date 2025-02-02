@@ -31,9 +31,6 @@ impl<T> Default for PostMatchAction<T> {
 }
 impl<T> PostMatchAction<T> {
     pub fn is_none(&self) -> bool {
-        match self {
-            PostMatchAction::None => true,
-            _ => false,
-        }
+        matches!(self, PostMatchAction::None)
     }
 }

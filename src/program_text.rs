@@ -17,7 +17,7 @@ impl<'p> Program<'p> {
         }
     }
     pub fn peek(&mut self) -> Option<(usize, char)> {
-        self.text.peek().map(|ix_and_ch_tuple| *ix_and_ch_tuple)
+        self.text.peek().copied()
     }
 
     pub fn peek_index(&mut self) -> usize {

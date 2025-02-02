@@ -16,7 +16,7 @@ pub struct TrieValue<Value> {
 impl<V> TrieValue<V> {
     pub fn new(value: V) -> Self {
         Self {
-            value: value,
+            value,
             to_validate: PostMatchAction::None,
         }
     }
@@ -28,7 +28,7 @@ pub enum MatchResult<'m, V> {
     Full(Range<usize>, &'m V),
 }
 
-fn create_match_result<'m, V>(a: Answer<'m, V>) -> MatchResult<'m, V> {
+fn create_match_result<V>(a: Answer<V>) -> MatchResult<V> {
     let range = a.0;
     match a.1 {
         Some(val) => MatchResult::Full(range, val),
@@ -53,7 +53,7 @@ where
         ValidatingTrieIterator(FirstMatchFinder::new(
             program,
             &self.trie,
-            &self.validators,
+            self.validators,
             &self.chain_indices,
         ))
         .peekable()
@@ -92,12 +92,12 @@ impl<'t, Value: Debug> ValidatingTrieBuilder<Value> {
     pub fn new(validators: &'static [Validator]) -> Self {
         Self {
             trie_builder: TrieBuilder::<char, TrieValue<Value>>::new(),
-            validators: validators,
+            validators,
             chain_indices: vec![],
         }
     }
     fn validate_str_slice(s: &'t str) {
-        assert!(s.len() > 0);
+        assert!(!s.is_empty());
     }
     fn register_index_list(&mut self, list: List) -> ValidatorChain<usize> {
         let index_pushed = self.chain_indices.len();
@@ -132,14 +132,14 @@ impl<'t, Value: Debug> ValidatingTrieBuilder<Value> {
         let mut trie_value = TrieValue::new(value);
         let validate = self.create_validation_from_validator_index(with);
         trie_value.to_validate = validate;
-        let chars: Vec<char> = key.chars().into_iter().collect();
+        let chars: Vec<char> = key.chars().collect();
         self.trie_builder.insert(chars, trie_value);
     }
 
     pub fn build(self) -> ValidatingTrie<Value> {
         let trie = self.trie_builder.build();
         ValidatingTrie {
-            trie: trie,
+            trie,
             validators: self.validators,
             chain_indices: self.chain_indices,
         }
