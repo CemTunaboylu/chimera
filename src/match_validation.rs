@@ -2,23 +2,6 @@ use crate::{program_text::Program, validator::Validator};
 
 use std::{fmt::Debug, iter::Cycle, slice::Iter};
 
-pub fn consume_with_chain(chain: Chain, prog: &mut Program) -> usize {
-    prog.consume_while(chain);
-    prog.peek_index()
-}
-
-pub fn extend_match(match_extender: Chain, prog: &mut Program) -> Option<usize> {
-    Some(consume_with_chain(match_extender, prog))
-}
-pub fn apply_post_match_condition(pmc: Chain, prog: &mut Program) -> (usize, usize) {
-    let before_index = prog.peek_index();
-    if prog.peek().is_none() {
-        return (0, before_index);
-    }
-    let moved_index = consume_with_chain(pmc, prog);
-    (before_index, moved_index)
-}
-
 type ValidatorIndexIter<'v> = Iter<'v, usize>;
 #[derive(Clone, Debug)]
 pub enum Chain<'v> {
@@ -46,6 +29,23 @@ impl<'v> Chain<'v> {
     pub fn cycle(v_arr: &'v [Validator], vec: &'v [usize]) -> Self {
         Self::Cycle((v_arr, vec.iter().cycle()))
     }
+}
+
+pub fn consume_with_chain(chain: Chain, prog: &mut Program) -> usize {
+    prog.consume_while(chain);
+    prog.peek_index()
+}
+
+pub fn extend_match(match_extender: Chain, prog: &mut Program) -> Option<usize> {
+    Some(consume_with_chain(match_extender, prog))
+}
+pub fn apply_post_match_condition(pmc: Chain, prog: &mut Program) -> (usize, usize) {
+    let before_index = prog.peek_index();
+    if prog.peek().is_none() {
+        return (0, before_index);
+    }
+    let moved_index = consume_with_chain(pmc, prog);
+    (before_index, moved_index)
 }
 #[cfg(test)]
 pub mod tests {

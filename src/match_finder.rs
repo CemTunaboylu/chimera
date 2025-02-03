@@ -93,12 +93,10 @@ where
         let chain = self.prepare_validators_for(validator_chain);
         // Note: for Chimera, there is no case where match is extended iff
         // post_match_condition is met thus the greed and simplicity of the consume_while
-        if let Some(moved_index) = extend_match(chain, &mut self.program) {
+        extend_match(chain, &mut self.program).is_some_and(|moved_index| {
             self.indices.end_match(moved_index);
             true
-        } else {
-            false
-        }
+        })
     }
 
     fn validate_match_result(&mut self) -> Option<&'m Value> {
@@ -120,11 +118,7 @@ where
                     && self.validate_post_match_condition(post_match_condition_validator_chain)
             }
         };
-        if result {
-            Some(&trie_value.value)
-        } else {
-            None
-        }
+        result.then(|| &trie_value.value)
     }
 
     fn process_match_candidate(&mut self, peeked_index: usize) -> Option<Answer<'m, Value>> {
