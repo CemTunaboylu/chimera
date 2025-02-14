@@ -1,15 +1,57 @@
 use logos::Logos;
+use num_derive::{FromPrimitive, ToPrimitive};
 
-#[derive(Copy, Clone, Debug, Logos, PartialEq)]
-pub enum TokenKind {
+pub struct Lexer<'l> {
+    inner_lexer: logos::Lexer<'l, SyntaxKind>,
+}
+
+impl<'l> Lexer<'l> {
+    pub fn new(program: &'l str) -> Self {
+        Self {
+            inner_lexer: SyntaxKind::lexer(program),
+        }
+    }
+
+    pub fn slice(&self) -> &'l str {
+        self.inner_lexer.slice()
+    }
+}
+
+impl<'l> Iterator for Lexer<'l> {
+    type Item = (Result<SyntaxKind, ()>, &'l str);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let kind = self.inner_lexer.next()?;
+        let text = self.inner_lexer.slice();
+
+        Some((kind, text))
+    }
+}
+
+#[derive(
+    Copy, Clone, Debug, Eq, FromPrimitive, Hash, Logos, Ord, PartialEq, PartialOrd, ToPrimitive,
+)]
+pub enum SyntaxKind {
+    // composite nodes for rowan
+    Atom,
+    // n-ary operators
+    PrefixOp,
+    PostFixOp,
+    InfixBinaryOp,
+    TrinaryOp,
+    Literal,
+    ParenExpr,
+
+    Root,
     #[token("&")]
     And,
     #[token("&&")]
     AndAnd,
     #[token("&=")]
     AndEq,
-    #[token("as")]
-    As,
+    // type coercion will be dealt later, if time permits
+    // #[token("as")]
+    // As,
     #[token("@")]
     Attribute,
     #[regex(r"/\*([^*]|\*[^*/])*\*/")]
@@ -26,8 +68,8 @@ pub enum TokenKind {
     DotDot,
     #[token("...")]
     DotDotDot,
-    #[token("..=")]
-    DotDotEq,
+    // #[token("..=")]
+    // DotDotEq,
     #[token("=")]
     Eq,
     #[token("==")]
@@ -58,12 +100,10 @@ pub enum TokenKind {
     KwFn,
     #[token("for")]
     KwFor,
-    #[token("go")]
-    KwGo, // same as go command as in Golang
     #[token("if")]
     KwIf,
-    #[token("impl")]
-    KwImpl,
+    // #[token("impl")]
+    // KwImpl,
     #[token("import")]
     KwImport,
     #[token("in")]
@@ -74,30 +114,30 @@ pub enum TokenKind {
     KwModule,
     #[token("mut")]
     KwMut,
-    #[token("pkg")] // same as crate in rust
-    KwPackage,
-    #[token("pub")]
-    KwPub,
+    // #[token("pkg")] // same as crate in rust
+    // KwPackage,
+    // #[token("pub")]
+    // KwPub,
     #[token("return")]
     KwReturn,
     #[token("Self")]
     KwSelf,
-    #[token("static")]
-    KwStatic,
+    // #[token("static")]
+    // KwStatic,
     #[token("struct")]
     KwStruct,
-    #[token("trait")]
-    KwTrait,
+    // #[token("trait")]
+    // KwTrait,
     #[token("true")]
     KwTrue,
     #[token("type")]
     KwType,
     #[token("while")]
     KwWhile,
-    #[token("yield")]
-    KwYield,
-    #[token("zk")]
-    KwZk,
+    // #[token("yield")]
+    // KwYield,
+    // #[token("zk")]
+    // KwZk,
     #[token("self")]
     Kwself,
     #[token("<-")]
@@ -182,22 +222,32 @@ pub enum TokenKind {
     TypeChar,
     #[token("f32")]
     TypeF32,
-    #[token("f64")]
-    TypeF64,
+    // #[token("f64")]
+    // TypeF64,
     #[token("i32")]
     TypeI32,
-    #[token("i64")]
-    TypeI64,
+    // #[token("i64")]
+    // TypeI64,
     #[token("str")]
     TypeStrSlice,
     #[token("String")]
     TypeString,
     #[token("u32")]
     TypeU32,
-    #[token("u64")]
-    TypeU64,
-    #[token("_")] // a number can be written with _ to separate and easen reading
-    Underscore,
+    // #[token("u64")]
+    // TypeU64,
+    // non-critical, will be dealt with later if time permits
+    // #[token("_")] // a number can be written with _ to separate and easen reading
+    // Underscore,
+}
+
+impl SyntaxKind {
+    pub(crate) fn is_trivia(self) -> bool {
+        matches!(
+            self,
+            Self::Space | Self::LineComment | Self::BlockComment | Self::Newline
+        )
+    }
 }
 
 #[cfg(test)]
@@ -206,13 +256,11 @@ mod tests {
 
     use super::*;
 
-    fn assert_token_kind(with: &str, token_kind: TokenKind) {
-        let mut lexer = TokenKind::lexer(with);
-        assert_eq!(
-            token_kind,
-            lexer.next().unwrap().expect("expected a tokenkind")
-        );
-        assert_eq!(with, lexer.slice());
+    fn assert_token_kind(with: &str, token_kind: SyntaxKind) {
+        let mut lexer = Lexer::new(with);
+        let result = lexer.next().unwrap();
+        assert_eq!(token_kind, result.0.expect("expected a tokenkind"));
+        assert_eq!(with, result.1);
     }
 
     create! {
@@ -222,104 +270,104 @@ mod tests {
         }
     }
     create_lexer_test! {
-            and: ("&", TokenKind::And),
-            andand: ("&&", TokenKind::AndAnd),
-            andeq: ("&=", TokenKind::AndEq),
-            as_: ("as", TokenKind::As),
-            attribute: ("@", TokenKind::Attribute),
-            block_comment: ("/* block comment */", TokenKind::BlockComment),
-            char_literal: ("'c'", TokenKind::CharLiteral),
-            colon: (":", TokenKind::Colon),
-            comma: (",", TokenKind::Comma),
-            dot: (".", TokenKind::Dot),
-            dotdot: ("..", TokenKind::DotDot),
-            dotdotdot: ("...", TokenKind::DotDotDot),
-            dotdoteq: ("..=", TokenKind::DotDotEq),
-            eq: ("=", TokenKind::Eq),
-            eqeq: ("==", TokenKind::EqEq),
-            exclamation: ("!", TokenKind::Exclamation),
-            fat_right_arrow: ("=>", TokenKind::FatRightArrow),
-            greater_than: (">", TokenKind::GreaterThan),
-            identifier: ("l0n9_id3nt1f13r", TokenKind::Identifier),
-            kw_break: ("break", TokenKind::KwBreak),
-            kw_const: ("const", TokenKind::KwConst),
-            kw_continue: ("continue", TokenKind::KwContinue),
-            kw_elif: ("elif", TokenKind::KwElif),
-            kw_else: ("else", TokenKind::KwElse),
-            kw_enum: ("enum", TokenKind::KwEnum),
-            kw_false: ("false", TokenKind::KwFalse),
-            kw_fn: ("fn", TokenKind::KwFn),
-            kw_for: ("for", TokenKind::KwFor),
-            kw_go: ("go", TokenKind::KwGo),
-            kw_if: ("if", TokenKind::KwIf),
-            kw_impl: ("impl", TokenKind::KwImpl),
-            kw_import: ("import", TokenKind::KwImport),
-            kw_in: ("in", TokenKind::KwIn),
-            kw_let: ("let", TokenKind::KwLet),
-            kw_module: ("mod", TokenKind::KwModule),
-            kw_mut: ("mut", TokenKind::KwMut),
-            kw_package: ("pkg", TokenKind::KwPackage),
-            kw_pub: ("pub", TokenKind::KwPub),
-            kw_return: ("return", TokenKind::KwReturn),
-            kw_self: ("Self", TokenKind::KwSelf),
-            kw_static: ("static", TokenKind::KwStatic),
-            kw_struct: ("struct", TokenKind::KwStruct),
-            kw_trait: ("trait", TokenKind::KwTrait),
-            kw_true: ("true", TokenKind::KwTrue),
-            kw_type: ("type", TokenKind::KwType),
-            kw_while: ("while", TokenKind::KwWhile),
-            kw_yield: ("yield", TokenKind::KwYield),
-            kw_zk: ("zk", TokenKind::KwZk),
-            kwself: ("self", TokenKind::Kwself),
-            left_arrow: ("<-", TokenKind::LeftArrow),
-            left_brace: ("{", TokenKind::LeftBrace),
-            left_paren: ("(", TokenKind::LeftParen),
-            left_shift: ("<<", TokenKind::LeftShift),
-            left_shift_eq: ("<<=", TokenKind::LeftShiftEq),
-            left_square_brac: ("[", TokenKind::LeftSquareBrac),
-            less_than: ("<", TokenKind::LessThan),
-            line_comment: ("// line comment \n", TokenKind::LineComment),
-            minus: ("-", TokenKind::Minus),
-            minus_eq: ("-=", TokenKind::MinusEq),
-            modulus: ("%", TokenKind::Modulus),
-            modulus_eq: ("%=", TokenKind::ModulusEq),
-            namespace_sep: ("::", TokenKind::NamespaceSep),
-            newline: ("\n\n", TokenKind::Newline),
-            not: ("~", TokenKind::Not),
-            not_eq: ("!=", TokenKind::NotEq),
-            number: ("314", TokenKind::Number),
-            or: ("|", TokenKind::Or),
-            or_eq: ("|=", TokenKind::OrEq),
-            or_or: ("||", TokenKind::OrOr),
-            plus: ("+", TokenKind::Plus),
-            plus_eq: ("+=", TokenKind::PlusEq),
-            question_mark: ("?", TokenKind::QuestionMark),
-            right_arrow: ("->", TokenKind::RightArrow),
-            right_brace: ("}", TokenKind::RightBrace),
-            right_paren: (")", TokenKind::RightParen),
-            right_shift: (">>", TokenKind::RightShift),
-            right_shift_eq: (">>=", TokenKind::RightShiftEq),
-            right_square_brac: ("]", TokenKind::RightSquareBrac),
-            semi_colon: (";", TokenKind::SemiColon),
-            slash: ("/", TokenKind::Slash),
-            slash_eq: ("/=", TokenKind::SlashEq),
-            space: ("   ", TokenKind::Space),
-            star: ("*", TokenKind::Star),
-            star_eq: ("*=", TokenKind::StarEq),
-            string_literal: ("\"string literal.\"", TokenKind::StringLiteral),
-            tab: ("\t\t", TokenKind::Tab),
-            type_byte: ("byte", TokenKind::TypeByte),
-            type_bool: ("bool", TokenKind::TypeBool),
-            type_char: ("char", TokenKind::TypeChar),
-            type_f32: ("f32", TokenKind::TypeF32),
-            type_f64: ("f64", TokenKind::TypeF64),
-            type_i32: ("i32", TokenKind::TypeI32),
-            type_i64: ("i64", TokenKind::TypeI64),
-            type_str_slice: ("str", TokenKind::TypeStrSlice),
-            type_string: ("String", TokenKind::TypeString),
-            type_u32: ("u32", TokenKind::TypeU32),
-            type_u64: ("u64", TokenKind::TypeU64),
-            underscore: ("_", TokenKind::Underscore),
+            and: ("&", SyntaxKind::And),
+            andand: ("&&", SyntaxKind::AndAnd),
+            andeq: ("&=", SyntaxKind::AndEq),
+            // as_: ("as", TokenKind::As),
+            attribute: ("@", SyntaxKind::Attribute),
+            block_comment: ("/* block comment */", SyntaxKind::BlockComment),
+            char_literal: ("'c'", SyntaxKind::CharLiteral),
+            colon: (":", SyntaxKind::Colon),
+            comma: (",", SyntaxKind::Comma),
+            dot: (".", SyntaxKind::Dot),
+            dotdot: ("..", SyntaxKind::DotDot),
+            dotdotdot: ("...", SyntaxKind::DotDotDot),
+            // dotdoteq: ("..=", TokenKind::DotDotEq),
+            eq: ("=", SyntaxKind::Eq),
+            eqeq: ("==", SyntaxKind::EqEq),
+            exclamation: ("!", SyntaxKind::Exclamation),
+            fat_right_arrow: ("=>", SyntaxKind::FatRightArrow),
+            greater_than: (">", SyntaxKind::GreaterThan),
+            identifier: ("l0n9_id3nt1f13r", SyntaxKind::Identifier),
+            kw_break: ("break", SyntaxKind::KwBreak),
+            kw_const: ("const", SyntaxKind::KwConst),
+            kw_continue: ("continue", SyntaxKind::KwContinue),
+            kw_elif: ("elif", SyntaxKind::KwElif),
+            kw_else: ("else", SyntaxKind::KwElse),
+            kw_enum: ("enum", SyntaxKind::KwEnum),
+            kw_false: ("false", SyntaxKind::KwFalse),
+            kw_fn: ("fn", SyntaxKind::KwFn),
+            kw_for: ("for", SyntaxKind::KwFor),
+            // kw_go: ("go", TokenKind::KwGo),
+            kw_if: ("if", SyntaxKind::KwIf),
+            // kw_impl: ("impl", TokenKind::KwImpl),
+            kw_import: ("import", SyntaxKind::KwImport),
+            kw_in: ("in", SyntaxKind::KwIn),
+            kw_let: ("let", SyntaxKind::KwLet),
+            kw_module: ("mod", SyntaxKind::KwModule),
+            kw_mut: ("mut", SyntaxKind::KwMut),
+            // kw_package: ("pkg", TokenKind::KwPackage),
+            // kw_pub: ("pub", TokenKind::KwPub),
+            kw_return: ("return", SyntaxKind::KwReturn),
+            kw_self: ("Self", SyntaxKind::KwSelf),
+            // kw_static: ("static", TokenKind::KwStatic),
+            kw_struct: ("struct", SyntaxKind::KwStruct),
+            // kw_trait: ("trait", TokenKind::KwTrait),
+            kw_true: ("true", SyntaxKind::KwTrue),
+            kw_type: ("type", SyntaxKind::KwType),
+            kw_while: ("while", SyntaxKind::KwWhile),
+            // kw_yield: ("yield", TokenKind::KwYield),
+            // kw_zk: ("zk", TokenKind::KwZk),
+            kwself: ("self", SyntaxKind::Kwself),
+            left_arrow: ("<-", SyntaxKind::LeftArrow),
+            left_brace: ("{", SyntaxKind::LeftBrace),
+            left_paren: ("(", SyntaxKind::LeftParen),
+            left_shift: ("<<", SyntaxKind::LeftShift),
+            left_shift_eq: ("<<=", SyntaxKind::LeftShiftEq),
+            left_square_brac: ("[", SyntaxKind::LeftSquareBrac),
+            less_than: ("<", SyntaxKind::LessThan),
+            line_comment: ("// line comment \n", SyntaxKind::LineComment),
+            minus: ("-", SyntaxKind::Minus),
+            minus_eq: ("-=", SyntaxKind::MinusEq),
+            modulus: ("%", SyntaxKind::Modulus),
+            modulus_eq: ("%=", SyntaxKind::ModulusEq),
+            namespace_sep: ("::", SyntaxKind::NamespaceSep),
+            newline: ("\n\n", SyntaxKind::Newline),
+            not: ("~", SyntaxKind::Not),
+            not_eq: ("!=", SyntaxKind::NotEq),
+            number: ("314", SyntaxKind::Number),
+            or: ("|", SyntaxKind::Or),
+            or_eq: ("|=", SyntaxKind::OrEq),
+            or_or: ("||", SyntaxKind::OrOr),
+            plus: ("+", SyntaxKind::Plus),
+            plus_eq: ("+=", SyntaxKind::PlusEq),
+            question_mark: ("?", SyntaxKind::QuestionMark),
+            right_arrow: ("->", SyntaxKind::RightArrow),
+            right_brace: ("}", SyntaxKind::RightBrace),
+            right_paren: (")", SyntaxKind::RightParen),
+            right_shift: (">>", SyntaxKind::RightShift),
+            right_shift_eq: (">>=", SyntaxKind::RightShiftEq),
+            right_square_brac: ("]", SyntaxKind::RightSquareBrac),
+            semi_colon: (";", SyntaxKind::SemiColon),
+            slash: ("/", SyntaxKind::Slash),
+            slash_eq: ("/=", SyntaxKind::SlashEq),
+            space: ("   ", SyntaxKind::Space),
+            star: ("*", SyntaxKind::Star),
+            star_eq: ("*=", SyntaxKind::StarEq),
+            string_literal: ("\"string literal.\"", SyntaxKind::StringLiteral),
+            tab: ("\t\t", SyntaxKind::Tab),
+            type_byte: ("byte", SyntaxKind::TypeByte),
+            type_bool: ("bool", SyntaxKind::TypeBool),
+            type_char: ("char", SyntaxKind::TypeChar),
+            type_f32: ("f32", SyntaxKind::TypeF32),
+            // type_f64: ("f64", TokenKind::TypeF64),
+            type_i32: ("i32", SyntaxKind::TypeI32),
+            // type_i64: ("i64", TokenKind::TypeI64),
+            type_str_slice: ("str", SyntaxKind::TypeStrSlice),
+            type_string: ("String", SyntaxKind::TypeString),
+            type_u32: ("u32", SyntaxKind::TypeU32),
+            // type_u64: ("u64", TokenKind::TypeU64),
+            // underscore: ("_", TokenKind::Underscore),
 
     }
 }
