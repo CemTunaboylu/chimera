@@ -42,7 +42,7 @@ jobs:
       run: cargo fmt --all -- --check
 
     - name: clippy
-      run: cargo clippy --release --locked --all-targets # -- -D warnings 
+      run: cargo clippy --release --locked --all-targets -- -D warnings 
   
   coverage:
     # permissions: write-all
@@ -56,8 +56,9 @@ jobs:
 
     - name: toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        components: tarpaulin
+        
+    - name: install tarpaulin
+      run: cargo install cargo-tarpaulin
       
     - name: rust-tarpaulin
       run: cargo tarpaulin --release --all-features --line --count --tests --verbose --color Always
