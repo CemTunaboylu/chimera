@@ -15,7 +15,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-
     - name: Cache
       uses: actions/cache@v4
       with:
@@ -30,18 +29,33 @@ jobs:
 
     - name: Run tests
       run: cargo test --verbose
+  
+  clippy:
+    permissions: write-all
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
 
     - name: rust-clippy-check
       uses: actions-rs/clippy-check@v1.0.7
       with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features
+  
+  coverage:
+    permissions: write-all
+    runs-on: ubuntu-latest
 
+    steps:
     - name: rust-tarpaulin
       uses: actions-rs/tarpaulin@v0.1.0
       with:
           token: ${{ secrets.GITHUB_TOKEN }}
+  audit:
+    runs-on: ubuntu-latest  
     
+    steps:
     - name: security-audit
       uses: actions-rs/audit-check@v1
       with:
