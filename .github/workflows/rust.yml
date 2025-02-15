@@ -36,6 +36,11 @@ jobs:
       with:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all-features
+
+    - name: rust-tarpaulin
+      uses: actions-rs/tarpaulin@v0.1.0
+      with:
+          token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: security-audit
       uses: actions-rs/audit-check@v1
