@@ -4,125 +4,69 @@ use crate::{
     parser::*,
 };
 
-pub type BindingPower = u8;
-
 // Note: Into and From will produce different kinds since from Op to SyntaxKind,
 // we transition to a composite SyntaxKind.
-
-enum Op {
-    Pre,
-    In,
-    Post,
+enum OpType {
+    Prefix(SyntaxKind),
+    Infix(SyntaxKind),
+    Postfix(SyntaxKind),
 }
-enum InfixOp {
+enum Op {
     Add,
     Sub,
     Mul,
     Div,
-    No,
+    Neg,
+    None,
 }
-impl InfixOp {
+
+pub type BindingPower = u8;
+pub const NO: BindingPower = 0;
+
+impl Op {
     fn binding_power(&self) -> (BindingPower, BindingPower) {
         match self {
+            Op::Neg => (NO, 5),
             // left associative
-            InfixOp::Add | InfixOp::Sub => (1, 2),
-            InfixOp::Mul | InfixOp::Div => (3, 4),
+            Op::Add | Op::Sub => (1, 2),
+            Op::Mul | Op::Div => (3, 4),
             _ => (0, 0),
         }
     }
-}
+    fn prefix_operation_from(syntax_kind: SyntaxKind) -> Op {
+        match syntax_kind {
+            SyntaxKind::Minus => Op::Neg,
+            _ => Op::None,
+        }
+    }
 
-impl From<SyntaxKind> for InfixOp {
-    fn from(tokenkind: SyntaxKind) -> Self {
-        match tokenkind {
-            SyntaxKind::And => todo!(),
-            SyntaxKind::AndAnd => todo!(),
-            SyntaxKind::AndEq => todo!(),
-            SyntaxKind::Colon => todo!(),
-            SyntaxKind::Dot => todo!(),
-            SyntaxKind::DotDot => todo!(),
-            SyntaxKind::DotDotDot => todo!(),
-            SyntaxKind::Eq => todo!(),
-            SyntaxKind::EqEq => todo!(),
-            SyntaxKind::Exclamation => todo!(),
-            SyntaxKind::GreaterThan => todo!(),
-            SyntaxKind::KwIn => todo!(),
-            SyntaxKind::LeftBrace => todo!(),
-            SyntaxKind::LeftParen => todo!(),
-            SyntaxKind::LeftShift => todo!(),
-            SyntaxKind::LeftShiftEq => todo!(),
-            SyntaxKind::LeftSquareBrac => todo!(),
-            SyntaxKind::LessThan => todo!(),
-            SyntaxKind::Minus => InfixOp::Sub,
-            SyntaxKind::MinusEq => todo!(),
-            SyntaxKind::Modulus => todo!(),
-            SyntaxKind::ModulusEq => todo!(),
-            SyntaxKind::NamespaceSep => todo!(),
-            SyntaxKind::Not => todo!(),
-            SyntaxKind::NotEq => todo!(),
-            SyntaxKind::Or => todo!(),
-            SyntaxKind::OrEq => todo!(),
-            SyntaxKind::OrOr => todo!(),
-            SyntaxKind::Plus => InfixOp::Add,
-            SyntaxKind::PlusEq => todo!(),
-            SyntaxKind::RightArrow => todo!(),
-            SyntaxKind::RightBrace => todo!(),
-            SyntaxKind::RightShift => todo!(),
-            SyntaxKind::RightShiftEq => todo!(),
-            SyntaxKind::RightSquareBrac => todo!(),
-            SyntaxKind::Slash => InfixOp::Div,
-            SyntaxKind::SlashEq => todo!(),
-            SyntaxKind::Star => InfixOp::Mul,
-            SyntaxKind::StarEq => todo!(),
-            _ => InfixOp::No,
+    fn infix_operation_from(syntax_kind: SyntaxKind) -> Op {
+        match syntax_kind {
+            SyntaxKind::Minus => Op::Sub,
+            SyntaxKind::Plus => Op::Add,
+            SyntaxKind::Slash => Op::Div,
+            SyntaxKind::Star => Op::Mul,
+            _ => Op::None,
         }
     }
 }
 
-impl Into<SyntaxKind> for InfixOp {
+impl From<OpType> for Op {
+    fn from(optype: OpType) -> Self {
+        match optype {
+            OpType::Prefix(syntax_kind) => Self::prefix_operation_from(syntax_kind),
+            OpType::Infix(syntax_kind) => Self::infix_operation_from(syntax_kind),
+            OpType::Postfix(_syntax_kind) => todo!(),
+        }
+    }
+}
+
+impl Into<SyntaxKind> for Op {
     fn into(self) -> SyntaxKind {
         match self {
-            InfixOp::Add | InfixOp::Sub | InfixOp::Mul | InfixOp::Div => SyntaxKind::InfixBinaryOp,
-            InfixOp::No => todo!(),
-        }
-    }
-}
-
-enum PrefixOp {
-    Neg,
-    No,
-}
-impl PrefixOp {
-    fn binding_power(&self) -> ((), BindingPower) {
-        match self {
-            PrefixOp::Neg => ((), 5),
-            _ => ((), 0),
-        }
-    }
-}
-
-impl From<SyntaxKind> for PrefixOp {
-    fn from(tokenkind: SyntaxKind) -> Self {
-        match tokenkind {
-            SyntaxKind::And => todo!(),
-            SyntaxKind::Colon => todo!(),
-            SyntaxKind::Exclamation => todo!(),
-            SyntaxKind::LeftBrace => todo!(),
-            SyntaxKind::LeftParen => todo!(),
-            SyntaxKind::LeftSquareBrac => todo!(),
-            SyntaxKind::Minus => PrefixOp::Neg,
-            SyntaxKind::Not => todo!(),
-            SyntaxKind::Star => todo!(),
-            _ => PrefixOp::No,
-        }
-    }
-}
-
-impl Into<SyntaxKind> for PrefixOp {
-    fn into(self) -> SyntaxKind {
-        match self {
-            PrefixOp::Neg => SyntaxKind::PrefixOp,
-            PrefixOp::No => todo!(),
+            Op::Add | Op::Sub | Op::Mul | Op::Div => SyntaxKind::InfixBinaryOp,
+            Op::Neg => SyntaxKind::PrefixUnaryOp,
+            Op::None => todo!(),
         }
     }
 }
@@ -135,50 +79,16 @@ fn parse_expression_until_binding_power<B: ASTBehavior>(
     parser: &mut Parser,
     min_binding_power: BindingPower,
 ) {
-    let peek_with_behavior = |parser: &mut Parser| parser.peek::<B>();
-    let parse_expression_until_binding_power_with_behavior =
-        |parser: &mut Parser, min_binding_power: BindingPower| {
-            parse_expression_until_binding_power::<B>(parser, min_binding_power)
-        };
-
-    let bump_with_marker = |parser: &mut Parser, kind: SyntaxKind| -> Marker<Complete> {
-        let marker = parser.start();
-        parser.bump();
-        marker.complete(&mut parser.event_holder, kind)
-    };
-
-    let mut lhs_marker = match peek_with_behavior(parser) {
-        Some(Result::Ok(SyntaxKind::Number)) | Some(Result::Ok(SyntaxKind::Identifier)) => {
-            bump_with_marker(parser, SyntaxKind::Literal)
-        }
-        Some(Result::Ok(SyntaxKind::Minus)) => {
-            let marker = parser.start();
-            parser.bump();
-            let op = PrefixOp::from(SyntaxKind::Minus);
-            let (_, right_binding_power) = op.binding_power();
-
-            parse_expression_until_binding_power_with_behavior(parser, right_binding_power);
-            marker.complete(&mut parser.event_holder, op.into())
-        }
-        Some(Result::Ok(SyntaxKind::LeftParen)) => {
-            let marker = parser.start();
-            parser.bump();
-            parse_expression_until_binding_power_with_behavior(parser, 0);
-            assert_eq!(
-                peek_with_behavior(parser),
-                Some(Result::Ok(SyntaxKind::RightParen))
-            );
-            parser.bump();
-            marker.complete(&mut parser.event_holder, SyntaxKind::ParenExpr)
-        }
-        None => return,
-        _ => todo!(),
+    let mut lhs_marker = if let Some(lhs) = left_hand_side::<B>(parser) {
+        lhs
+    } else {
+        return;
     };
     loop {
-        match peek_with_behavior(parser) {
+        match parser.peek::<B>() {
             None => return,
-            Some(Result::Ok(kind)) => match InfixOp::from(kind) {
-                InfixOp::No => {
+            Some(Result::Ok(kind)) => match OpType::Infix(kind).into() {
+                Op::None => {
                     return;
                 }
                 op => {
@@ -188,13 +98,55 @@ fn parse_expression_until_binding_power<B: ASTBehavior>(
                     }
                     parser.bump();
                     let preceding_marker = lhs_marker.precede(parser);
-                    parse_expression_until_binding_power_with_behavior(parser, right_binding_power);
+                    parse_expression_until_binding_power::<B>(parser, right_binding_power);
                     lhs_marker = preceding_marker.complete(&mut parser.event_holder, op.into());
                 }
             },
             _ => return,
         }
     }
+}
+
+fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
+    let lhs_marker = match parser.peek::<B>() {
+        Some(Result::Ok(SyntaxKind::Number)) => literal(parser),
+        Some(Result::Ok(SyntaxKind::Identifier)) => variable_ref(parser),
+        Some(Result::Ok(SyntaxKind::Minus)) => prefix_expr::<B>(parser, SyntaxKind::Minus),
+        Some(Result::Ok(SyntaxKind::LeftParen)) => paren_expr::<B>(parser),
+        None => return None,
+        _ => todo!(),
+    };
+    Some(lhs_marker)
+}
+
+fn literal(parser: &mut Parser) -> Marker<Complete> {
+    assert!(parser.is_next(SyntaxKind::Number));
+    parser.bump_with_marker(SyntaxKind::Literal)
+}
+
+fn variable_ref(parser: &mut Parser) -> Marker<Complete> {
+    assert!(parser.is_next(SyntaxKind::Identifier));
+    parser.bump_with_marker(SyntaxKind::VariableRef)
+}
+
+fn prefix_expr<B: ASTBehavior>(parser: &mut Parser, kind: SyntaxKind) -> Marker<Complete> {
+    assert!(parser.is_next(SyntaxKind::Minus));
+    let marker = parser.start();
+    parser.bump();
+    let op: Op = OpType::Prefix(kind).into();
+    let (_, right_binding_power) = op.binding_power();
+
+    parse_expression_until_binding_power::<B>(parser, right_binding_power);
+    marker.complete(&mut parser.event_holder, op.into())
+}
+
+fn paren_expr<B: ASTBehavior>(parser: &mut Parser) -> Marker<Complete> {
+    assert!(parser.is_next(SyntaxKind::LeftParen));
+    let marker = parser.start();
+    parser.bump();
+    parse_expression_until_binding_power::<B>(parser, 0);
+    parser.bump_iff_or_panic(SyntaxKind::RightParen);
+    marker.complete(&mut parser.event_holder, SyntaxKind::ParenExpr)
 }
 
 #[cfg(test)]
@@ -227,7 +179,7 @@ mod tests {
         nothing: ("", expect![["Root@0..0"]]),
         single_digit: ("9", expect![["Root@0..1\n  Literal@0..1\n    Number@0..1 \"9\""]]),
         multiple_digit: ("314", expect![["Root@0..3\n  Literal@0..3\n    Number@0..3 \"314\""]]),
-        identifier: ("ident", expect![["Root@0..5\n  Literal@0..5\n    Identifier@0..5 \"ident\""]]),
+        identifier: ("ident", expect![["Root@0..5\n  VariableRef@0..5\n    Identifier@0..5 \"ident\""]]),
         ignored_whitespaces: ("   ", expect![["Root@0..0" ]]),
         binary_add_two_numbers: ("3+14",
             expect![[
@@ -245,12 +197,12 @@ mod tests {
         ),
         prefix_minus_digit: ("-9",
             expect![[
-                "Root@0..2\n  PrefixOp@0..2\n    Minus@0..1 \"-\"\n    Literal@1..2\n      Number@1..2 \"9\""
+                "Root@0..2\n  PrefixUnaryOp@0..2\n    Minus@0..1 \"-\"\n    Literal@1..2\n      Number@1..2 \"9\""
             ]]
         ),
         prefix_minus_precedence: ("-3+14",
             expect![[
-                "Root@0..5\n  InfixBinaryOp@0..5\n    PrefixOp@0..2\n      Minus@0..1 \"-\"\n      Literal@1..2\n        Number@1..2 \"3\"\n    Plus@2..3 \"+\"\n    Literal@3..5\n      Number@3..5 \"14\""
+                "Root@0..5\n  InfixBinaryOp@0..5\n    PrefixUnaryOp@0..2\n      Minus@0..1 \"-\"\n      Literal@1..2\n        Number@1..2 \"3\"\n    Plus@2..3 \"+\"\n    Literal@3..5\n      Number@3..5 \"14\""
             ]]
         ),
 
@@ -271,7 +223,7 @@ mod tests {
         nothing: ("", expect![["Root@0..0"]]),
         single_digit: ("9", expect![["Root@0..1\n  Literal@0..1\n    Number@0..1 \"9\""]]),
         multiple_digit: ("314", expect![["Root@0..3\n  Literal@0..3\n    Number@0..3 \"314\""]]),
-        identifier: ("ident", expect![["Root@0..5\n  Literal@0..5\n    Identifier@0..5 \"ident\""]]),
+        identifier: ("ident", expect![["Root@0..5\n  VariableRef@0..5\n    Identifier@0..5 \"ident\""]]),
         whitespaces: ("   ", expect![["Root@0..3\n  Space@0..3 \"   \""]]),
 
     }

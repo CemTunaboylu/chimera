@@ -36,10 +36,12 @@ pub enum SyntaxKind {
     Atom,
     // n-ary operators
     PrefixOp,
-    PostFixOp,
+    PostFixaryOp,
     InfixBinaryOp,
-    TrinaryOp,
+    PrefixUnaryOp,
+    // composite tokens
     Literal,
+    VariableRef,
     ParenExpr,
 
     Root,

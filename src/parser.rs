@@ -7,7 +7,7 @@ use crate::{
     event_holder::EventHolder,
     language::SyntaxNode,
     lexer::{Lexer, SyntaxKind},
-    marker::Marker,
+    marker::{Complete, Marker},
     s_expression::pratt_parser,
     sink::Sink,
 };
@@ -64,13 +64,14 @@ impl ASTBehavior for NonIgnoring {
     }
 }
 
-pub struct Parser<'p> {
-    lexer: Peekable<Lexer<'p>>,
+pub struct Parser<'input> {
+    lexer: Peekable<Lexer<'input>>,
     pub event_holder: EventHolder,
 }
 
-impl<'p> Parser<'p> {
-    pub fn new(program: &'p str) -> Self {
+// TODO: I can slice the string, instead of smolstr
+impl<'input> Parser<'input> {
+    pub fn new(program: &'input str) -> Self {
         Self {
             lexer: Lexer::new(program).peekable(),
             event_holder: EventHolder::new(),
@@ -102,6 +103,25 @@ impl<'p> Parser<'p> {
             kind: kind.expect("expected tokenkind"),
             lexeme: lexeme.into(),
         });
+    }
+
+    pub fn is_next(&mut self, expected_kind: SyntaxKind) -> bool {
+        if let Some(Result::Ok(kind)) = self.peek_token_kind() {
+            kind == expected_kind
+        } else {
+            false
+        }
+    }
+
+    pub fn bump_iff_or_panic(&mut self, expected_kind: SyntaxKind) {
+        assert!(self.is_next(expected_kind));
+        self.bump();
+    }
+
+    pub fn bump_with_marker(&mut self, kind: SyntaxKind) -> Marker<Complete> {
+        let marker = self.start();
+        self.bump();
+        marker.complete(&mut self.event_holder, kind)
     }
     pub fn start(&mut self) -> Marker {
         let checkpoint = self.event_holder.checkpoint();
