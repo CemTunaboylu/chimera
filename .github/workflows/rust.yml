@@ -42,17 +42,28 @@ jobs:
       run: cargo fmt --all -- --check
 
     - name: clippy
-      run: cargo clippy --release --locked --all-targets -- -D warnings
+      run: cargo clippy --release --locked --all-targets -- -D warnings 
   
   coverage:
-    permissions: write-all
+    # permissions: write-all
     runs-on: ubuntu-latest
 
     steps:
-    - name: rust-tarpaulin
-      uses: actions-rs/tarpaulin@v0.1.0
+    - uses: actions/checkout@v4
+    
+    - name: sccache
+      uses: mozilla-actions/sccache-action@v0.0.4
+
+    - name: toolchain
+      uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        components: clippy, rustfmt
+      
+    - name: rust-tarpaulin
+      run: cargo tarpaulin --release --all-features --line --count --tests --verbose --color Always
+    #   uses: actions-rs/tarpaulin@v0.1.0
+    #   with:
+    #       token: ${{ secrets.GITHUB_TOKEN }}
   audit:
     runs-on: ubuntu-latest  
     
