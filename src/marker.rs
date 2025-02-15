@@ -1,11 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{
-    event::{new_start_node_with, Event},
-    event_holder::EventHolder,
-    lexer::SyntaxKind,
-    parser::Parser,
-};
+use crate::{event::Event, event_holder::EventHolder, lexer::SyntaxKind, parser::Parser};
 use drop_bomb::DropBomb;
 
 mod private {
@@ -45,10 +40,13 @@ impl Marker<Incomplete> {
     ) -> Marker<Complete> {
         let index = self.checkpoint;
         let corresponding_event = event_holder.get_mut(index).unwrap();
-        assert_eq!(*corresponding_event, Event::Marker { checkpoint: index });
-        *corresponding_event = new_start_node_with(kind);
+
+        corresponding_event.validate_marker_event(index);
+
+        *corresponding_event = Event::new_start_node_with(kind);
         event_holder.push(Event::FinishNode);
         self.bomb.defuse();
+
         Marker::<Complete> {
             checkpoint: self.checkpoint,
             bomb: self.bomb,
@@ -60,14 +58,11 @@ impl Marker<Incomplete> {
 impl Marker<Complete> {
     pub fn precede(self, parser: &mut Parser) -> Marker<Incomplete> {
         let new_marker = parser.start();
+        let forward_parent_index = new_marker.checkpoint - self.checkpoint;
         match parser.event_holder.get_mut(self.checkpoint) {
-            Some(Event::StartNode {
-                ref mut forward_parent,
-                ..
-            }) => {
-                *forward_parent = Some(new_marker.checkpoint - self.checkpoint);
-            }
-            _ => unreachable!(),
+            // add_forward_parent_to_start_node panics if it is not a start node
+            Some(event) => event.add_forward_parent_to_start_node(forward_parent_index),
+            None => unreachable!(),
         }
         new_marker
     }

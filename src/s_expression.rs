@@ -6,9 +6,14 @@ use crate::{
 
 pub type BindingPower = u8;
 
-// TODO: merge pre,in,post fix operations
 // Note: Into and From will produce different kinds since from Op to SyntaxKind,
 // we transition to a composite SyntaxKind.
+
+enum Op {
+    Pre,
+    In,
+    Post,
+}
 enum InfixOp {
     Add,
     Sub,
@@ -170,7 +175,6 @@ fn parse_expression_until_binding_power<B: ASTBehavior>(
         _ => todo!(),
     };
     loop {
-        // match parser.peek() {
         match peek_with_behavior(parser) {
             None => return,
             Some(Result::Ok(kind)) => match InfixOp::from(kind) {

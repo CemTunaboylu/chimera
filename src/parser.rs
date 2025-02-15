@@ -81,8 +81,7 @@ impl<'p> Parser<'p> {
         pratt_parser::<B>(&mut self);
         root_marker.complete(&mut self.event_holder, SyntaxKind::Root);
 
-        let sink = Sink::new(self.event_holder);
-
+        let sink = Sink::new(self.event_holder.into());
         Parse {
             green_node: sink.finish(),
         }
@@ -108,8 +107,5 @@ impl<'p> Parser<'p> {
         let checkpoint = self.event_holder.checkpoint();
         self.event_holder.push(Event::Marker { checkpoint });
         Marker::new(checkpoint)
-    }
-    pub fn checkpoint(&mut self) -> usize {
-        self.event_holder.checkpoint()
     }
 }
