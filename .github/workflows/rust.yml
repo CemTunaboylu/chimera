@@ -57,7 +57,7 @@ jobs:
     - name: toolchain
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
-        components: clippy, rustfmt
+        components: tarpaulin
       
     - name: rust-tarpaulin
       run: cargo tarpaulin --release --all-features --line --count --tests --verbose --color Always
@@ -68,6 +68,10 @@ jobs:
     runs-on: ubuntu-latest  
     
     steps:
+    - uses: actions/checkout@v4
+    
+    - name: sccache
+      uses: mozilla-actions/sccache-action@v0.0.4
     - name: security-audit
       uses: actions-rs/audit-check@v1
       with:
