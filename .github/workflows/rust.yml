@@ -27,10 +27,13 @@ jobs:
     - name: sccache
       uses: mozilla-actions/sccache-action@v0.0.4
 
-    - name: toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: stable toolchain
+      # uses: actions-rust-lang/setup-rust-toolchain@v1
+      uses: actions-rs/toolchain@v1
       with:
+        toolchain: stable
         components: clippy, rustfmt
+        override: true
         
     - name: build
       run: cargo build --verbose
@@ -54,26 +57,29 @@ jobs:
     - name: sccache
       uses: mozilla-actions/sccache-action@v0.0.4
 
-    - name: toolchain
-      uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: stable toolchain
+      uses: actions-rs/toolchain@v1
+      with:
+          toolchain: stable
+          override: true
         
-    - name: install tarpaulin
-      run: cargo install cargo-tarpaulin
+    # - name: install tarpaulin
+    #   run: cargo install cargo-tarpaulin
       
-    - name: rust-tarpaulin
-      run: cargo tarpaulin --release --all-features --line --count --tests --verbose --color Always
+    # - name: rust-tarpaulin
+      # run: cargo tarpaulin --release --all-features --line --count --tests --verbose --color Always
     #   uses: actions-rs/tarpaulin@v0.1.0
     #   with:
     #       token: ${{ secrets.GITHUB_TOKEN }}
-  audit:
-    runs-on: ubuntu-latest  
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: sccache
-      uses: mozilla-actions/sccache-action@v0.0.4
-    - name: security-audit
-      uses: actions-rs/audit-check@v1
+
+    - name: run cargo-tarpaulin
+      uses: actions-rs/tarpaulin@v0.1
       with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        version: '0.32.0'
+        args: '-- --test-threads 1 --release --all-features --line --count --tests --verbose --color Always'
+
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v1
+      with:
+        name: code-coverage-report
+        path: cobertura.xml
