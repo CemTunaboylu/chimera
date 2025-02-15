@@ -62,6 +62,11 @@ jobs:
       with:
           toolchain: stable
           override: true
+    - name: run cargo-tarpaulin
+      uses: actions-rs/tarpaulin@v0.1
+      with:
+        version: '0.15.0'
+        args: '-- --test-threads 1 --release --all-features --line --count --tests --verbose --color Always'
         
     # - name: install tarpaulin
     #   run: cargo install cargo-tarpaulin
@@ -72,7 +77,4 @@ jobs:
     #   with:
     #       token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: run cargo-tarpaulin
-      uses: actions-rs/tarpaulin@v0.1
-      with:
-        args: '-- --test-threads 1 --release --all-features --line --count --tests --verbose --color Always'
+   
