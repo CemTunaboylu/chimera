@@ -75,5 +75,4 @@ jobs:
     - name: run cargo-tarpaulin
       uses: actions-rs/tarpaulin@v0.1
       with:
-        version: 'latest'
         args: '-- --test-threads 1 --release --all-features --line --count --tests --verbose --color Always'
