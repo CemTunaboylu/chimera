@@ -6,12 +6,13 @@ use crate::{
     event::Event,
     event_holder::EventHolder,
     language::SyntaxNode,
-    lexer::{Lexer, SyntaxKind},
+    lexer::{LexResult, Lexer, SyntaxKind},
     marker::{Complete, Marker},
     s_expression::pratt_parser,
     sink::Sink,
 };
 
+use miette::Result as MietteResult;
 use std::fmt::Debug;
 
 pub struct Parse {
@@ -32,12 +33,9 @@ pub trait ASTBehavior: Debug {
 
 fn prepare_trivias_event(lexer: &mut Peekable<Lexer>) -> Option<Event> {
     match lexer.peek() {
-        Some((Result::Ok(kind), _lexeme)) if kind.is_trivia() => {
-            let (kind, lexeme) = lexer.next().unwrap();
-            Some(Event::AddToken {
-                kind: kind.expect("expects syntax kind"),
-                lexeme: lexeme.into(),
-            })
+        Some(Ok(token)) if token.is_trivia() => {
+            let token = lexer.next().unwrap().expect("expects syntax kind");
+            Some(Event::AddToken { token })
         }
         _ => None,
     }
@@ -67,6 +65,7 @@ impl ASTBehavior for NonIgnoring {
 pub struct Parser<'input> {
     lexer: Peekable<Lexer<'input>>,
     pub event_holder: EventHolder,
+    program: &'input str,
 }
 
 // TODO: I can slice the string, instead of smolstr
@@ -75,39 +74,42 @@ impl<'input> Parser<'input> {
         Self {
             lexer: Lexer::new(program).peekable(),
             event_holder: EventHolder::new(),
+            program,
         }
     }
-    pub fn parse<B: ASTBehavior>(mut self) -> Parse {
+    pub fn parse<B: ASTBehavior>(mut self) -> MietteResult<Parse> {
         let root_marker = self.start();
-        pratt_parser::<B>(&mut self);
+        let result = pratt_parser::<B>(&mut self);
         root_marker.complete(&mut self.event_holder, SyntaxKind::Root);
-
-        let sink = Sink::new(self.event_holder.into());
-        Parse {
-            green_node: sink.finish(),
+        if let Some(err) = result {
+            return Err(err);
         }
+
+        // TODO: give the program string to sink
+        let sink = Sink::new(self.event_holder.into(), self.program);
+        Ok(Parse {
+            green_node: sink.finish(),
+        })
     }
 
-    pub fn peek<B: ASTBehavior>(&mut self) -> Option<Result<SyntaxKind, ()>> {
+    pub fn peek<B: ASTBehavior>(&mut self) -> Option<&LexResult> {
         B::apply(&mut self.lexer, &mut self.event_holder);
-        self.peek_token_kind()
+        self._peek()
     }
 
-    fn peek_token_kind(&mut self) -> Option<Result<SyntaxKind, ()>> {
-        self.lexer.peek().map(|(k, _)| *k)
+    fn _peek(&mut self) -> Option<&LexResult> {
+        self.lexer.peek()
     }
 
     pub fn bump(&mut self) {
-        let (kind, lexeme) = self.lexer.next().unwrap();
-        self.event_holder.push(Event::AddToken {
-            kind: kind.expect("expected tokenkind"),
-            lexeme: lexeme.into(),
-        });
+        if let Ok(token) = self.lexer.next().unwrap() {
+            self.event_holder.push(Event::AddToken { token });
+        }
     }
 
     pub fn is_next(&mut self, expected_kind: SyntaxKind) -> bool {
-        if let Some(Result::Ok(kind)) = self.peek_token_kind() {
-            kind == expected_kind
+        if let Some(Ok(token)) = self._peek() {
+            token.is_of_kind(expected_kind)
         } else {
             false
         }

@@ -1,5 +1,4 @@
-use crate::lexer::SyntaxKind;
-use smol_str::SmolStr;
+use crate::lexer::{SyntaxKind, Token};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -9,8 +8,7 @@ pub enum Event {
         forward_parent: Option<usize>,
     },
     AddToken {
-        kind: SyntaxKind,
-        lexeme: SmolStr,
+        token: Token,
     },
     FinishNode,
     Marker {

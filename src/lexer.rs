@@ -1,30 +1,62 @@
-use logos::Logos;
-use num_derive::{FromPrimitive, ToPrimitive};
+use std::ops::Range;
 
-pub struct Lexer<'l> {
-    inner_lexer: logos::Lexer<'l, SyntaxKind>,
+use logos::Logos;
+use miette::{Diagnostic, Result as MietteResult, SourceSpan};
+use num_derive::{FromPrimitive, ToPrimitive};
+use thiserror::Error;
+
+#[derive(Clone, Default, Diagnostic, Debug, PartialEq, Error)]
+#[diagnostic()]
+#[error("LexError")]
+pub struct LexError {
+    #[source_code]
+    src: String,
+
+    #[label = "Here"]
+    err_span: Range<usize>,
+
+    #[label("Related")]
+    related: Option<SourceSpan>,
 }
 
-impl<'l> Lexer<'l> {
-    pub fn new(program: &'l str) -> Self {
+#[derive(Clone, Debug, PartialEq)]
+pub struct Token {
+    pub kind: SyntaxKind,
+    pub span: Range<usize>,
+}
+pub type LexResult = MietteResult<Token, LexError>;
+pub struct Lexer<'input> {
+    inner_lexer: logos::Lexer<'input, SyntaxKind>,
+}
+
+impl<'input> Lexer<'input> {
+    pub fn new(program: &'input str) -> Self {
         Self {
             inner_lexer: SyntaxKind::lexer(program),
         }
     }
-
-    pub fn slice(&self) -> &'l str {
-        self.inner_lexer.slice()
-    }
 }
 
 impl<'l> Iterator for Lexer<'l> {
-    type Item = (Result<SyntaxKind, ()>, &'l str);
+    type Item = LexResult;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let kind = self.inner_lexer.next()?;
-        let text = self.inner_lexer.slice();
-
-        Some((kind, text))
+        let result = match self.inner_lexer.next()? {
+            Ok(kind) => Ok(Token {
+                kind,
+                span: self.inner_lexer.span(),
+            }),
+            Err(_) => {
+                let src = self.inner_lexer.source().to_string();
+                let err_span = self.inner_lexer.span();
+                Err(LexError {
+                    src,
+                    err_span,
+                    related: None,
+                })
+            }
+        };
+        Some(result)
     }
 }
 
@@ -243,12 +275,18 @@ pub enum SyntaxKind {
     // Underscore,
 }
 
-impl SyntaxKind {
-    pub(crate) fn is_trivia(self) -> bool {
+impl Token {
+    pub(crate) fn is_trivia(&self) -> bool {
         matches!(
-            self,
-            Self::Space | Self::LineComment | Self::BlockComment | Self::Newline
+            self.kind,
+            SyntaxKind::Space
+                | SyntaxKind::LineComment
+                | SyntaxKind::BlockComment
+                | SyntaxKind::Newline
         )
+    }
+    pub(crate) fn is_of_kind(&self, kind: SyntaxKind) -> bool {
+        self.kind == kind
     }
 }
 
@@ -258,17 +296,18 @@ mod tests {
 
     use super::*;
 
-    fn assert_token_kind(with: &str, token_kind: SyntaxKind) {
+    fn assert_token_kind(with: &str, kind: SyntaxKind) {
         let mut lexer = Lexer::new(with);
         let result = lexer.next().unwrap();
-        assert_eq!(token_kind, result.0.expect("expected a tokenkind"));
-        assert_eq!(with, result.1);
+        let span = 0..with.len();
+        let token = Token { kind, span };
+        assert_eq!(token, result.expect("expected a tokenkind"));
     }
 
     create! {
         create_lexer_test,
-        (prog, expected_token_kind), {
-            assert_token_kind(prog, expected_token_kind);
+        (prog, expected_kind), {
+            assert_token_kind(prog, expected_kind);
         }
     }
     create_lexer_test! {

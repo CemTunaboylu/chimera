@@ -4,7 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use chimera::parser::Parser as ChimeraParser;
+use chimera::{lexer::Lexer, parser::Parser as ChimeraParser};
 use chimera::{lexer::SyntaxKind, parser::IgnoreTrivia};
 use clap::{Parser, Subcommand};
 use logos::Logos;
@@ -33,27 +33,27 @@ fn main() -> MietteResult<()> {
                 .into_diagnostic()
                 .wrap_err_with(|| format!("reading '{}' failed", filename.display()))?;
 
-            let lexer = SyntaxKind::lexer(file_contents.as_str());
-
+            let lexer = Lexer::new(file_contents.as_str());
+            let mut err = Ok(());
             for token in lexer {
                 let token = match token {
                     Ok(tokenkind) => tokenkind,
                     Err(e) => {
                         eprintln!("{e:?}");
+                        err = Err(e.into());
                         continue;
                     }
                 };
                 println!("{token:?}");
             }
             println!("EOF  null");
-            Result::Ok(())
+            err
         }
         ChimeraCommand::Parse { .. } => todo!(),
         ChimeraCommand::Run { .. } => todo!(),
         ChimeraCommand::Repl => {
             let stdin = io::stdin();
             let mut stdout = io::stdout();
-
             let mut input = String::new();
 
             loop {
@@ -63,7 +63,11 @@ fn main() -> MietteResult<()> {
                 stdin.read_line(&mut input).unwrap();
 
                 let parse = ChimeraParser::new(&input).parse::<IgnoreTrivia>();
-                println!("{}", parse.debug_tree());
+                if let Err(err) = parse {
+                    eprintln!("{err:}");
+                } else {
+                    println!("{}", parse.expect("expected parse").debug_tree());
+                }
 
                 input.clear();
             }

@@ -4,6 +4,8 @@ use crate::{
     parser::*,
 };
 
+use miette::Report;
+
 // Note: Into and From will produce different kinds since from Op to SyntaxKind,
 // we transition to a composite SyntaxKind.
 enum OpType {
@@ -71,30 +73,30 @@ impl Into<SyntaxKind> for Op {
     }
 }
 
-pub fn pratt_parser<B: ASTBehavior>(parser: &mut Parser) {
-    parse_expression_until_binding_power::<B>(parser, 0);
+pub fn pratt_parser<B: ASTBehavior>(parser: &mut Parser) -> Option<Report> {
+    parse_expression_until_binding_power::<B>(parser, 0)
 }
 
 fn parse_expression_until_binding_power<B: ASTBehavior>(
     parser: &mut Parser,
     min_binding_power: BindingPower,
-) {
+) -> Option<Report> {
     let mut lhs_marker = if let Some(lhs) = left_hand_side::<B>(parser) {
         lhs
     } else {
-        return;
+        return None;
     };
     loop {
         match parser.peek::<B>() {
-            None => return,
-            Some(Result::Ok(kind)) => match OpType::Infix(kind).into() {
+            None => return None,
+            Some(Ok(token)) => match OpType::Infix(token.kind).into() {
                 Op::None => {
-                    return;
+                    return None;
                 }
                 op => {
                     let (left_binding_power, right_binding_power) = op.binding_power();
                     if left_binding_power < min_binding_power {
-                        return;
+                        return None;
                     }
                     parser.bump();
                     let preceding_marker = lhs_marker.precede(parser);
@@ -102,19 +104,22 @@ fn parse_expression_until_binding_power<B: ASTBehavior>(
                     lhs_marker = preceding_marker.complete(&mut parser.event_holder, op.into());
                 }
             },
-            _ => return,
+            Some(Err(err)) => return Some(err.clone().into()),
         }
     }
 }
 
 fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
-    let lhs_marker = match parser.peek::<B>() {
-        Some(Result::Ok(SyntaxKind::Number)) => literal(parser),
-        Some(Result::Ok(SyntaxKind::Identifier)) => variable_ref(parser),
-        Some(Result::Ok(SyntaxKind::Minus)) => prefix_expr::<B>(parser, SyntaxKind::Minus),
-        Some(Result::Ok(SyntaxKind::LeftParen)) => paren_expr::<B>(parser),
-        None => return None,
-        _ => todo!(),
+    let result = parser.peek::<B>()?;
+    let lhs_marker = match result {
+        Ok(token) => match token.kind {
+            SyntaxKind::Number => literal(parser),
+            SyntaxKind::Identifier => variable_ref(parser),
+            SyntaxKind::Minus => prefix_expr::<B>(parser, SyntaxKind::Minus),
+            SyntaxKind::LeftParen => paren_expr::<B>(parser),
+            _ => todo!(),
+        },
+        Err(err) => todo!(),
     };
     Some(lhs_marker)
 }
@@ -157,7 +162,7 @@ mod tests {
     use parameterized_test::create;
 
     fn check<B: ASTBehavior>(prog: &str, expect: Expect) {
-        let parse = Parser::new(prog).parse::<B>();
+        let parse = Parser::new(prog).parse::<B>().expect("expected a parse");
         let debug_tree = parse.debug_tree();
         expect.assert_eq(&debug_tree);
     }

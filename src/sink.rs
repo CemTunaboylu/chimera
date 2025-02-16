@@ -4,16 +4,18 @@ use rowan::{GreenNode, GreenNodeBuilder, Language};
 
 use crate::{event::Event, language::ChimeraLanguage, lexer::SyntaxKind};
 
-pub(super) struct Sink {
+pub(super) struct Sink<'input> {
     builder: GreenNodeBuilder<'static>,
     events: Vec<Event>,
+    program: &'input str,
 }
 
-impl Sink {
-    pub(super) fn new(events: Vec<Event>) -> Self {
+impl<'input> Sink<'input> {
+    pub(super) fn new(events: Vec<Event>, program: &'input str) -> Self {
         Self {
             builder: GreenNodeBuilder::new(),
             events,
+            program,
         }
     }
 
@@ -43,7 +45,6 @@ impl Sink {
     }
 
     pub(super) fn finish(mut self) -> GreenNode {
-        dbg!(&self.events);
         for ix in 0..self.events.len() {
             match mem::replace(&mut self.events[ix], Event::Moved) {
                 Event::StartNode {
@@ -58,9 +59,10 @@ impl Sink {
                             .start_node(ChimeraLanguage::kind_to_raw(*forward_parent_kind));
                     }
                 }
-                Event::AddToken { kind, lexeme } => self
-                    .builder
-                    .token(ChimeraLanguage::kind_to_raw(kind), lexeme.as_str()),
+                Event::AddToken { token } => self.builder.token(
+                    ChimeraLanguage::kind_to_raw(token.kind),
+                    &self.program[token.span],
+                ),
                 Event::FinishNode => self.builder.finish_node(),
                 Event::Marker { .. } => unreachable!(),
                 Event::Moved => {}
