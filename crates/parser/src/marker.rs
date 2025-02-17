@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{event::Event, event_holder::EventHolder, lexer::SyntaxKind, parser::Parser};
+use crate::{event::Event, event_holder::EventHolder, parser::Parser, syntax::SyntaxKind};
 use drop_bomb::DropBomb;
 
 mod private {

@@ -2,7 +2,7 @@ use std::mem;
 
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 
-use crate::{event::Event, language::ChimeraLanguage, lexer::SyntaxKind};
+use crate::{event::Event, language::ChimeraLanguage, syntax::SyntaxKind};
 
 pub(super) struct Sink<'input> {
     builder: GreenNodeBuilder<'static>,
@@ -59,9 +59,9 @@ impl<'input> Sink<'input> {
                             .start_node(ChimeraLanguage::kind_to_raw(*forward_parent_kind));
                     }
                 }
-                Event::AddToken { token } => self.builder.token(
-                    ChimeraLanguage::kind_to_raw(token.kind),
-                    &self.program[token.span],
+                Event::AddSyntax { syntax } => self.builder.token(
+                    ChimeraLanguage::kind_to_raw(syntax.kind),
+                    &self.program[syntax.span],
                 ),
                 Event::FinishNode => self.builder.finish_node(),
                 Event::Marker { .. } => unreachable!(),

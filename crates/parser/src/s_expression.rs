@@ -1,19 +1,20 @@
 use crate::{
-    lexer::*,
+    expression::parse_expression_until_binding_power,
     marker::{Complete, Marker},
-    parser::*,
+    parser::{ASTBehavior, Parser},
+    syntax::{Syntax, SyntaxKind},
 };
 
 use miette::Report;
 
 // Note: Into and From will produce different kinds since from Op to SyntaxKind,
 // we transition to a composite SyntaxKind.
-enum OpType {
+pub(crate) enum OpType {
     Prefix(SyntaxKind),
     Infix(SyntaxKind),
     Postfix(SyntaxKind),
 }
-enum Op {
+pub(crate) enum Op {
     Add,
     Sub,
     Mul,
@@ -26,7 +27,7 @@ pub type BindingPower = u8;
 pub const NO: BindingPower = 0;
 
 impl Op {
-    fn binding_power(&self) -> (BindingPower, BindingPower) {
+    pub(crate) fn binding_power(&self) -> (BindingPower, BindingPower) {
         match self {
             Op::Neg => (NO, 5),
             // left associative
@@ -35,14 +36,14 @@ impl Op {
             _ => (0, 0),
         }
     }
-    fn prefix_operation_from(syntax_kind: SyntaxKind) -> Op {
+    pub(crate) fn prefix_operation_from(syntax_kind: SyntaxKind) -> Op {
         match syntax_kind {
             SyntaxKind::Minus => Op::Neg,
             _ => Op::None,
         }
     }
 
-    fn infix_operation_from(syntax_kind: SyntaxKind) -> Op {
+    pub(crate) fn infix_operation_from(syntax_kind: SyntaxKind) -> Op {
         match syntax_kind {
             SyntaxKind::Minus => Op::Sub,
             SyntaxKind::Plus => Op::Add,
@@ -77,88 +78,12 @@ pub fn pratt_parser<B: ASTBehavior>(parser: &mut Parser) -> Option<Report> {
     parse_expression_until_binding_power::<B>(parser, 0)
 }
 
-fn parse_expression_until_binding_power<B: ASTBehavior>(
-    parser: &mut Parser,
-    min_binding_power: BindingPower,
-) -> Option<Report> {
-    let mut lhs_marker = if let Some(lhs) = left_hand_side::<B>(parser) {
-        lhs
-    } else {
-        return None;
-    };
-    loop {
-        match parser.peek::<B>() {
-            None => return None,
-            Some(Ok(token)) => match OpType::Infix(token.kind).into() {
-                Op::None => {
-                    return None;
-                }
-                op => {
-                    let (left_binding_power, right_binding_power) = op.binding_power();
-                    if left_binding_power < min_binding_power {
-                        return None;
-                    }
-                    parser.bump();
-                    let preceding_marker = lhs_marker.precede(parser);
-                    parse_expression_until_binding_power::<B>(parser, right_binding_power);
-                    lhs_marker = preceding_marker.complete(&mut parser.event_holder, op.into());
-                }
-            },
-            Some(Err(err)) => return Some(err.clone().into()),
-        }
-    }
-}
-
-fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
-    let result = parser.peek::<B>()?;
-    let lhs_marker = match result {
-        Ok(token) => match token.kind {
-            SyntaxKind::Number => literal(parser),
-            SyntaxKind::Identifier => variable_ref(parser),
-            SyntaxKind::Minus => prefix_expr::<B>(parser, SyntaxKind::Minus),
-            SyntaxKind::LeftParen => paren_expr::<B>(parser),
-            _ => todo!(),
-        },
-        Err(err) => todo!(),
-    };
-    Some(lhs_marker)
-}
-
-fn literal(parser: &mut Parser) -> Marker<Complete> {
-    assert!(parser.is_next(SyntaxKind::Number));
-    parser.bump_with_marker(SyntaxKind::Literal)
-}
-
-fn variable_ref(parser: &mut Parser) -> Marker<Complete> {
-    assert!(parser.is_next(SyntaxKind::Identifier));
-    parser.bump_with_marker(SyntaxKind::VariableRef)
-}
-
-fn prefix_expr<B: ASTBehavior>(parser: &mut Parser, kind: SyntaxKind) -> Marker<Complete> {
-    assert!(parser.is_next(SyntaxKind::Minus));
-    let marker = parser.start();
-    parser.bump();
-    let op: Op = OpType::Prefix(kind).into();
-    let (_, right_binding_power) = op.binding_power();
-
-    parse_expression_until_binding_power::<B>(parser, right_binding_power);
-    marker.complete(&mut parser.event_holder, op.into())
-}
-
-fn paren_expr<B: ASTBehavior>(parser: &mut Parser) -> Marker<Complete> {
-    assert!(parser.is_next(SyntaxKind::LeftParen));
-    let marker = parser.start();
-    parser.bump();
-    parse_expression_until_binding_power::<B>(parser, 0);
-    parser.bump_iff_or_panic(SyntaxKind::RightParen);
-    marker.complete(&mut parser.event_holder, SyntaxKind::ParenExpr)
-}
-
 #[cfg(test)]
 mod tests {
 
     use super::*;
-    use expect_test::{expect, Expect};
+    use crate::parser::{IgnoreTrivia, NonIgnoring};
+    use expect_test::{Expect, expect};
     use parameterized_test::create;
 
     fn check<B: ASTBehavior>(prog: &str, expect: Expect) {
@@ -213,13 +138,13 @@ mod tests {
 
         parenthesised_pi: ("((314))",
             expect![[
-                "Root@0..7\n  ParenExpr@0..7\n    LeftParen@0..1 \"(\"\n    ParenExpr@1..6\n      LeftParen@1..2 \"(\"\n      Literal@2..5\n        Number@2..5 \"314\"\n      RightParen@5..6 \")\"\n    RightParen@6..7 \")\""
+                "Root@0..7\n  ParenExpr@0..7\n    LParen@0..1 \"(\"\n    ParenExpr@1..6\n      LParen@1..2 \"(\"\n      Literal@2..5\n        Number@2..5 \"314\"\n      RParen@5..6 \")\"\n    RParen@6..7 \")\""
             ]]
         ),
 
         parenthesised_sub_precedes_mul: ("(3+1)*4",
             expect![[
-                "Root@0..7\n  InfixBinaryOp@0..7\n    ParenExpr@0..5\n      LeftParen@0..1 \"(\"\n      InfixBinaryOp@1..4\n        Literal@1..2\n          Number@1..2 \"3\"\n        Plus@2..3 \"+\"\n        Literal@3..4\n          Number@3..4 \"1\"\n      RightParen@4..5 \")\"\n    Star@5..6 \"*\"\n    Literal@6..7\n      Number@6..7 \"4\""
+                "Root@0..7\n  InfixBinaryOp@0..7\n    ParenExpr@0..5\n      LParen@0..1 \"(\"\n      InfixBinaryOp@1..4\n        Literal@1..2\n          Number@1..2 \"3\"\n        Plus@2..3 \"+\"\n        Literal@3..4\n          Number@3..4 \"1\"\n      RParen@4..5 \")\"\n    Star@5..6 \"*\"\n    Literal@6..7\n      Number@6..7 \"4\""
             ]]
         ),
     }
@@ -229,7 +154,7 @@ mod tests {
         single_digit: ("9", expect![["Root@0..1\n  Literal@0..1\n    Number@0..1 \"9\""]]),
         multiple_digit: ("314", expect![["Root@0..3\n  Literal@0..3\n    Number@0..3 \"314\""]]),
         identifier: ("ident", expect![["Root@0..5\n  VariableRef@0..5\n    Identifier@0..5 \"ident\""]]),
-        whitespaces: ("   ", expect![["Root@0..3\n  Space@0..3 \"   \""]]),
+        whitespaces: ("   ", expect![["Root@0..3\n  Whitespace@0..3 \"   \""]]),
 
     }
 }

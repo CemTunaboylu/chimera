@@ -1,4 +1,4 @@
-use crate::lexer::{SyntaxKind, Token};
+use crate::syntax::{Syntax, SyntaxKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -7,8 +7,8 @@ pub enum Event {
         kind: SyntaxKind,
         forward_parent: Option<usize>,
     },
-    AddToken {
-        token: Token,
+    AddSyntax {
+        syntax: Syntax,
     },
     FinishNode,
     Marker {
@@ -26,7 +26,7 @@ impl Event {
 
     pub fn add_forward_parent_to_start_node(&mut self, index: usize) {
         match self {
-            Event::StartNode {
+            &mut Event::StartNode {
                 ref mut forward_parent,
                 ..
             } => *forward_parent = Some(index),

@@ -53,16 +53,16 @@ impl Into<Vec<Event>> for EventHolder {
 
 #[cfg(test)]
 mod test {
-    use crate::lexer::SyntaxKind;
-
     use super::*;
+
+    use crate::syntax::SyntaxKind;
 
     #[test]
     fn include_ignored() {
         let ignored = vec![
-            (1, Event::new_start_node_with(SyntaxKind::Space)),
-            (3, Event::new_start_node_with(SyntaxKind::Space)),
-            (5, Event::new_start_node_with(SyntaxKind::Space)),
+            (1, Event::new_start_node_with(SyntaxKind::Whitespace)),
+            (3, Event::new_start_node_with(SyntaxKind::Whitespace)),
+            (5, Event::new_start_node_with(SyntaxKind::Whitespace)),
         ];
         let events = vec![Event::FinishNode; 5];
 
@@ -77,7 +77,7 @@ mod test {
 
         for (ix, event) in event_vector.into_iter().enumerate() {
             if ix == 1 || ix == 4 || ix == 7 {
-                assert_eq!(event, Event::new_start_node_with(SyntaxKind::Space));
+                assert_eq!(event, Event::new_start_node_with(SyntaxKind::Whitespace));
             } else {
                 assert_eq!(event, Event::FinishNode);
             }

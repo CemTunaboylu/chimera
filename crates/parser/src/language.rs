@@ -1,4 +1,4 @@
-use crate::lexer::SyntaxKind;
+use crate::syntax::SyntaxKind;
 use num_traits::{FromPrimitive, ToPrimitive};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
