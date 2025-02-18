@@ -29,28 +29,29 @@ fn variable_def<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>>
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        parse_behaviors::{IgnoreTrivia, NonIgnoring},
-        s_expression::tests::check,
-    };
+    use crate::{parse_behaviors::IgnoreTrivia, s_expression::tests::check};
     use expect_test::expect;
-    use parameterized_test::create;
 
     #[test]
     fn parse_variable_definition() {
-        check::<IgnoreTrivia>("let foo = bar", expect![[r#"
+        check::<IgnoreTrivia>(
+            "let foo = bar",
+            expect![[r#"
 Root@0..10
   VariableDef@0..10
     LetKw@0..3 "let"
     Identifier@3..6 "foo"
     Eq@6..7 "="
     VariableRef@7..10
-      Identifier@7..10 "bar""#]]);
+      Identifier@7..10 "bar""#]],
+        );
     }
 
     #[test]
     fn recover_on_let_token() {
-        check::<IgnoreTrivia>("let a =\nlet b = a", expect![[r#"
+        check::<IgnoreTrivia>(
+            "let a =\nlet b = a",
+            expect![[r#"
 Root@0..11
   VariableDef@0..5
     LetKw@0..3 "let"
@@ -61,12 +62,15 @@ Root@0..11
     Identifier@8..9 "b"
     Eq@9..10 "="
     VariableRef@10..11
-      Identifier@10..11 "a""#]]);
+      Identifier@10..11 "a""#]],
+        );
     }
 
     #[test]
     fn parse_multiple_statements() {
-        check::<IgnoreTrivia>("let a = 1\na", expect![[r#"
+        check::<IgnoreTrivia>(
+            "let a = 1\na",
+            expect![[r#"
 Root@0..7
   VariableDef@0..7
     LetKw@0..3 "let"
@@ -75,7 +79,8 @@ Root@0..7
     Literal@5..6
       Number@5..6 "1"
     VariableRef@6..7
-      Identifier@6..7 "a""#]]);
+      Identifier@6..7 "a""#]],
+        );
     }
 
     /*
