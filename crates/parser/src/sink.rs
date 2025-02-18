@@ -2,12 +2,13 @@ use std::mem;
 
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 
-use crate::{event::Event, language::ChimeraLanguage, syntax::SyntaxKind};
+use crate::{errors::ParseError, event::Event, language::ChimeraLanguage, syntax::SyntaxKind};
 
 pub(super) struct Sink<'input> {
     builder: GreenNodeBuilder<'static>,
-    events: Vec<Event>,
     program: &'input str,
+    events: Vec<Event>,
+    errors: Vec<ParseError>,
 }
 
 impl<'input> Sink<'input> {
@@ -16,6 +17,7 @@ impl<'input> Sink<'input> {
             builder: GreenNodeBuilder::new(),
             events,
             program,
+            errors: vec![],
         }
     }
 
@@ -44,7 +46,7 @@ impl<'input> Sink<'input> {
         kinds
     }
 
-    pub(super) fn finish(mut self) -> GreenNode {
+    pub(super) fn finish(mut self) -> (GreenNode, Vec<ParseError>) {
         for ix in 0..self.events.len() {
             match mem::replace(&mut self.events[ix], Event::Moved) {
                 Event::StartNode {
@@ -66,8 +68,9 @@ impl<'input> Sink<'input> {
                 Event::FinishNode => self.builder.finish_node(),
                 Event::Marker { .. } => unreachable!(),
                 Event::Moved => {}
+                Event::Error { err } => self.errors.push(err),
             }
         }
-        self.builder.finish()
+        (self.builder.finish(), self.errors)
     }
 }

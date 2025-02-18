@@ -1,12 +1,15 @@
+pub mod errors;
 mod event;
 mod event_holder;
 mod language;
+pub mod parse_behaviors;
 extern crate lexer;
 mod expression;
 pub mod marker;
 pub mod parser;
 pub mod s_expression;
 mod sink;
+mod statement;
 pub mod syntax;
 
 #[cfg(test)]
@@ -14,8 +17,6 @@ mod tests {
     use miette::{Context, IntoDiagnostic, Result as MietteResult};
     use parameterized_test::create;
     use std::{fs::read_to_string, path::PathBuf};
-
-    use super::parser::{IgnoreTrivia, Parse, Parser};
 
     const TEST_DIR: &str = "test_programs";
 

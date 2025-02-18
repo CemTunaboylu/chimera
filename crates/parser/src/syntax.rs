@@ -5,6 +5,8 @@ use num_derive::{FromPrimitive, ToPrimitive};
 
 #[derive(Copy, Clone, Debug, FromPrimitive, Eq, Hash, Ord, PartialEq, PartialOrd, ToPrimitive)]
 pub enum SyntaxKind {
+    // recovering
+    Recovered,
     Atom,
     // n-ary operators
     PrefixOp,
@@ -14,6 +16,7 @@ pub enum SyntaxKind {
     // composite tokens
     Literal,
     VariableRef,
+    VariableDef,
     ParenExpr,
     // separators
     Whitespace,
@@ -53,6 +56,24 @@ pub enum SyntaxKind {
 }
 
 impl SyntaxKind {
+    pub fn operators() -> [SyntaxKind; 14] {
+        [
+            Self::Colon,
+            Self::And,
+            Self::Or,
+            Self::Exclamation,
+            Self::GreaterThan,
+            Self::LessThan,
+            Self::Eq,
+            Self::NotEq,
+            Self::Plus,
+            Self::Minus,
+            Self::Modulus,
+            Self::Not,
+            Self::Star,
+            Self::Slash,
+        ]
+    }
     pub(crate) fn is_trivia(self) -> bool {
         matches!(self, Self::Whitespace | Self::Comment)
     }

@@ -30,13 +30,27 @@ pub struct Token {
 pub type LexResult = MietteResult<Token, LexError>;
 pub struct Lexer<'input> {
     inner_lexer: logos::Lexer<'input, TokenKind>,
+    peeked: Option<Option<<Self as Iterator>::Item>>,
 }
 
 impl<'input> Lexer<'input> {
     pub fn new(program: &'input str) -> Self {
         Self {
             inner_lexer: TokenKind::lexer(program),
+            peeked: None,
         }
+    }
+
+    pub fn span(&self) -> Range<usize> {
+        self.inner_lexer.span()
+    }
+
+    pub fn peek(&mut self) -> Option<&<Self as Iterator>::Item> {
+        if self.peeked.is_none() {
+            let next = self.next();
+            return self.peeked.get_or_insert(next).as_ref();
+        }
+        self.peeked.as_ref().unwrap().as_ref()
     }
 }
 
@@ -44,6 +58,9 @@ impl<'l> Iterator for Lexer<'l> {
     type Item = LexResult;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.peeked.is_some() {
+            return self.peeked.take().unwrap();
+        }
         let result = match self.inner_lexer.next()? {
             Ok(kind) => Ok(Token {
                 kind,
@@ -68,6 +85,35 @@ mod tests {
     use parameterized_test::create;
 
     use super::*;
+
+    #[test]
+    fn ensure_peek_works() {
+        let program = "1 2";
+        let mut lexer = Lexer::new(program);
+        assert_eq!(
+            Some(&Ok(Token {
+                kind: TokenKind::Number,
+                span: 0..1
+            })),
+            lexer.peek()
+        );
+
+        assert_eq!(
+            Some(Ok(Token {
+                kind: TokenKind::Number,
+                span: 0..1
+            })),
+            lexer.next()
+        );
+
+        assert_eq!(
+            Some(&Ok(Token {
+                kind: TokenKind::Space,
+                span: 1..2
+            })),
+            lexer.peek()
+        );
+    }
 
     fn assert_token_kind(with: &str, kind: TokenKind) {
         let mut lexer = Lexer::new(with);

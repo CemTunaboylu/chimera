@@ -1,4 +1,7 @@
-use crate::syntax::{Syntax, SyntaxKind};
+use crate::{
+    errors::ParseError,
+    syntax::{Syntax, SyntaxKind},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
@@ -13,6 +16,9 @@ pub enum Event {
     FinishNode,
     Marker {
         checkpoint: usize,
+    },
+    Error {
+        err: ParseError,
     },
 }
 

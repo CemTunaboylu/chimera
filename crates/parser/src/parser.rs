@@ -1,28 +1,35 @@
-use std::iter::Peekable;
+use std::mem;
 
 use rowan::GreenNode;
 
 use crate::{
+    errors::ParseError,
     event::Event,
     event_holder::EventHolder,
     language::SyntaxNode,
     marker::{Complete, Marker},
+    parse_behaviors::ASTBehavior,
     s_expression::pratt_parser,
     sink::Sink,
     syntax::{Syntax, SyntaxKind},
 };
 
-use lexer::lexer::{Lexer, Token};
+use lexer::lexer::Lexer;
 
 use miette::Result as MietteResult;
 use std::fmt::Debug;
 
 #[derive(Debug)]
 pub struct Parse {
-    green_node: GreenNode,
+    pub green_node: GreenNode,
+    pub errors: Vec<ParseError>,
 }
 
 impl Parse {
+    pub(crate) fn from(sink: Sink) -> Self {
+        let (green_node, errors) = sink.finish();
+        Self { green_node, errors }
+    }
     pub fn debug_tree(&self) -> String {
         let syntax_node = SyntaxNode::new_root(self.green_node.clone());
         let formatted = format!("{:#?}", syntax_node);
@@ -30,73 +37,28 @@ impl Parse {
     }
 }
 
-pub trait ASTBehavior: Debug {
-    fn apply(lexer: &mut Peekable<Lexer>, event_holder: &mut EventHolder);
-}
-
-fn prepare_trivias_event(lexer: &mut Peekable<Lexer>) -> Option<Event> {
-    let lex_result = lexer.peek()?;
-    match lex_result {
-        Ok(token) => {
-            let syntax = <Token as Into<Syntax>>::into(token.clone());
-            if syntax.is_trivia() {
-                lexer.next().unwrap().expect("expects syntax kind");
-                Some(Event::AddSyntax { syntax })
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
-}
-
-#[derive(Debug)]
-pub enum IgnoreTrivia {}
-
-impl ASTBehavior for IgnoreTrivia {
-    fn apply(lexer: &mut Peekable<Lexer>, event_holder: &mut EventHolder) {
-        if let Some(trivia_event) = prepare_trivias_event(lexer) {
-            event_holder.ignore(trivia_event);
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum NonIgnoring {}
-impl ASTBehavior for NonIgnoring {
-    fn apply(lexer: &mut Peekable<Lexer>, event_holder: &mut EventHolder) {
-        if let Some(trivia_event) = prepare_trivias_event(lexer) {
-            event_holder.push(trivia_event);
-        }
-    }
-}
-
 pub struct Parser<'input> {
-    lexer: Peekable<Lexer<'input>>,
+    lexer: Lexer<'input>,
     pub event_holder: EventHolder,
     program: &'input str,
+    expected: Vec<SyntaxKind>,
 }
+
+const RECOVERY_SET: [SyntaxKind; 1] = [SyntaxKind::LetKw];
 
 impl<'input> Parser<'input> {
     pub fn new(program: &'input str) -> Self {
         Self {
-            lexer: Lexer::new(program).peekable(),
+            lexer: Lexer::new(program),
             event_holder: EventHolder::new(),
             program,
+            expected: vec![],
         }
     }
-    pub fn parse<B: ASTBehavior>(mut self) -> MietteResult<Parse> {
-        let root_marker = self.start();
-        let result = pratt_parser::<B>(&mut self);
-        root_marker.complete(&mut self.event_holder, SyntaxKind::Root);
-        if let Some(err) = result {
-            return Err(err);
-        }
-
+    pub fn parse<B: ASTBehavior>(mut self) -> Parse {
+        pratt_parser::<B>(&mut self);
         let sink = Sink::new(self.event_holder.into(), self.program);
-        Ok(Parse {
-            green_node: sink.finish(),
-        })
+        Parse::from(sink)
     }
 
     pub fn peek<B: ASTBehavior>(&mut self) -> Option<MietteResult<Syntax>> {
@@ -112,15 +74,30 @@ impl<'input> Parser<'input> {
         Some(result)
     }
 
-    pub fn bump(&mut self) {
-        if let Ok(token) = self.lexer.next().unwrap() {
+    pub fn is_at_the_end(&mut self) -> bool {
+        self.lexer.peek().is_none()
+    }
+
+    pub fn bump(&mut self) -> Option<()> {
+        if let Ok(token) = self.lexer.next()? {
             self.event_holder.push(Event::AddSyntax {
                 syntax: token.into(),
             });
+            self.expected.clear();
         }
+        Some(())
+    }
+
+    pub fn inject_expectations(&mut self, expectations: &[SyntaxKind]) {
+        // TODO: maybe I can clear?
+        // if !self.expected.ends_with(expectations) {
+        self.expected = Vec::from(expectations);
+        // self.expected.extend_from_slice(expectations);
+        // }
     }
 
     pub fn is_next(&mut self, expected_kind: SyntaxKind) -> bool {
+        self.expected.push(expected_kind);
         if let Some(Ok(token)) = self._peek() {
             let syntax: Syntax = token.into();
             syntax.is_of_kind(expected_kind)
@@ -137,9 +114,34 @@ impl<'input> Parser<'input> {
         }
     }
 
-    pub fn expect_and_bump(&mut self, expected_kind: SyntaxKind) {
-        assert!(self.is_next(expected_kind));
-        self.bump();
+    pub fn expect_and_bump<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) {
+        B::apply(&mut self.lexer, &mut self.event_holder);
+        if self.is_next(expected_kind) {
+            self.bump();
+            return;
+        }
+
+        self.recover();
+    }
+
+    fn can_recover(&mut self) -> bool {
+        self._peek()
+            .is_some_and(|r| r.is_ok_and(|s| !RECOVERY_SET.contains(&s.kind)))
+    }
+
+    pub fn recover(&mut self) {
+        let got = self._peek();
+        self.event_holder.push(Event::Error {
+            err: ParseError::unexpected_token(
+                self.program.to_string(),
+                self.lexer.span().clone(),
+                mem::take(&mut self.expected),
+                got,
+            ),
+        });
+        if self.can_recover() {
+            self.bump_with_marker(SyntaxKind::Recovered);
+        }
     }
 
     pub fn bump_iff_or_panic(&mut self, expectation: fn(&Syntax) -> bool) {
@@ -156,5 +158,33 @@ impl<'input> Parser<'input> {
         let checkpoint = self.event_holder.checkpoint();
         self.event_holder.push(Event::Marker { checkpoint });
         Marker::new(checkpoint)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ops::Range;
+
+    fn check_err(
+        input: &str,
+        expected: Vec<SyntaxKind>,
+        found: Option<SyntaxKind>,
+        range: Range<usize>,
+        output: &str,
+    ) {
+        let error = ParseError::unexpected_token(input.to_string(), range, expected, found);
+        assert_eq!(format!("{:?}", error), output);
+    }
+
+    #[test]
+    fn one_expected_did_find() {
+        check_err(
+            "let a = ",
+            vec![SyntaxKind::Literal],
+            None,
+            8..9,
+            "UnexpectedToken(Inner { src: \"let a = \", err_span: 8..9, expected_but_found: \"expected Literal, but got ''\" })",
+        );
     }
 }

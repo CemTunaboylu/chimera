@@ -1,11 +1,6 @@
 use crate::{
-    expression::parse_expression_until_binding_power,
-    marker::{Complete, Marker},
-    parser::{ASTBehavior, Parser},
-    syntax::{Syntax, SyntaxKind},
+    parse_behaviors::ASTBehavior, parser::Parser, statement::statement, syntax::SyntaxKind,
 };
-
-use miette::Report;
 
 // Note: Into and From will produce different kinds since from Op to SyntaxKind,
 // we transition to a composite SyntaxKind.
@@ -20,7 +15,7 @@ pub(crate) enum Op {
     Mul,
     Div,
     Neg,
-    None,
+    NotAnOp,
 }
 
 pub type BindingPower = u8;
@@ -30,6 +25,8 @@ impl Op {
     pub(crate) fn binding_power(&self) -> (BindingPower, BindingPower) {
         match self {
             Op::Neg => (NO, 5),
+            // like rust-analyzer, dummy token has a binding power pair
+            Op::NotAnOp => (0, 1),
             // left associative
             Op::Add | Op::Sub => (1, 2),
             Op::Mul | Op::Div => (3, 4),
@@ -39,7 +36,7 @@ impl Op {
     pub(crate) fn prefix_operation_from(syntax_kind: SyntaxKind) -> Op {
         match syntax_kind {
             SyntaxKind::Minus => Op::Neg,
-            _ => Op::None,
+            _ => Op::NotAnOp,
         }
     }
 
@@ -49,7 +46,7 @@ impl Op {
             SyntaxKind::Plus => Op::Add,
             SyntaxKind::Slash => Op::Div,
             SyntaxKind::Star => Op::Mul,
-            _ => Op::None,
+            _ => Op::NotAnOp,
         }
     }
 }
@@ -69,25 +66,29 @@ impl Into<SyntaxKind> for Op {
         match self {
             Op::Add | Op::Sub | Op::Mul | Op::Div => SyntaxKind::InfixBinaryOp,
             Op::Neg => SyntaxKind::PrefixUnaryOp,
-            Op::None => todo!(),
+            Op::NotAnOp => todo!(),
         }
     }
 }
 
-pub fn pratt_parser<B: ASTBehavior>(parser: &mut Parser) -> Option<Report> {
-    parse_expression_until_binding_power::<B>(parser, 0)
+pub fn pratt_parser<B: ASTBehavior>(parser: &mut Parser) {
+    let root = parser.start();
+    while !parser.is_at_the_end() {
+        statement::<B>(parser);
+    }
+    root.complete(&mut parser.event_holder, SyntaxKind::Root);
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
 
     use super::*;
-    use crate::parser::{IgnoreTrivia, NonIgnoring};
+    use crate::parse_behaviors::{IgnoreTrivia, NonIgnoring};
     use expect_test::{Expect, expect};
     use parameterized_test::create;
 
-    fn check<B: ASTBehavior>(prog: &str, expect: Expect) {
-        let parse = Parser::new(prog).parse::<B>().expect("expected a parse");
+    pub fn check<B: ASTBehavior>(prog: &str, expect: Expect) {
+        let parse = Parser::new(prog).parse::<B>();
         let debug_tree = parse.debug_tree();
         expect.assert_eq(&debug_tree);
     }
@@ -133,6 +134,17 @@ mod tests {
         prefix_minus_precedence: ("-3+14",
             expect![[
                 "Root@0..5\n  InfixBinaryOp@0..5\n    PrefixUnaryOp@0..2\n      Minus@0..1 \"-\"\n      Literal@1..2\n        Number@1..2 \"3\"\n    Plus@2..3 \"+\"\n    Literal@3..5\n      Number@3..5 \"14\""
+            ]]
+        ),
+        only_parenthesis: ("()",
+            expect![[
+                "Root@0..2\n  ParenExpr@0..2\n    LParen@0..1 \"(\"\n    RParen@1..2 \")\""
+            ]]
+        ),
+
+        missing_closing_parenthesis_does_not_panic: ("(",
+            expect![[
+                "Root@0..1\n  ParenExpr@0..1\n    LParen@0..1 \"(\""
             ]]
         ),
 
