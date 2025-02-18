@@ -1,15 +1,15 @@
+mod cst;
 pub mod errors;
 mod event;
 mod event_holder;
+pub mod expression;
 mod language;
-pub mod parse_behaviors;
-extern crate lexer;
-mod expression;
 pub mod marker;
+pub mod parse_behaviors;
 pub mod parser;
 pub mod s_expression;
 mod sink;
-mod statement;
+pub mod statement;
 
 #[cfg(test)]
 mod tests {

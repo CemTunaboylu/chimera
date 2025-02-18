@@ -7,6 +7,7 @@ description = "Chimera's parser"
 [dependencies]
 lexer = { path = "../lexer" }
 syntax = { path = "../syntax" }
+
 rowan = "0.16.1"
 miette = { version = "7.5.0", features = ["fancy"] }
 thiserror = "2.0.11"
