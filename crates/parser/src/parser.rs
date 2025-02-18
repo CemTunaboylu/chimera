@@ -20,12 +20,12 @@ use miette::Result as MietteResult;
 use std::fmt::Debug;
 
 #[derive(Debug)]
-pub struct Parse {
+pub struct ConcreteSyntaxTree {
     pub green_node: GreenNode,
     pub errors: Vec<ParseError>,
 }
 
-impl Parse {
+impl ConcreteSyntaxTree {
     pub(crate) fn from(sink: Sink) -> Self {
         let (green_node, errors) = sink.finish();
         Self { green_node, errors }
@@ -55,10 +55,10 @@ impl<'input> Parser<'input> {
             expected: vec![],
         }
     }
-    pub fn parse<B: ASTBehavior>(mut self) -> Parse {
+    pub fn parse<B: ASTBehavior>(mut self) -> ConcreteSyntaxTree {
         pratt_parser::<B>(&mut self);
         let sink = Sink::new(self.event_holder.into(), self.program);
-        Parse::from(sink)
+        ConcreteSyntaxTree::from(sink)
     }
 
     pub fn peek<B: ASTBehavior>(&mut self) -> Option<MietteResult<Syntax>> {
