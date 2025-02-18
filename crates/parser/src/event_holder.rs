@@ -45,9 +45,9 @@ impl EventHolder {
     }
 }
 
-impl Into<Vec<Event>> for EventHolder {
-    fn into(self) -> Vec<Event> {
-        self.events
+impl From<EventHolder> for Vec<Event> {
+    fn from(val: EventHolder) -> Self {
+        val.events
     }
 }
 

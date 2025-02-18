@@ -14,7 +14,7 @@ pub(crate) enum Op {
     Mul,
     Div,
     Neg,
-    NotAnOp,
+    None,
 }
 
 pub type BindingPower = u8;
@@ -25,17 +25,16 @@ impl Op {
         match self {
             Op::Neg => (NO, 5),
             // like rust-analyzer, dummy token has a binding power pair
-            Op::NotAnOp => (0, 1),
+            Op::None => (0, 1),
             // left associative
             Op::Add | Op::Sub => (1, 2),
             Op::Mul | Op::Div => (3, 4),
-            _ => (0, 0),
         }
     }
     pub(crate) fn prefix_operation_from(syntax_kind: SyntaxKind) -> Op {
         match syntax_kind {
             SyntaxKind::Minus => Op::Neg,
-            _ => Op::NotAnOp,
+            _ => Op::None,
         }
     }
 
@@ -45,7 +44,7 @@ impl Op {
             SyntaxKind::Plus => Op::Add,
             SyntaxKind::Slash => Op::Div,
             SyntaxKind::Star => Op::Mul,
-            _ => Op::NotAnOp,
+            _ => Op::None,
         }
     }
 }
@@ -60,12 +59,14 @@ impl From<OpType> for Op {
     }
 }
 
+// we don't want the 'free' into, we want to implement the conversion explicitly because it is one to many
+#[allow(clippy::from_over_into)]
 impl Into<SyntaxKind> for Op {
     fn into(self) -> SyntaxKind {
         match self {
             Op::Add | Op::Sub | Op::Mul | Op::Div => SyntaxKind::InfixBinaryOp,
             Op::Neg => SyntaxKind::PrefixUnaryOp,
-            Op::NotAnOp => todo!(),
+            Op::None => todo!(),
         }
     }
 }

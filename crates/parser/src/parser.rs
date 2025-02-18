@@ -77,7 +77,7 @@ impl<'input> Parser<'input> {
     pub fn is_next(&mut self, expected_kind: SyntaxKind) -> bool {
         self.expected.push(expected_kind);
         if let Some(Ok(token)) = self._peek() {
-            let syntax: Syntax = token.into();
+            let syntax: Syntax = token;
             syntax.is_of_kind(expected_kind)
         } else {
             false

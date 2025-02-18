@@ -11,18 +11,13 @@ pub(crate) fn parse_expression_until_binding_power<B: ASTBehavior>(
     parser: &mut Parser,
     min_binding_power: BindingPower,
 ) -> Option<Marker<Complete>> {
-    let mut lhs_marker = if let Some(lhs) = left_hand_side::<B>(parser) {
-        lhs
-    } else {
-        return None;
-    };
+    let mut lhs_marker = left_hand_side::<B>(parser)?;
     loop {
-        // parser.inject_expectations(&SyntaxKind::operators());
         parser.inject_expectations(&[SyntaxKind::InfixBinaryOp]);
         match parser.peek::<B>() {
             None => break,
             Some(Ok(token)) => match OpType::Infix(token.kind).into() {
-                Op::NotAnOp => match token.kind {
+                Op::None => match token.kind {
                     SyntaxKind::Identifier => {
                         lhs_marker = variable_ref(parser);
                     }
@@ -45,7 +40,7 @@ pub(crate) fn parse_expression_until_binding_power<B: ASTBehavior>(
                     lhs_marker = preceding_marker.complete(&mut parser.event_holder, op.into());
                 }
             },
-            Some(Err(err)) => todo!(),
+            Some(Err(_err)) => todo!(),
         }
     }
 
@@ -85,16 +80,14 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
 
 fn literal(parser: &mut Parser) -> Marker<Complete> {
     assert!(parser.check_next_syntax(|token| matches!(token.kind, SyntaxKind::Number)));
-    let marker = parser.bump_with_marker(SyntaxKind::Literal);
+    parser.bump_with_marker(SyntaxKind::Literal)
     // parser.check_next_syntax(Syntax::is_a_separator);
-    marker
 }
 
 fn variable_ref(parser: &mut Parser) -> Marker<Complete> {
     assert!(parser.is_next(SyntaxKind::Identifier));
-    let marker = parser.bump_with_marker(SyntaxKind::VariableRef);
+    parser.bump_with_marker(SyntaxKind::VariableRef)
     // parser.check_next_syntax(Syntax::is_a_separator);
-    marker
 }
 
 fn prefix_expr<B: ASTBehavior>(parser: &mut Parser, kind: SyntaxKind) -> Marker<Complete> {

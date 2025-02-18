@@ -54,7 +54,7 @@ impl<'input> Lexer<'input> {
     }
 }
 
-impl<'l> Iterator for Lexer<'l> {
+impl Iterator for Lexer<'_> {
     type Item = LexResult;
 
     fn next(&mut self) -> Option<Self::Item> {
