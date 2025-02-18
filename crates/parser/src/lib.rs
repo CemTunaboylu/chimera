@@ -10,7 +10,6 @@ pub mod parser;
 pub mod s_expression;
 mod sink;
 mod statement;
-pub mod syntax;
 
 #[cfg(test)]
 mod tests {

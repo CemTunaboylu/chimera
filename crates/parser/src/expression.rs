@@ -3,8 +3,9 @@ use crate::{
     parse_behaviors::ASTBehavior,
     parser::Parser,
     s_expression::{BindingPower, Op, OpType},
-    syntax::SyntaxKind,
 };
+
+use syntax::syntax::SyntaxKind;
 
 pub(crate) fn parse_expression_until_binding_power<B: ASTBehavior>(
     parser: &mut Parser,

@@ -55,7 +55,7 @@ impl Into<Vec<Event>> for EventHolder {
 mod test {
     use super::*;
 
-    use crate::syntax::SyntaxKind;
+    use syntax::syntax::SyntaxKind;
 
     #[test]
     fn include_ignored() {

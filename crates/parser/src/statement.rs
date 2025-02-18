@@ -3,8 +3,9 @@ use crate::{
     marker::{Complete, Marker},
     parse_behaviors::ASTBehavior,
     parser::Parser,
-    syntax::SyntaxKind,
 };
+
+use syntax::syntax::SyntaxKind;
 
 pub(crate) fn statement<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
     let syntax = parser.peek::<B>()?;

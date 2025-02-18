@@ -74,7 +74,7 @@ impl SyntaxKind {
             Self::Slash,
         ]
     }
-    pub(crate) fn is_trivia(self) -> bool {
+    pub fn is_trivia(self) -> bool {
         matches!(self, Self::Whitespace | Self::Comment)
     }
 

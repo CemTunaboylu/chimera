@@ -1,8 +1,8 @@
 use miette::{Diagnostic, Report};
 use thiserror::Error;
 
-use crate::syntax::{Syntax, SyntaxKind};
 use std::ops::Range;
+use syntax::syntax::{Syntax, SyntaxKind};
 
 #[derive(Clone, Diagnostic, Debug, PartialEq, Error)]
 #[diagnostic()]

@@ -11,10 +11,10 @@ use crate::{
     parse_behaviors::ASTBehavior,
     s_expression::pratt_parser,
     sink::Sink,
-    syntax::{Syntax, SyntaxKind},
 };
 
 use lexer::lexer::Lexer;
+use syntax::syntax::{Syntax, SyntaxKind};
 
 use miette::Result as MietteResult;
 use std::fmt::Debug;

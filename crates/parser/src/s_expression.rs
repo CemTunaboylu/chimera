@@ -1,6 +1,5 @@
-use crate::{
-    parse_behaviors::ASTBehavior, parser::Parser, statement::statement, syntax::SyntaxKind,
-};
+use crate::{parse_behaviors::ASTBehavior, parser::Parser, statement::statement};
+use syntax::syntax::SyntaxKind;
 
 // Note: Into and From will produce different kinds since from Op to SyntaxKind,
 // we transition to a composite SyntaxKind.

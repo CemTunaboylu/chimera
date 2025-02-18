@@ -1,5 +1,5 @@
-use crate::syntax::SyntaxKind;
 use num_traits::{FromPrimitive, ToPrimitive};
+use syntax::syntax::SyntaxKind;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum ChimeraLanguage {}

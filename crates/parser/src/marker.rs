@@ -1,7 +1,9 @@
 use std::marker::PhantomData;
 
-use crate::{event::Event, event_holder::EventHolder, parser::Parser, syntax::SyntaxKind};
+use crate::{event::Event, event_holder::EventHolder, parser::Parser};
+
 use drop_bomb::DropBomb;
+use syntax::syntax::SyntaxKind;
 
 mod private {
     pub trait Sealed {}

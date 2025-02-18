@@ -1,8 +1,9 @@
 use std::fmt::Debug;
 
 use lexer::lexer::Lexer;
+use syntax::syntax::Syntax;
 
-use crate::{event::Event, event_holder::EventHolder, syntax::Syntax};
+use crate::{event::Event, event_holder::EventHolder};
 
 pub trait ASTBehavior: Debug {
     fn apply(lexer: &mut Lexer, event_holder: &mut EventHolder);
