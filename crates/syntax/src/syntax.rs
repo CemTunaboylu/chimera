@@ -9,10 +9,9 @@ pub enum SyntaxKind {
     Recovered,
     Atom,
     // n-ary operators
-    PrefixOp,
-    PostFixaryOp,
     InfixBinaryOp,
     PrefixUnaryOp,
+    PostFixUnaryOp,
     // composite tokens
     Literal,
     VariableRef,
@@ -56,6 +55,13 @@ pub enum SyntaxKind {
 }
 
 impl SyntaxKind {
+    pub fn is_binary_operator(&self) -> bool {
+        matches!(self, Self::Plus | Self::Minus | Self::Star | Self::Slash)
+    }
+
+    pub fn is_unary_operator(&self) -> bool {
+        matches!(self, Self::Minus)
+    }
     pub fn operators() -> [SyntaxKind; 14] {
         [
             Self::Colon,

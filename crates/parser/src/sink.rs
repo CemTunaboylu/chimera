@@ -2,9 +2,9 @@ use std::mem;
 
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 
-use crate::{errors::ParseError, event::Event, language::ChimeraLanguage};
+use crate::{errors::ParseError, event::Event};
 
-use syntax::syntax::SyntaxKind;
+use syntax::{language::ChimeraLanguage, syntax::SyntaxKind};
 
 pub(super) struct Sink<'input> {
     builder: GreenNodeBuilder<'static>,

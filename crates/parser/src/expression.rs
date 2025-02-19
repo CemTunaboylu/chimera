@@ -47,10 +47,9 @@ pub(crate) fn parse_expression_until_binding_power<B: ASTBehavior>(
     Some(lhs_marker)
 }
 
-const LHS_EXPECTATIONS: [SyntaxKind; 5] = [
+const LHS_EXPECTATIONS: [SyntaxKind; 4] = [
     SyntaxKind::Number,
     SyntaxKind::Identifier,
-    SyntaxKind::PrefixOp,
     SyntaxKind::PrefixUnaryOp,
     SyntaxKind::LParen,
 ];

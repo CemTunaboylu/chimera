@@ -1,9 +1,12 @@
+use crate::syntax::SyntaxKind;
 use num_traits::{FromPrimitive, ToPrimitive};
-use syntax::syntax::SyntaxKind;
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub(crate) enum ChimeraLanguage {}
-pub(crate) type SyntaxNode = rowan::SyntaxNode<ChimeraLanguage>;
+pub enum ChimeraLanguage {}
+
+pub type SyntaxNode = rowan::SyntaxNode<ChimeraLanguage>;
+pub type SyntaxToken = rowan::SyntaxToken<ChimeraLanguage>;
+pub type SyntaxElement = rowan::SyntaxElement<ChimeraLanguage>;
 
 impl rowan::Language for ChimeraLanguage {
     type Kind = SyntaxKind;
