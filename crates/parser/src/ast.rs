@@ -94,7 +94,7 @@ impl TryFrom<SyntaxNode> for Root {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Infix {
     Binary(SyntaxNode),
 }
@@ -153,11 +153,77 @@ impl VarRef {
 }
 
 #[derive(Debug)]
-pub struct Literal(SyntaxNode);
+pub enum Value {
+    Char(char),
+    Str(SmolStr),
+    Num(usize),
+}
+
+#[derive(Debug)]
+
+pub enum LiteralValue {
+    Char(SyntaxToken),
+    Str(SyntaxToken),
+    Num(SyntaxToken),
+}
+
+impl LiteralValue {
+    pub fn value(&self) -> Value {
+        match self {
+            LiteralValue::Char(syntax_token) => Value::Char(
+                syntax_token
+                    .text()
+                    .parse::<char>()
+                    .expect("should have been a char dammit"),
+            ),
+            LiteralValue::Str(syntax_token) => Value::Str(syntax_token.text().to_smolstr()),
+            LiteralValue::Num(syntax_token) => Value::Num(
+                syntax_token
+                    .text()
+                    .to_string()
+                    .parse::<usize>()
+                    .expect("should have been parsable to uisize dammit"),
+            ),
+        }
+    }
+}
+impl TryFrom<SyntaxToken> for LiteralValue {
+    type Error = ASTError;
+
+    fn try_from(node: SyntaxToken) -> Result<Self, Self::Error> {
+        let result = match node.kind() {
+            SyntaxKind::StringLiteral => Self::Str(node),
+            SyntaxKind::CharLiteral => Self::Char(node),
+            SyntaxKind::Number => Self::Num(node),
+            _ => return Err(ASTError {}),
+        };
+
+        Ok(result)
+    }
+}
+#[derive(Debug)]
+pub struct Literal(LiteralValue);
 
 impl Literal {
-    pub fn value<As: From<SyntaxText>>(&self) -> As {
-        As::from(self.0.first_child().unwrap().text())
+    pub fn value(&self) -> Value {
+        self.0.value()
+    }
+}
+
+impl TryFrom<SyntaxNode> for Literal {
+    type Error = ASTError;
+
+    fn try_from(node: SyntaxNode) -> Result<Self, Self::Error> {
+        let node_containing_value = node
+            .children_with_tokens()
+            .filter(|syntax_node| syntax_node.kind().is_literal_value())
+            .find_map(SyntaxElement::into_token)
+            .unwrap();
+
+        let literal_value = LiteralValue::try_from(node_containing_value)
+            .expect("child should have been convertible to LiteralValue");
+
+        Ok(Self(literal_value))
     }
 }
 
@@ -215,7 +281,7 @@ impl TryFrom<SyntaxNode> for Expr {
     fn try_from(node: SyntaxNode) -> Result<Self, Self::Error> {
         let result = match node.kind() {
             SyntaxKind::InfixBinaryOp => Self::Infix(Infix::Binary(node)),
-            SyntaxKind::Literal => Self::Literal(Literal(node)),
+            SyntaxKind::Literal => Self::Literal(try_from_opted::<Literal>(node).unwrap()),
             SyntaxKind::ParenExpr => Self::Paren(Paren(node)),
             SyntaxKind::PrefixUnaryOp => Self::Unary(Unary::Prefix(node)),
             SyntaxKind::VariableRef => Self::VarRef(VarRef(node)),

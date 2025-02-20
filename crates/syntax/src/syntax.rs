@@ -13,6 +13,8 @@ pub enum SyntaxKind {
     PrefixUnaryOp,
     PostFixUnaryOp,
     // composite tokens
+    StringLiteral,
+    CharLiteral,
     Literal,
     VariableRef,
     VariableDef,
@@ -55,6 +57,9 @@ pub enum SyntaxKind {
 }
 
 impl SyntaxKind {
+    pub fn is_literal_value(&self) -> bool {
+        matches!(self, Self::Number | Self::StringLiteral | Self::CharLiteral)
+    }
     pub fn is_binary_operator(&self) -> bool {
         matches!(self, Self::Plus | Self::Minus | Self::Star | Self::Slash)
     }
@@ -104,7 +109,8 @@ impl From<TokenKind> for SyntaxKind {
         match token_kind {
             TokenKind::Space | TokenKind::Newline | TokenKind::Tab => Self::Whitespace,
             TokenKind::Comma => Self::Comma,
-            TokenKind::StringLiteral | TokenKind::CharLiteral => Self::Literal,
+            TokenKind::StringLiteral => Self::StringLiteral,
+            TokenKind::CharLiteral => Self::CharLiteral,
             TokenKind::Colon => Self::Colon,
             TokenKind::SemiColon => Self::SemiColon,
             TokenKind::KwFn => Self::FnKw,
