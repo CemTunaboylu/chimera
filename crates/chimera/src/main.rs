@@ -1,12 +1,16 @@
-use miette::{IntoDiagnostic, Report, Result as MietteResult};
+use miette::{Context, IntoDiagnostic, Report, Result as MietteResult};
 use parser::{
     ast::{Expr, Root, Stmt},
     cst::ConcreteSyntaxTree,
-    parse_behaviors::IgnoreTrivia,
+    hir::lower,
+    parse_behaviors::{IgnoreTrivia, NonIgnoring},
     parser::Parser as ChimeraParser,
 };
-use std::io::{Write, stdin, stdout};
 use std::path::PathBuf;
+use std::{
+    fs::read_to_string,
+    io::{Write, stdin, stdout},
+};
 
 use clap::{Parser, Subcommand};
 
@@ -24,6 +28,7 @@ enum Commands {
     Run { filename: PathBuf },
     CST,
     AST,
+    HIR,
 }
 
 fn main() -> MietteResult<()> {
@@ -36,6 +41,13 @@ fn main() -> MietteResult<()> {
     let display = match args.command {
         Commands::AST => display_as_ast,
         Commands::CST => display_as_cst,
+        Commands::HIR => display_as_hir,
+        Commands::Parse { filename } => {
+            let content = get_file_contents(filename)?;
+            let cst = ChimeraParser::new(&content).parse::<NonIgnoring>();
+            display_as_cst(&cst);
+            return Ok(());
+        }
         _ => display_as_cst,
     };
 
@@ -77,4 +89,29 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
             // })
             .collect::<Vec<_>>()
     );
+}
+
+fn display_as_hir(cst: &ConcreteSyntaxTree) {
+    let ast_root = Root::try_from(cst.syntax_node_root()).unwrap();
+    let hir = lower(&ast_root);
+
+    dbg!(
+        hir
+            // .filter_map(|stmt| match stmt {
+            //     Stmt::VarDef(var_def) => Some(var_def.value()),
+            //     Stmt::Expr(expr) => None,
+            // match expr {
+            //     Expr::VarRef(var_ref) => Some(var_ref.name()),
+            //     _ => None,
+            // },
+            // })
+            .collect::<Vec<_>>()
+    );
+}
+
+fn get_file_contents(file_name: PathBuf) -> MietteResult<String> {
+    let file_contents = read_to_string(&file_name)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("reading '{}' failed", file_name.display()))?;
+    Ok(file_contents)
 }
