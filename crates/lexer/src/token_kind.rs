@@ -126,7 +126,7 @@ pub enum TokenKind {
     ModulusEq,
     #[token("::")]
     NamespaceSep,
-    #[regex("\n+")]
+    #[regex("(\\r\\n|\\r|\\n)+")] // [<windows line break> | <linux> | <mac> ]
     Newline,
     #[token("~")]
     Not,

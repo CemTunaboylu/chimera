@@ -28,6 +28,7 @@ pub struct Token {
 }
 
 pub type LexResult = MietteResult<Token, LexError>;
+#[derive(Debug)]
 pub struct Lexer<'input> {
     inner_lexer: logos::Lexer<'input, TokenKind>,
     peeked: Option<Option<<Self as Iterator>::Item>>,
@@ -192,7 +193,8 @@ mod tests {
             modulus: ("%", TokenKind::Modulus),
             modulus_eq: ("%=", TokenKind::ModulusEq),
             namespace_sep: ("::", TokenKind::NamespaceSep),
-            newline: ("\n\n", TokenKind::Newline),
+            newline: ("\n", TokenKind::Newline),
+            two_newlines: ("\n\n", TokenKind::Newline),
             not: ("~", TokenKind::Not),
             not_eq: ("!=", TokenKind::NotEq),
             number: ("314", TokenKind::Number),
@@ -211,11 +213,13 @@ mod tests {
             semi_colon: (";", TokenKind::SemiColon),
             slash: ("/", TokenKind::Slash),
             slash_eq: ("/=", TokenKind::SlashEq),
-            space: ("   ", TokenKind::Space),
+            space: (" ", TokenKind::Space),
+            three_spaces: ("   ", TokenKind::Space),
             star: ("*", TokenKind::Star),
             star_eq: ("*=", TokenKind::StarEq),
             string_literal: ("\"string literal.\"", TokenKind::StringLiteral),
-            tab: ("\t\t", TokenKind::Tab),
+            tab: ("\t", TokenKind::Tab),
+            two_tabs: ("\t\t", TokenKind::Tab),
             type_byte: ("byte", TokenKind::TypeByte),
             type_bool: ("bool", TokenKind::TypeBool),
             type_char: ("char", TokenKind::TypeChar),
