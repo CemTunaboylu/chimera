@@ -45,6 +45,7 @@ pub enum SyntaxKind {
     Not,
     Star,
     Slash,
+    Dot,
     //
     LParen,
     RParen,
@@ -61,28 +62,32 @@ impl SyntaxKind {
         matches!(self, Self::Number | Self::StringLiteral | Self::CharLiteral)
     }
     pub fn is_binary_operator(&self) -> bool {
-        matches!(self, Self::Plus | Self::Minus | Self::Star | Self::Slash)
+        matches!(
+            self,
+            Self::Plus | Self::Minus | Self::Star | Self::Slash | Self::Dot
+        )
     }
 
     pub fn is_unary_operator(&self) -> bool {
         matches!(self, Self::Minus)
     }
-    pub fn operators() -> [SyntaxKind; 14] {
+    pub fn operators() -> [SyntaxKind; 15] {
         [
-            Self::Colon,
             Self::And,
-            Self::Or,
+            Self::Colon,
+            Self::Dot,
+            Self::Eq,
             Self::Exclamation,
             Self::GreaterThan,
             Self::LessThan,
-            Self::Eq,
-            Self::NotEq,
-            Self::Plus,
             Self::Minus,
             Self::Modulus,
             Self::Not,
-            Self::Star,
+            Self::NotEq,
+            Self::Or,
+            Self::Plus,
             Self::Slash,
+            Self::Star,
         ]
     }
     pub fn is_trivia(self) -> bool {
@@ -107,39 +112,43 @@ impl SyntaxKind {
 impl From<TokenKind> for SyntaxKind {
     fn from(token_kind: TokenKind) -> Self {
         match token_kind {
-            TokenKind::Space | TokenKind::Newline | TokenKind::Tab => Self::Whitespace,
-            TokenKind::Comma => Self::Comma,
-            TokenKind::StringLiteral => Self::StringLiteral,
+            TokenKind::And => Self::And,
+            TokenKind::BlockComment | TokenKind::LineComment => Self::Comment,
             TokenKind::CharLiteral => Self::CharLiteral,
             TokenKind::Colon => Self::Colon,
-            TokenKind::SemiColon => Self::SemiColon,
+            TokenKind::Comma => Self::Comma,
+            TokenKind::Dot => SyntaxKind::Dot,
+            TokenKind::Eq => Self::Eq,
+            TokenKind::Exclamation => Self::Exclamation,
+            TokenKind::GreaterThan => Self::GreaterThan,
+            TokenKind::Identifier => Self::Identifier,
             TokenKind::KwFn => Self::FnKw,
             TokenKind::KwLet => Self::LetKw,
             TokenKind::KwReturn => Self::ReturnKw,
-            TokenKind::Identifier => Self::Identifier,
-            TokenKind::Number => Self::Number,
-            TokenKind::And => Self::And,
-            TokenKind::Or => Self::Or,
-            TokenKind::Exclamation => Self::Exclamation,
-            TokenKind::GreaterThan => Self::GreaterThan,
+            TokenKind::LeftBrace => Self::LBrace,
+            TokenKind::LeftParen => Self::LParen,
+            TokenKind::LeftSquareBrac => Self::LSquareBrac,
             TokenKind::LessThan => Self::LessThan,
-            TokenKind::Eq => Self::Eq,
-            TokenKind::NotEq => Self::NotEq,
-            TokenKind::Plus => Self::Plus,
             TokenKind::Minus => Self::Minus,
             TokenKind::Modulus => Self::Modulus,
             TokenKind::Not => Self::Not,
-            TokenKind::Star => Self::Star,
-            TokenKind::Slash => Self::Slash,
-            TokenKind::LeftParen => Self::LParen,
-            TokenKind::RightParen => Self::RParen,
-            TokenKind::LeftBrace => Self::LBrace,
+            TokenKind::NotEq => Self::NotEq,
+            TokenKind::Number => Self::Number,
+            TokenKind::Or => Self::Or,
+            TokenKind::Plus => Self::Plus,
             TokenKind::RightBrace => Self::RBrace,
-            TokenKind::LeftSquareBrac => Self::LSquareBrac,
+            TokenKind::RightParen => Self::RParen,
             TokenKind::RightSquareBrac => Self::RSquareBrac,
-            TokenKind::BlockComment | TokenKind::LineComment => Self::Comment,
             TokenKind::Root => SyntaxKind::Root,
-            _ => todo!(),
+            TokenKind::SemiColon => Self::SemiColon,
+            TokenKind::Slash => Self::Slash,
+            TokenKind::Space | TokenKind::Newline | TokenKind::Tab => Self::Whitespace,
+            TokenKind::Star => Self::Star,
+            TokenKind::StringLiteral => Self::StringLiteral,
+            _ => {
+                let msg = format!("{:?} don't have a corresponding syntaxkind", token_kind);
+                panic!("{}", msg)
+            }
         }
     }
 }

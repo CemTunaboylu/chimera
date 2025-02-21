@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-use rowan::SyntaxText;
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
     language::{SyntaxElement, SyntaxNode, SyntaxToken},
@@ -12,63 +11,7 @@ use syntax::{
 /*
    TODO:
        - maybe I can merge VarRef and VarDef into a single enum
-       - add test for let a = let b = let c
-
 */
-
-/*
-→ let a = b
-CST:
-    Root@0..6
-    VariableDef@0..6
-        LetKw@0..3 "let"
-        Identifier@3..4 "a"
-        Eq@4..5 "="
-        VariableRef@5..6
-        Identifier@5..6 "b"
-AST:
-    VarDef(
-        VarDef(
-            VariableDef@0..6
-              LetKw@0..3 "let"
-              Identifier@3..4 "a"
-              Eq@4..5 "="
-              VariableRef@5..6
-                Identifier@5..6 "b"
-            ,
-        ),
-    ),
-
-→ let a = 3 + 14
-CST:
-    Root@0..9
-    VariableDef@0..9
-        LetKw@0..3 "let"
-        Identifier@3..4 "a"
-        Eq@4..5 "="
-        InfixBinaryOp@5..9
-        Literal@5..6
-            Number@5..6 "3"
-        Plus@6..7 "+"
-        Literal@7..9
-            Number@7..9 "14"
-AST:
-    VarDef(
-            VarDef(
-                VariableDef@0..9
-                LetKw@0..3 "let"
-                Identifier@3..4 "a"
-                Eq@4..5 "="
-                InfixBinaryOp@5..9
-                    Literal@5..6
-                    Number@5..6 "3"
-                    Plus@6..7 "+"
-                    Literal@7..9
-                    Number@7..9 "14"
-                ,
-            ),
-        ),
- */
 
 #[derive(Debug)]
 pub struct ASTError {}
@@ -148,11 +91,16 @@ pub struct VarRef(SyntaxNode);
 
 impl VarRef {
     pub fn name(&self) -> SmolStr {
-        self.0.first_child().unwrap().text().to_smolstr()
+        self.0
+            .children_with_tokens()
+            .find_map(SyntaxElement::into_token)
+            .unwrap()
+            .text()
+            .to_smolstr()
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Value {
     Char(char),
     Str(SmolStr),

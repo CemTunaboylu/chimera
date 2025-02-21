@@ -13,6 +13,7 @@ pub(crate) enum Op {
     Sub,
     Mul,
     Div,
+    Dot,
     Neg,
     None,
 }
@@ -29,6 +30,8 @@ impl Op {
             // left associative
             Op::Add | Op::Sub => (1, 2),
             Op::Mul | Op::Div => (3, 4),
+            // right associative
+            Op::Dot => (6, 5),
         }
     }
     pub(crate) fn prefix_operation_from(syntax_kind: SyntaxKind) -> Op {
@@ -44,6 +47,7 @@ impl Op {
             SyntaxKind::Plus => Op::Add,
             SyntaxKind::Slash => Op::Div,
             SyntaxKind::Star => Op::Mul,
+            SyntaxKind::Dot => Op::Dot,
             _ => Op::None,
         }
     }
@@ -64,7 +68,7 @@ impl From<OpType> for Op {
 impl Into<SyntaxKind> for Op {
     fn into(self) -> SyntaxKind {
         match self {
-            Op::Add | Op::Sub | Op::Mul | Op::Div => SyntaxKind::InfixBinaryOp,
+            Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Dot => SyntaxKind::InfixBinaryOp,
             Op::Neg => SyntaxKind::PrefixUnaryOp,
             Op::None => todo!(),
         }
@@ -115,6 +119,36 @@ pub(super) mod tests {
         binary_add_two_numbers: ("3+14",
             expect![[
             "Root@0..4\n  InfixBinaryOp@0..4\n    Literal@0..1\n      Number@0..1 \"3\"\n    Plus@1..2 \"+\"\n    Literal@2..4\n      Number@2..4 \"14\""
+            ]]),
+
+        binary_dot_member: ("structure.member",
+            expect![[
+r#"Root@0..16
+  InfixBinaryOp@0..16
+    VariableRef@0..9
+      Identifier@0..9 "structure"
+    Dot@9..10 "."
+    VariableRef@10..16
+      Identifier@10..16 "member""#
+            ]]),
+
+        binary_dot_member_precedence: ("human.weight + 1 /100",
+            expect![[
+r#"Root@0..18
+  InfixBinaryOp@0..18
+    InfixBinaryOp@0..12
+      VariableRef@0..5
+        Identifier@0..5 "human"
+      Dot@5..6 "."
+      VariableRef@6..12
+        Identifier@6..12 "weight"
+    Plus@12..13 "+"
+    InfixBinaryOp@13..18
+      Literal@13..14
+        Number@13..14 "1"
+      Slash@14..15 "/"
+      Literal@15..18
+        Number@15..18 "100""#
             ]]),
         binary_add_four_numbers: ("3+14+159+2653",
             expect![[
