@@ -18,6 +18,7 @@ pub enum Complete {}
 impl MarkerState for Complete {}
 impl private::Sealed for Complete {}
 
+#[derive(Debug)]
 pub struct Marker<S: MarkerState = Incomplete> {
     checkpoint: usize,
     bomb: DropBomb,
@@ -58,7 +59,7 @@ impl Marker<Incomplete> {
 }
 
 impl Marker<Complete> {
-    pub fn precede(self, parser: &mut Parser) -> Marker<Incomplete> {
+    pub fn precede(&self, parser: &mut Parser) -> Marker<Incomplete> {
         let new_marker = parser.start();
         let forward_parent_index = new_marker.checkpoint - self.checkpoint;
         match parser.event_holder.get_mut(self.checkpoint) {

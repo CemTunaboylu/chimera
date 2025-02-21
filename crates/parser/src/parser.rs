@@ -16,6 +16,7 @@ use syntax::syntax::{Syntax, SyntaxKind};
 
 use miette::Result as MietteResult;
 
+#[derive(Debug)]
 pub struct Parser<'input> {
     lexer: Lexer<'input>,
     pub event_holder: EventHolder,

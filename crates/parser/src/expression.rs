@@ -7,43 +7,83 @@ use crate::{
 
 use syntax::syntax::SyntaxKind;
 
+impl OpType {
+    fn inject_expectations(&self, parser: &mut Parser) {
+        let expectations = match self {
+            OpType::Prefix(_) => return, // left_hand_side has its own function
+            OpType::Infix(_) => &[SyntaxKind::InfixBinaryOp],
+            OpType::Postfix(_) => &[SyntaxKind::PostFixUnaryOp],
+        };
+
+        parser.inject_expectations(expectations);
+    }
+
+    fn handle_no_op(&self, parser: &mut Parser) -> Option<Marker<Complete>> {
+        match self {
+            OpType::Prefix(_) => unreachable!(),
+            OpType::Infix(syntax_kind) => match syntax_kind {
+                SyntaxKind::Identifier => {
+                    return Some(variable_ref(parser));
+                }
+                SyntaxKind::RParen => {}
+                _ => {
+                    parser.recover();
+                }
+            },
+            OpType::Postfix(_) => {}
+        }
+        return None;
+    }
+    fn parse<B: ASTBehavior>(
+        self,
+        parser: &mut Parser,
+        min_binding_power: BindingPower,
+        marker: &Marker<Complete>,
+    ) -> Option<Marker<Complete>> {
+        // note: after with a bump, expectations will be cleared
+        self.inject_expectations(parser);
+        let op: Op = (&self).into();
+        match op {
+            Op::None => self.handle_no_op(parser),
+            _ => {
+                let (left_binding_power, right_binding_power) = op.binding_power();
+                if left_binding_power < min_binding_power {
+                    return None;
+                }
+                parser.bump();
+                let preceding_marker = marker.precede(parser);
+                parse_expression_until_binding_power::<B>(parser, right_binding_power);
+                return Some(preceding_marker.complete(&mut parser.event_holder, op.into()));
+            }
+        }
+    }
+}
+
 pub(crate) fn parse_expression_until_binding_power<B: ASTBehavior>(
     parser: &mut Parser,
     min_binding_power: BindingPower,
 ) -> Option<Marker<Complete>> {
     let mut lhs_marker = left_hand_side::<B>(parser)?;
-    loop {
-        parser.inject_expectations(&[SyntaxKind::InfixBinaryOp]);
-        match parser.peek::<B>() {
-            None => break,
-            Some(Ok(token)) => match OpType::Infix(token.kind).into() {
-                Op::None => match token.kind {
-                    SyntaxKind::Identifier => {
-                        lhs_marker = variable_ref(parser);
+    'parsing: loop {
+        match parser.peek::<B>()? {
+            Ok(syntax) => {
+                let kind = syntax.kind;
+                for op_type in [OpType::Postfix, OpType::Infix] {
+                    if let Some(marker) =
+                        op_type(kind).parse::<B>(parser, min_binding_power, &lhs_marker)
+                    {
+                        lhs_marker = marker;
+                        continue 'parsing;
                     }
-                    SyntaxKind::RParen => {
-                        return None;
-                    }
-                    _ => {
-                        parser.recover();
-                        return None;
-                    }
-                },
-                op => {
-                    let (left_binding_power, right_binding_power) = op.binding_power();
-                    if left_binding_power < min_binding_power {
-                        return None;
-                    }
-                    parser.bump();
-                    let preceding_marker = lhs_marker.precede(parser);
-                    parse_expression_until_binding_power::<B>(parser, right_binding_power);
-                    lhs_marker = preceding_marker.complete(&mut parser.event_holder, op.into());
                 }
-            },
-            Some(Err(_err)) => todo!(),
+            }
+            Err(err) => {
+                println!("{:?}", err);
+                panic!("{:?}", format!("{:?}", err));
+            }
         }
+        break;
     }
-
     Some(lhs_marker)
 }
 
@@ -55,11 +95,10 @@ const LHS_EXPECTATIONS: [SyntaxKind; 4] = [
 ];
 
 fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
+    // note: after with a bump, expectations will be cleared
     parser.inject_expectations(&LHS_EXPECTATIONS);
     let result = parser.peek::<B>()?;
     let lhs_marker = match result {
-        // TODO: matches do not provide expected ones thus, should change it?
-        // Or, I can add all of the options before the match and then match?
         Ok(token) => match token.kind {
             SyntaxKind::Number => literal(parser),
             SyntaxKind::Identifier => variable_ref(parser),
@@ -72,7 +111,10 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
                 return None;
             }
         },
-        Err(_err) => todo!(),
+        Err(_err) => {
+            println!("{:?}", _err);
+            panic!("{:?}", _err);
+        }
     };
     Some(lhs_marker)
 }
@@ -80,20 +122,18 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
 fn literal(parser: &mut Parser) -> Marker<Complete> {
     assert!(parser.check_next_syntax(|token| matches!(token.kind, SyntaxKind::Number)));
     parser.bump_with_marker(SyntaxKind::Literal)
-    // parser.check_next_syntax(Syntax::is_a_separator);
 }
 
 fn variable_ref(parser: &mut Parser) -> Marker<Complete> {
     assert!(parser.is_next(SyntaxKind::Identifier));
     parser.bump_with_marker(SyntaxKind::VariableRef)
-    // parser.check_next_syntax(Syntax::is_a_separator);
 }
 
 fn prefix_expr<B: ASTBehavior>(parser: &mut Parser, kind: SyntaxKind) -> Marker<Complete> {
     assert!(parser.is_next(SyntaxKind::Minus));
     let marker = parser.start();
     parser.bump();
-    let op: Op = OpType::Prefix(kind).into();
+    let op: Op = (&OpType::Prefix(kind)).into();
     let (_, right_binding_power) = op.binding_power();
 
     parse_expression_until_binding_power::<B>(parser, right_binding_power);

@@ -9,12 +9,17 @@ pub(crate) enum OpType {
     Postfix(SyntaxKind),
 }
 pub(crate) enum Op {
+    // prefix
+    Neg,
+    Not,
+    // infix
     Add,
     Sub,
     Mul,
     Div,
     Dot,
-    Neg,
+    // postfix
+    Factorial,
     None,
 }
 
@@ -24,7 +29,9 @@ pub const NO: BindingPower = 0;
 impl Op {
     pub(crate) fn binding_power(&self) -> (BindingPower, BindingPower) {
         match self {
+            // prefix
             Op::Neg => (NO, 5),
+            Op::Not => (NO, 5),
             // like rust-analyzer, dummy token has a binding power pair
             Op::None => (0, 1),
             // left associative
@@ -32,16 +39,19 @@ impl Op {
             Op::Mul | Op::Div => (3, 4),
             // right associative
             Op::Dot => (6, 5),
+            // postfix
+            Op::Factorial => (7, NO),
         }
     }
-    pub(crate) fn prefix_operation_from(syntax_kind: SyntaxKind) -> Op {
+    pub(crate) fn prefix_operation_from(syntax_kind: &SyntaxKind) -> Op {
         match syntax_kind {
             SyntaxKind::Minus => Op::Neg,
+            SyntaxKind::Not => Op::Not,
             _ => Op::None,
         }
     }
 
-    pub(crate) fn infix_operation_from(syntax_kind: SyntaxKind) -> Op {
+    pub(crate) fn infix_operation_from(syntax_kind: &SyntaxKind) -> Op {
         match syntax_kind {
             SyntaxKind::Minus => Op::Sub,
             SyntaxKind::Plus => Op::Add,
@@ -51,14 +61,20 @@ impl Op {
             _ => Op::None,
         }
     }
+    pub(crate) fn postfix_operation_from(syntax_kind: &SyntaxKind) -> Op {
+        match syntax_kind {
+            SyntaxKind::Exclamation => Op::Factorial,
+            _ => Op::None,
+        }
+    }
 }
 
-impl From<OpType> for Op {
-    fn from(optype: OpType) -> Self {
+impl From<&OpType> for Op {
+    fn from(optype: &OpType) -> Self {
         match optype {
             OpType::Prefix(syntax_kind) => Self::prefix_operation_from(syntax_kind),
             OpType::Infix(syntax_kind) => Self::infix_operation_from(syntax_kind),
-            OpType::Postfix(_syntax_kind) => todo!(),
+            OpType::Postfix(syntax_kind) => Self::postfix_operation_from(syntax_kind),
         }
     }
 }
@@ -70,7 +86,9 @@ impl Into<SyntaxKind> for Op {
         match self {
             Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Dot => SyntaxKind::InfixBinaryOp,
             Op::Neg => SyntaxKind::PrefixUnaryOp,
-            Op::None => todo!(),
+            Op::Factorial => SyntaxKind::PostFixUnaryOp,
+            // TODO: implement Op::Not
+            Op::None | Op::Not => todo!(),
         }
     }
 }
