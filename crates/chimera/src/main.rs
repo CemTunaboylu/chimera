@@ -1,6 +1,6 @@
 use miette::{Context, IntoDiagnostic, Report, Result as MietteResult};
 use parser::{
-    ast::{Expr, Root, Stmt},
+    ast::Root,
     cst::ConcreteSyntaxTree,
     hir::lower,
     parse_behaviors::{IgnoreTrivia, NonIgnoring},
@@ -93,20 +93,11 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
 
 fn display_as_hir(cst: &ConcreteSyntaxTree) {
     let ast_root = Root::try_from(cst.syntax_node_root()).unwrap();
-    let hir = lower(&ast_root);
+    let mut expr_arena = lower(&ast_root);
 
-    dbg!(
-        hir
-            // .filter_map(|stmt| match stmt {
-            //     Stmt::VarDef(var_def) => Some(var_def.value()),
-            //     Stmt::Expr(expr) => None,
-            // match expr {
-            //     Expr::VarRef(var_ref) => Some(var_ref.name()),
-            //     _ => None,
-            // },
-            // })
-            .collect::<Vec<_>>()
-    );
+    for elm in &mut expr_arena {
+        println!("{:?}", elm);
+    }
 }
 
 fn get_file_contents(file_name: PathBuf) -> MietteResult<String> {
