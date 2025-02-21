@@ -10,7 +10,7 @@ use syntax::syntax::SyntaxKind;
 impl OpType {
     fn inject_expectations(&self, parser: &mut Parser) {
         let expectations = match self {
-            OpType::Prefix(_) => return, // left_hand_side has its own function
+            OpType::Prefix(_) => &[SyntaxKind::PrefixUnaryOp], // left_hand_side has its own function
             OpType::Infix(_) => &[SyntaxKind::InfixBinaryOp],
             OpType::Postfix(_) => &[SyntaxKind::PostFixUnaryOp],
         };
@@ -20,7 +20,7 @@ impl OpType {
 
     fn handle_no_op(&self, parser: &mut Parser) -> Option<Marker<Complete>> {
         match self {
-            OpType::Prefix(_) => unreachable!(),
+            OpType::Prefix(_) => {}
             OpType::Infix(syntax_kind) => match syntax_kind {
                 SyntaxKind::Identifier => {
                     return Some(variable_ref(parser));
@@ -38,7 +38,7 @@ impl OpType {
         self,
         parser: &mut Parser,
         min_binding_power: BindingPower,
-        marker: &Marker<Complete>,
+        marker: Option<&Marker<Complete>>,
     ) -> Option<Marker<Complete>> {
         // note: after with a bump, expectations will be cleared
         self.inject_expectations(parser);
@@ -50,10 +50,16 @@ impl OpType {
                 if left_binding_power < min_binding_power {
                     return None;
                 }
-                parser.bump();
-                let preceding_marker = marker.precede(parser);
+                let new_marker = if let Some(marker) = marker {
+                    parser.bump();
+                    marker.precede(parser)
+                } else {
+                    let marker = parser.start();
+                    parser.bump();
+                    marker
+                };
                 parse_expression_until_binding_power::<B>(parser, right_binding_power);
-                return Some(preceding_marker.complete(&mut parser.event_holder, op.into()));
+                return Some(new_marker.complete(&mut parser.event_holder, op.into()));
             }
         }
     }
@@ -70,7 +76,7 @@ pub(crate) fn parse_expression_until_binding_power<B: ASTBehavior>(
                 let kind = syntax.kind;
                 for op_type in [OpType::Postfix, OpType::Infix] {
                     if let Some(marker) =
-                        op_type(kind).parse::<B>(parser, min_binding_power, &lhs_marker)
+                        op_type(kind).parse::<B>(parser, min_binding_power, Some(&lhs_marker))
                     {
                         lhs_marker = marker;
                         continue 'parsing;
@@ -99,10 +105,12 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
     parser.inject_expectations(&LHS_EXPECTATIONS);
     let result = parser.peek::<B>()?;
     let lhs_marker = match result {
-        Ok(token) => match token.kind {
+        Ok(syntax) => match syntax.kind {
             SyntaxKind::Number => literal(parser),
             SyntaxKind::Identifier => variable_ref(parser),
-            SyntaxKind::Minus => prefix_expr::<B>(parser, SyntaxKind::Minus),
+            SyntaxKind::Minus | SyntaxKind::Not => {
+                OpType::Prefix(syntax.kind).parse::<B>(parser, 0, None)?
+            }
             SyntaxKind::LParen => paren_expr::<B>(parser),
             SyntaxKind::RParen => return None,
             _ => {
@@ -127,17 +135,6 @@ fn literal(parser: &mut Parser) -> Marker<Complete> {
 fn variable_ref(parser: &mut Parser) -> Marker<Complete> {
     assert!(parser.is_next(SyntaxKind::Identifier));
     parser.bump_with_marker(SyntaxKind::VariableRef)
-}
-
-fn prefix_expr<B: ASTBehavior>(parser: &mut Parser, kind: SyntaxKind) -> Marker<Complete> {
-    assert!(parser.is_next(SyntaxKind::Minus));
-    let marker = parser.start();
-    parser.bump();
-    let op: Op = (&OpType::Prefix(kind)).into();
-    let (_, right_binding_power) = op.binding_power();
-
-    parse_expression_until_binding_power::<B>(parser, right_binding_power);
-    marker.complete(&mut parser.event_holder, op.into())
 }
 
 fn paren_expr<B: ASTBehavior>(parser: &mut Parser) -> Marker<Complete> {

@@ -24,14 +24,15 @@ pub(crate) enum Op {
 }
 
 pub type BindingPower = u8;
-pub const NO: BindingPower = 0;
+pub const NO_FOR_POSTFIX: BindingPower = 0;
+pub const NO_FOR_PREFIX: BindingPower = 99;
 
 impl Op {
     pub(crate) fn binding_power(&self) -> (BindingPower, BindingPower) {
         match self {
             // prefix
-            Op::Neg => (NO, 5),
-            Op::Not => (NO, 5),
+            Op::Neg => (NO_FOR_PREFIX, 5),
+            Op::Not => (NO_FOR_PREFIX, 5),
             // like rust-analyzer, dummy token has a binding power pair
             Op::None => (0, 1),
             // left associative
@@ -40,7 +41,7 @@ impl Op {
             // right associative
             Op::Dot => (6, 5),
             // postfix
-            Op::Factorial => (7, NO),
+            Op::Factorial => (7, NO_FOR_POSTFIX),
         }
     }
     pub(crate) fn prefix_operation_from(syntax_kind: &SyntaxKind) -> Op {
@@ -85,10 +86,9 @@ impl Into<SyntaxKind> for Op {
     fn into(self) -> SyntaxKind {
         match self {
             Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Dot => SyntaxKind::InfixBinaryOp,
-            Op::Neg => SyntaxKind::PrefixUnaryOp,
+            Op::Neg | Op::Not => SyntaxKind::PrefixUnaryOp,
             Op::Factorial => SyntaxKind::PostFixUnaryOp,
-            // TODO: implement Op::Not
-            Op::None | Op::Not => todo!(),
+            Op::None => todo!(),
         }
     }
 }
@@ -183,7 +183,44 @@ r#"Root@0..18
                 "Root@0..2\n  PrefixUnaryOp@0..2\n    Minus@0..1 \"-\"\n    Literal@1..2\n      Number@1..2 \"9\""
             ]]
         ),
-        prefix_minus_precedence: ("-3+14",
+
+        prefix_not_var_ref: ("~a",
+            expect![[
+r#"
+Root@0..2
+  PrefixUnaryOp@0..2
+    Not@0..1 "~"
+    VariableRef@1..2
+      Identifier@1..2 "a""#
+            ]]
+        ),
+        postfix_excl_prefix_neg_precedence: ("-9!",
+            expect![[
+r#"
+Root@0..3
+  PrefixUnaryOp@0..3
+    Minus@0..1 "-"
+    PostFixUnaryOp@1..3
+      Literal@1..2
+        Number@1..2 "9"
+      Exclamation@2..3 "!""#
+            ]]
+        ),
+        postfix_excl_infix_mul_precedence: ("1*9!",
+            expect![[
+r#"
+Root@0..4
+  InfixBinaryOp@0..4
+    Literal@0..1
+      Number@0..1 "1"
+    Star@1..2 "*"
+    PostFixUnaryOp@2..4
+      Literal@2..3
+        Number@2..3 "9"
+      Exclamation@3..4 "!""#
+            ]]
+        ),
+        prefix_minus_sum_precedence: ("-3+14",
             expect![[
                 "Root@0..5\n  InfixBinaryOp@0..5\n    PrefixUnaryOp@0..2\n      Minus@0..1 \"-\"\n      Literal@1..2\n        Number@1..2 \"3\"\n    Plus@2..3 \"+\"\n    Literal@3..5\n      Number@3..5 \"14\""
             ]]
