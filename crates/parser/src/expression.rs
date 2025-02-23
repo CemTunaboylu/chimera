@@ -30,7 +30,7 @@ impl OpType {
             },
             OpType::Postfix(_) => {}
         }
-        return None;
+        None
     }
     fn parse<B: ASTBehavior>(
         self,
@@ -59,7 +59,7 @@ impl OpType {
                     marker
                 };
                 parse_expression_until_binding_power::<B>(parser, right_binding_power);
-                return Some(new_marker.complete(&mut parser.event_holder, op.into()));
+                Some(new_marker.complete(&mut parser.event_holder, op.into()))
             }
         }
     }

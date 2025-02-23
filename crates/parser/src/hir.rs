@@ -53,7 +53,7 @@ impl ExprArena {
     }
 
     pub fn lower_expr_as_idx(&mut self, from: Option<&ast::Expr>) -> ExprIdx {
-        if let None = from {
+        if from.is_none() {
             return self.missing_idx;
         }
         let from = from.unwrap();
@@ -197,9 +197,8 @@ pub enum Stmt {
     Expr(Expr),
 }
 
-pub fn lower<'ast>(ast_root: &'ast ast::Root) -> ExprArena {
-    let expr_arena = ExprArena::new(ast_root);
-    expr_arena
+pub fn lower(ast_root: &ast::Root) -> ExprArena {
+    ExprArena::new(ast_root)
 }
 
 #[cfg(test)]

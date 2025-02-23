@@ -26,9 +26,9 @@ enum Commands {
     Tokenize { filename: PathBuf },
     Parse { filename: PathBuf },
     Run { filename: PathBuf },
-    CST,
-    AST,
-    HIR,
+    Cst,
+    Ast,
+    Hir,
 }
 
 fn main() -> MietteResult<()> {
@@ -39,9 +39,9 @@ fn main() -> MietteResult<()> {
     let mut input = String::new();
 
     let display = match args.command {
-        Commands::AST => display_as_ast,
-        Commands::CST => display_as_cst,
-        Commands::HIR => display_as_hir,
+        Commands::Ast => display_as_ast,
+        Commands::Cst => display_as_cst,
+        Commands::Hir => display_as_hir,
         Commands::Parse { filename } => {
             let content = get_file_contents(filename)?;
             let cst = ChimeraParser::new(&content).parse::<NonIgnoring>();
