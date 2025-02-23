@@ -1,6 +1,6 @@
 use miette::{Context, IntoDiagnostic, Report, Result as MietteResult};
 use parser::{
-    ast::Root,
+    ast::{Root, Stmt as AstStmt},
     cst::ConcreteSyntaxTree,
     hir::lower,
     parse_behaviors::{IgnoreTrivia, NonIgnoring},
@@ -79,9 +79,10 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
     let ast = Root::try_from(cst.syntax_node_root()).unwrap();
     dbg!(
         ast.statements()
-            // .filter_map(|stmt| match stmt {
-            //     Stmt::VarDef(var_def) => Some(var_def.value()),
-            //     Stmt::Expr(expr) => None,
+            .filter_map(|stmt| match stmt {
+                AstStmt::VarDef(var_def) => Some(var_def),
+                AstStmt::Expr(_) => None,
+            })
             // match expr {
             //     Expr::VarRef(var_ref) => Some(var_ref.name()),
             //     _ => None,
@@ -92,8 +93,11 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
 }
 
 fn display_as_hir(cst: &ConcreteSyntaxTree) {
+    display_as_cst(cst);
     let ast_root = Root::try_from(cst.syntax_node_root()).unwrap();
+    println!("{:?}", ast_root);
     let mut expr_arena = lower(&ast_root);
+    dbg!("{:?}", &expr_arena);
 
     for elm in &mut expr_arena {
         println!("{:?}", elm);

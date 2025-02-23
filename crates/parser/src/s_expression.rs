@@ -3,21 +3,24 @@ use syntax::syntax::SyntaxKind;
 
 // Note: Into and From will produce different kinds since from Op to SyntaxKind,
 // we transition to a composite SyntaxKind.
+#[derive(Debug)]
 pub(crate) enum OpType {
     Prefix(SyntaxKind),
     Infix(SyntaxKind),
     Postfix(SyntaxKind),
 }
+#[derive(Debug)]
 pub(crate) enum Op {
     // prefix
     Neg,
     Not,
     // infix
     Add,
-    Sub,
-    Mul,
     Div,
     Dot,
+    Eq,
+    Mul,
+    Sub,
     // postfix
     Factorial,
     None,
@@ -31,17 +34,18 @@ impl Op {
     pub(crate) fn binding_power(&self) -> (BindingPower, BindingPower) {
         match self {
             // prefix
-            Op::Neg => (NO_FOR_PREFIX, 5),
-            Op::Not => (NO_FOR_PREFIX, 5),
+            Op::Neg => (NO_FOR_PREFIX, 9),
+            Op::Not => (NO_FOR_PREFIX, 9),
             // like rust-analyzer, dummy token has a binding power pair
             Op::None => (0, 1),
             // left associative
-            Op::Add | Op::Sub => (1, 2),
-            Op::Mul | Op::Div => (3, 4),
+            Op::Eq => (2, 1),
+            Op::Add | Op::Sub => (5, 6),
+            Op::Mul | Op::Div => (7, 8),
             // right associative
-            Op::Dot => (6, 5),
+            Op::Dot => (14, 13),
             // postfix
-            Op::Factorial => (7, NO_FOR_POSTFIX),
+            Op::Factorial => (11, NO_FOR_POSTFIX),
         }
     }
     pub(crate) fn prefix_operation_from(syntax_kind: &SyntaxKind) -> Op {
@@ -54,11 +58,12 @@ impl Op {
 
     pub(crate) fn infix_operation_from(syntax_kind: &SyntaxKind) -> Op {
         match syntax_kind {
+            SyntaxKind::Dot => Op::Dot,
+            SyntaxKind::Eq => Op::Eq,
             SyntaxKind::Minus => Op::Sub,
             SyntaxKind::Plus => Op::Add,
             SyntaxKind::Slash => Op::Div,
             SyntaxKind::Star => Op::Mul,
-            SyntaxKind::Dot => Op::Dot,
             _ => Op::None,
         }
     }
@@ -85,7 +90,7 @@ impl From<&OpType> for Op {
 impl Into<SyntaxKind> for Op {
     fn into(self) -> SyntaxKind {
         match self {
-            Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Dot => SyntaxKind::InfixBinaryOp,
+            Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Dot | Op::Eq => SyntaxKind::InfixBinaryOp,
             Op::Neg | Op::Not => SyntaxKind::PrefixUnaryOp,
             Op::Factorial => SyntaxKind::PostFixUnaryOp,
             Op::None => todo!(),

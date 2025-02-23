@@ -1,20 +1,52 @@
 #![allow(dead_code)]
+use std::ops::Range;
+
+use miette::{Diagnostic, Report};
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
     language::{SyntaxElement, SyntaxNode, SyntaxToken},
     syntax::SyntaxKind,
 };
+use thiserror::Error;
+
+use crate::errors::{Inner, Stringer};
 
 // AST is a pseudo abstract syntax tree because it is built on
 // top of the CST that's constructed by rowan.
 
-/*
-   TODO:
-       - maybe I can merge VarRef and VarDef into a single enum
-*/
+#[derive(Clone, Diagnostic, Debug, PartialEq, Error)]
+pub enum ASTError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Unexpected(#[from] Inner),
+}
 
-#[derive(Debug)]
-pub struct ASTError {}
+type SrcTextAndErrSpan = (String, Range<usize>);
+
+fn get_src_and_span_from_node(node: &SyntaxNode) -> SrcTextAndErrSpan {
+    (node.text().to_string(), node.text_range().into())
+}
+
+fn get_src_and_span_from_token(token: &SyntaxToken) -> SrcTextAndErrSpan {
+    (token.text().to_string(), token.text_range().into())
+}
+
+impl ASTError {
+    fn for_src_and_err_span(
+        src_and_span: SrcTextAndErrSpan,
+        got: SyntaxKind,
+        exp: impl Stringer,
+    ) -> Self {
+        let inner = Inner::new(src_and_span.0, src_and_span.1, exp, got);
+        Self::Unexpected(inner)
+    }
+
+    fn for_expr(expr: Expr, exp: impl Stringer) -> Self {
+        let src_and_span = expr.get_src_and_span();
+        let inner = Inner::new(src_and_span.0, src_and_span.1, exp, expr);
+        Self::Unexpected(inner)
+    }
+}
 
 #[derive(Debug)]
 pub struct Root(SyntaxNode);
@@ -32,7 +64,12 @@ impl TryFrom<SyntaxNode> for Root {
         if SyntaxKind::Root == node.kind() {
             Ok(Self(node))
         } else {
-            Err(ASTError {})
+            let kind = node.kind();
+            Err(ASTError::for_src_and_err_span(
+                get_src_and_span_from_node(&node),
+                kind,
+                SyntaxKind::Root,
+            ))
         }
     }
 }
@@ -48,6 +85,11 @@ impl Infix {
             Self::Binary(syntax_node) => syntax_node,
         }
     }
+    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
+        let node = self.get_syntax_node();
+        get_src_and_span_from_node(node)
+    }
+
     pub fn lhs(&self) -> Option<Expr> {
         let syntax_node = self.get_syntax_node();
         syntax_node.children().find_map(try_from_opted::<Expr>)
@@ -71,18 +113,47 @@ impl Infix {
 }
 
 #[derive(Debug)]
-pub struct VarDef(SyntaxNode);
+// pub struct VarDef(SyntaxNode);
+pub struct VarDef(VarRef, Option<Expr>);
 
 impl VarDef {
-    pub fn name(&self) -> Option<SyntaxToken> {
-        self.0
-            .children_with_tokens()
-            .filter_map(SyntaxElement::into_token)
-            .find(|syntax_token| SyntaxKind::Identifier == syntax_token.kind())
+    pub fn name(&self) -> SmolStr {
+        self.0.name()
     }
 
-    pub fn value(&self) -> Option<Expr> {
-        self.0.children().find_map(try_from_opted::<Expr>)
+    pub fn value(&self) -> Option<&Expr> {
+        self.1.as_ref()
+    }
+}
+
+impl TryFrom<SyntaxNode> for VarDef {
+    type Error = ASTError;
+
+    fn try_from(node: SyntaxNode) -> Result<Self, Self::Error> {
+        let infix = node
+            .children()
+            .filter(|c| try_from_opted::<Expr>(c.clone()).is_some())
+            .nth(0)
+            .unwrap();
+
+        let mut exprs = infix.children().filter_map(try_from_opted::<Expr>);
+        let name_as_var_ref = exprs.next();
+        let var_ref = if name_as_var_ref.is_none() {
+            return Err(ASTError::for_src_and_err_span(
+                get_src_and_span_from_node(&infix),
+                infix.kind(),
+                "non-None and Expr::VarRef",
+            ));
+        } else {
+            match name_as_var_ref.unwrap() {
+                Expr::VarRef(var_ref) => var_ref,
+                unwanted => {
+                    return Err(ASTError::for_expr(unwanted, "Expr::VarRef"));
+                }
+            }
+        };
+        let assignment = exprs.next();
+        Ok(Self(var_ref, assignment))
     }
 }
 
@@ -98,9 +169,13 @@ impl VarRef {
             .text()
             .to_smolstr()
     }
+
+    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
+        get_src_and_span_from_node(&self.0)
+    }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Char(char),
     Str(SmolStr),
@@ -143,7 +218,18 @@ impl TryFrom<SyntaxToken> for LiteralValue {
             SyntaxKind::StringLiteral => Self::Str(node),
             SyntaxKind::CharLiteral => Self::Char(node),
             SyntaxKind::Number => Self::Num(node),
-            _ => return Err(ASTError {}),
+            kind => {
+                return Err(ASTError::for_src_and_err_span(
+                    get_src_and_span_from_token(&node),
+                    kind,
+                    [
+                        SyntaxKind::StringLiteral,
+                        SyntaxKind::CharLiteral,
+                        SyntaxKind::Number,
+                    ]
+                    .as_ref(),
+                ));
+            }
         };
 
         Ok(result)
@@ -155,6 +241,15 @@ pub struct Literal(LiteralValue);
 impl Literal {
     pub fn value(&self) -> Value {
         self.0.value()
+    }
+
+    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
+        let token = match &self.0 {
+            LiteralValue::Char(syntax_token) => syntax_token,
+            LiteralValue::Str(syntax_token) => syntax_token,
+            LiteralValue::Num(syntax_token) => syntax_token,
+        };
+        get_src_and_span_from_token(token)
     }
 }
 
@@ -182,6 +277,10 @@ impl Paren {
     pub fn expr(&self) -> Option<Expr> {
         self.0.children().find_map(try_from_opted::<Expr>)
     }
+
+    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
+        get_src_and_span_from_node(&self.0)
+    }
 }
 
 #[derive(Debug)]
@@ -197,6 +296,10 @@ impl Unary {
             Self::Postfix(syntax_node) => syntax_node,
         }
     }
+    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
+        let node = self.get_syntax_node();
+        get_src_and_span_from_node(node)
+    }
     pub fn expr(&self) -> Option<Expr> {
         let syntax_node = self.get_syntax_node();
         syntax_node.children().find_map(try_from_opted::<Expr>)
@@ -211,8 +314,16 @@ impl Unary {
     }
 }
 
-fn try_from_opted<S: TryFrom<SyntaxNode>>(node: SyntaxNode) -> Option<S> {
-    S::try_from(node).ok()
+// TODO: fix this hack
+fn try_from_opted<S: TryFrom<SyntaxNode, Error = ASTError>>(node: SyntaxNode) -> Option<S> {
+    match S::try_from(node) {
+        Ok(s) => Some(s),
+        Err(ast_err) => {
+            let report: Report = ast_err.into();
+            println!("{:?}", report);
+            panic!("NOOO");
+        }
+    }
 }
 #[derive(Debug)]
 pub enum Expr {
@@ -223,20 +334,52 @@ pub enum Expr {
     VarRef(VarRef),
 }
 
+impl Expr {
+    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
+        match self {
+            Expr::Infix(infix) => infix.get_src_and_span(),
+            Expr::Unary(unary) => unary.get_src_and_span(),
+            Expr::Paren(paren) => paren.get_src_and_span(),
+            Expr::VarRef(var_ref) => var_ref.get_src_and_span(),
+            Expr::Literal(literal) => literal.get_src_and_span(),
+        }
+    }
+}
+
 impl TryFrom<SyntaxNode> for Expr {
     type Error = ASTError;
 
     fn try_from(node: SyntaxNode) -> Result<Self, Self::Error> {
         let result = match node.kind() {
             SyntaxKind::InfixBinaryOp => Self::Infix(Infix::Binary(node)),
+            SyntaxKind::PrefixUnaryOp => Self::Unary(Unary::Prefix(node)),
+            SyntaxKind::PostFixUnaryOp => Self::Unary(Unary::Postfix(node)),
             SyntaxKind::Literal => Self::Literal(try_from_opted::<Literal>(node).unwrap()),
             SyntaxKind::ParenExpr => Self::Paren(Paren(node)),
-            SyntaxKind::PrefixUnaryOp => Self::Unary(Unary::Prefix(node)),
             SyntaxKind::VariableRef => Self::VarRef(VarRef(node)),
-            _ => return Err(ASTError {}),
+            kind => {
+                return Err(ASTError::for_src_and_err_span(
+                    get_src_and_span_from_node(&node),
+                    kind,
+                    [
+                        SyntaxKind::InfixBinaryOp,
+                        SyntaxKind::Literal,
+                        SyntaxKind::ParenExpr,
+                        SyntaxKind::PrefixUnaryOp,
+                        SyntaxKind::VariableRef,
+                    ]
+                    .as_ref(),
+                ));
+            }
         };
 
         Ok(result)
+    }
+}
+
+impl Stringer for Expr {
+    fn into(self) -> String {
+        format!("{:?}", self)
     }
 }
 
@@ -251,7 +394,10 @@ impl TryFrom<SyntaxNode> for Stmt {
 
     fn try_from(node: SyntaxNode) -> Result<Self, Self::Error> {
         match node.kind() {
-            SyntaxKind::VariableDef => Ok(Self::VarDef(VarDef(node))),
+            SyntaxKind::VariableDef => {
+                let v = VarDef::try_from(node)?;
+                Ok(Self::VarDef(v))
+            }
             _ => {
                 let e = Expr::try_from(node)?;
                 Ok(Self::Expr(e))

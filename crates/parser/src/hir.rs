@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::ast;
-use smol_str::{SmolStr, ToSmolStr};
+use smol_str::SmolStr;
 
 use la_arena::{Arena, Idx};
 use syntax::language;
@@ -9,10 +9,11 @@ use syntax::syntax::SyntaxKind;
 
 // HIR is the high-level intermediate representation that is built on top of the AST
 
+pub type ExprIdx = Idx<Expr>;
 #[derive(Debug)]
 pub struct ExprArena {
     pub arena: Arena<Expr>,
-    missing_idx: Idx<Expr>,
+    missing_idx: ExprIdx,
     stmts: Vec<ast::Stmt>,
 }
 
@@ -29,19 +30,19 @@ impl ExprArena {
         }
     }
 
-    pub fn get_expr(&self, idx: Idx<Expr>) -> &Expr {
+    pub fn get_expr(&self, idx: ExprIdx) -> &Expr {
         &self.arena[idx]
     }
 
-    fn as_expr_idx(&mut self, exp: Expr) -> Idx<Expr> {
+    fn as_expr_idx(&mut self, exp: Expr) -> ExprIdx {
         self.arena.alloc(exp)
     }
 
     pub fn lower_stmt(&mut self, from: ast::Stmt) -> Option<Stmt> {
         let s = match from {
             ast::Stmt::VarDef(var_def) => Stmt::VarDef {
-                name: var_def.name()?.text().to_smolstr(),
-                value: self.lower_expr_as_idx(var_def.value().as_ref()),
+                name: var_def.name(),
+                value: self.lower_expr_as_idx(var_def.value()),
             },
             ast::Stmt::Expr(expr) => {
                 let ix = self.lower_expr_as_idx(Some(&expr));
@@ -51,7 +52,7 @@ impl ExprArena {
         Some(s)
     }
 
-    pub fn lower_expr_as_idx(&mut self, from: Option<&ast::Expr>) -> Idx<Expr> {
+    pub fn lower_expr_as_idx(&mut self, from: Option<&ast::Expr>) -> ExprIdx {
         if let None = from {
             return self.missing_idx;
         }
@@ -85,7 +86,10 @@ impl ExprArena {
                 op: from.op().unwrap().into(),
                 expr: self.lower_expr_as_idx(from.expr().as_ref()),
             },
-            ast::Unary::Postfix(_) => todo!(),
+            ast::Unary::Postfix(_) => Unary::Postfix {
+                op: from.op().unwrap().into(),
+                expr: self.lower_expr_as_idx(from.expr().as_ref()),
+            },
         }
     }
 }
@@ -99,34 +103,37 @@ impl Iterator for &mut ExprArena {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BinaryOp {
     Add,
-    Sub,
-    Mul,
     Div,
     Dot,
+    Eq,
+    Mul,
     No,
+    Sub,
 }
 
 impl From<language::SyntaxToken> for BinaryOp {
     fn from(value: language::SyntaxToken) -> Self {
         let kind = value.kind();
         match kind {
-            SyntaxKind::Plus => Self::Add,
-            SyntaxKind::Minus => Self::Sub,
-            SyntaxKind::Star => Self::Mul,
-            SyntaxKind::Slash => Self::Div,
             SyntaxKind::Dot => Self::Dot,
+            SyntaxKind::Eq => Self::Eq,
+            SyntaxKind::Minus => Self::Sub,
+            SyntaxKind::Plus => Self::Add,
+            SyntaxKind::Slash => Self::Div,
+            SyntaxKind::Star => Self::Mul,
             _ => Self::No,
         }
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UnaryOp {
     Neg,
     Not,
+    Factorial,
     No,
 }
 
@@ -136,20 +143,21 @@ impl From<language::SyntaxToken> for UnaryOp {
         match kind {
             SyntaxKind::Minus => Self::Neg,
             SyntaxKind::Not => Self::Not,
+            SyntaxKind::Exclamation => Self::Factorial,
             _ => Self::No,
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Infix {
     Binary {
         op: BinaryOp,
-        lhs: Idx<Expr>,
-        rhs: Idx<Expr>,
+        lhs: ExprIdx,
+        rhs: ExprIdx,
     },
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Literal(ast::Value);
 
 impl From<&ast::Literal> for Literal {
@@ -158,10 +166,10 @@ impl From<&ast::Literal> for Literal {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Unary {
-    Prefix { op: UnaryOp, expr: Idx<Expr> },
-    Postfix { op: UnaryOp, expr: Idx<Expr> },
+    Prefix { op: UnaryOp, expr: ExprIdx },
+    Postfix { op: UnaryOp, expr: ExprIdx },
 }
 
 impl Unary {
@@ -173,7 +181,7 @@ impl Unary {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Infix(Infix),
     Literal(Literal),
@@ -182,14 +190,120 @@ pub enum Expr {
     Missing, // handles parser errors
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Stmt {
-    VarDef { name: SmolStr, value: Idx<Expr> },
-    // Expr(Idx<Expr>),
+    VarDef { name: SmolStr, value: ExprIdx },
+    // Expr(ExprIdx),
     Expr(Expr),
 }
 
 pub fn lower<'ast>(ast_root: &'ast ast::Root) -> ExprArena {
     let expr_arena = ExprArena::new(ast_root);
     expr_arena
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{parse_behaviors::IgnoreTrivia, parser::Parser};
+    use la_arena::RawIdx;
+
+    fn parse(program: &str) -> ast::Root {
+        let parse = Parser::new(program).parse::<IgnoreTrivia>();
+        ast::Root::try_from(parse.syntax_node_root()).unwrap()
+    }
+
+    fn idx(from: u32) -> ExprIdx {
+        Idx::from_raw(RawIdx::from_u32(from))
+    }
+
+    #[test]
+    fn lower_variable_def() {
+        let root = parse("let foo = bar");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(
+            hir,
+            Stmt::VarDef {
+                name: "foo".into(),
+                value: idx(1)
+            }
+        );
+    }
+
+    #[test]
+    fn lower_infix_binary_expr() {
+        let root = parse("3 + 14");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(
+            hir,
+            Stmt::Expr(Expr::Infix(Infix::Binary {
+                op: BinaryOp::Add,
+                lhs: idx(1),
+                rhs: idx(2),
+            }))
+        );
+    }
+
+    #[test]
+    fn lower_literal_expr() {
+        let root = parse("\"pi\"");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(
+            hir,
+            Stmt::Expr(Expr::Literal(Literal(ast::Value::Str("\"pi\"".into())))),
+        );
+    }
+
+    #[test]
+    fn lower_unary_prefix_expr() {
+        let root = parse("~ok");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(
+            hir,
+            Stmt::Expr(Expr::Unary(Unary::Prefix {
+                op: UnaryOp::Not,
+                expr: idx(1)
+            })),
+        );
+    }
+
+    #[test]
+    fn lower_unary_postfix_expr() {
+        let root = parse("9!");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(
+            hir,
+            Stmt::Expr(Expr::Unary(Unary::Postfix {
+                op: UnaryOp::Factorial,
+                expr: idx(1)
+            })),
+        );
+    }
+
+    #[test]
+    fn lower_var_ref_expr() {
+        let root = parse("var");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(hir, Stmt::Expr(Expr::VarRef { var: "var".into() }));
+    }
+
+    #[test]
+    fn lower_malformed_var_def() {
+        let root = parse("let a = ");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(
+            hir,
+            Stmt::VarDef {
+                name: "a".into(),
+                value: idx(0) // Expr::Missing index
+            }
+        );
+    }
 }

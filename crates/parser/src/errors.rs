@@ -20,11 +20,34 @@ pub trait Stringer {
     fn into(self) -> String;
 }
 
+impl Stringer for &str {
+    fn into(self) -> String {
+        self.to_string()
+    }
+}
+
+impl Stringer for SyntaxKind {
+    fn into(self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl Stringer for &[SyntaxKind] {
+    fn into(self) -> String {
+        let expected = self
+            .iter()
+            .map(|s| <SyntaxKind as Stringer>::into(*s))
+            .collect::<Vec<String>>()
+            .join(" or ");
+        expected
+    }
+}
+
 impl Stringer for Vec<SyntaxKind> {
     fn into(self) -> String {
         let expected = self
             .iter()
-            .map(|s| format!("{:?}", s))
+            .map(|s| <SyntaxKind as Stringer>::into(*s))
             .collect::<Vec<String>>()
             .join(" or ");
         expected

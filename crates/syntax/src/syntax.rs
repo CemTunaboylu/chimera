@@ -69,7 +69,7 @@ impl SyntaxKind {
     }
 
     pub fn is_unary_operator(&self) -> bool {
-        matches!(self, Self::Minus)
+        matches!(self, Self::Minus | Self::Not | Self::Exclamation)
     }
     pub fn operators() -> [SyntaxKind; 15] {
         [
@@ -97,14 +97,14 @@ impl SyntaxKind {
     pub fn is_a_separator(&self) -> bool {
         matches!(
             self,
-            SyntaxKind::Whitespace
-                | SyntaxKind::Comment
+            SyntaxKind::Colon
                 | SyntaxKind::Comma
-                | SyntaxKind::SemiColon
-                | SyntaxKind::Colon
+                | SyntaxKind::Comment
                 | SyntaxKind::RBrace
                 | SyntaxKind::RParen
                 | SyntaxKind::RSquareBrac
+                | SyntaxKind::SemiColon
+                | SyntaxKind::Whitespace
         )
     }
 }

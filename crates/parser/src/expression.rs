@@ -18,13 +18,11 @@ impl OpType {
         parser.inject_expectations(expectations);
     }
 
-    fn handle_no_op(&self, parser: &mut Parser) -> Option<Marker<Complete>> {
+    fn should_recurse_with_recovery(&self, parser: &mut Parser) -> Option<()> {
         match self {
             OpType::Prefix(_) => {}
             OpType::Infix(syntax_kind) => match syntax_kind {
-                SyntaxKind::Identifier => {
-                    return Some(variable_ref(parser));
-                }
+                SyntaxKind::Identifier | SyntaxKind::Literal => return Some(()),
                 SyntaxKind::RParen => {}
                 _ => {
                     parser.recover();
@@ -44,7 +42,9 @@ impl OpType {
         self.inject_expectations(parser);
         let op: Op = (&self).into();
         match op {
-            Op::None => self.handle_no_op(parser),
+            Op::None => self
+                .should_recurse_with_recovery(parser)
+                .and_then(|_| parse_expression_until_binding_power::<B>(parser, min_binding_power)),
             _ => {
                 let (left_binding_power, right_binding_power) = op.binding_power();
                 if left_binding_power < min_binding_power {
@@ -106,13 +106,15 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
     let result = parser.peek::<B>()?;
     let lhs_marker = match result {
         Ok(syntax) => match syntax.kind {
-            SyntaxKind::Number => literal(parser),
+            SyntaxKind::Number | SyntaxKind::StringLiteral | SyntaxKind::CharLiteral => {
+                literal(parser)
+            }
             SyntaxKind::Identifier => variable_ref(parser),
             SyntaxKind::Minus | SyntaxKind::Not => {
                 OpType::Prefix(syntax.kind).parse::<B>(parser, 0, None)?
             }
             SyntaxKind::LParen => paren_expr::<B>(parser),
-            SyntaxKind::RParen => return None,
+            SyntaxKind::RParen | SyntaxKind::PostFixUnaryOp => return None,
             _ => {
                 // ')' hits here if we only provide "()"
                 parser.recover();
@@ -128,7 +130,7 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
 }
 
 fn literal(parser: &mut Parser) -> Marker<Complete> {
-    assert!(parser.check_next_syntax(|token| matches!(token.kind, SyntaxKind::Number)));
+    assert!(parser.check_next_syntax(|syntax| syntax.kind.is_literal_value()));
     parser.bump_with_marker(SyntaxKind::Literal)
 }
 
