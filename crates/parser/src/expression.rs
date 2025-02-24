@@ -107,16 +107,15 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
     let lhs_marker = match result {
         Ok(syntax) => match syntax.kind {
             SyntaxKind::Number | SyntaxKind::StringLiteral | SyntaxKind::CharLiteral => {
-                literal(parser)
+                literal::<B>(parser)
             }
-            SyntaxKind::Identifier => variable_ref(parser),
+            SyntaxKind::Identifier => variable_ref::<B>(parser),
             SyntaxKind::Minus | SyntaxKind::Not => {
                 OpType::Prefix(syntax.kind).parse::<B>(parser, 0, None)?
             }
             SyntaxKind::LParen => paren_expr::<B>(parser),
             SyntaxKind::RParen | SyntaxKind::PostFixUnaryOp => return None,
             _ => {
-                // ')' hits here if we only provide "()"
                 parser.recover();
                 return None;
             }
@@ -129,18 +128,18 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
     Some(lhs_marker)
 }
 
-fn literal(parser: &mut Parser) -> Marker<Complete> {
-    assert!(parser.check_next_syntax(|syntax| syntax.kind.is_literal_value()));
+fn literal<B: ASTBehavior>(parser: &mut Parser) -> Marker<Complete> {
+    assert!(parser.check_next_syntax::<B>(|syntax| syntax.kind.is_literal_value()));
     parser.bump_with_marker(SyntaxKind::Literal)
 }
 
-fn variable_ref(parser: &mut Parser) -> Marker<Complete> {
-    assert!(parser.is_next(SyntaxKind::Identifier));
+fn variable_ref<B: ASTBehavior>(parser: &mut Parser) -> Marker<Complete> {
+    assert!(parser.is_next::<B>(SyntaxKind::Identifier));
     parser.bump_with_marker(SyntaxKind::VariableRef)
 }
 
 fn paren_expr<B: ASTBehavior>(parser: &mut Parser) -> Marker<Complete> {
-    assert!(parser.is_next(SyntaxKind::LParen));
+    assert!(parser.is_next::<B>(SyntaxKind::LParen));
     let marker = parser.start();
     parser.bump();
     parse_expression_until_binding_power::<B>(parser, 0);

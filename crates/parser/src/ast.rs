@@ -113,7 +113,6 @@ impl Infix {
 }
 
 #[derive(Debug)]
-// pub struct VarDef(SyntaxNode);
 pub struct VarDef(VarRef, Option<Expr>);
 
 impl VarDef {
@@ -133,9 +132,16 @@ impl TryFrom<SyntaxNode> for VarDef {
         let infix = node
             .children()
             .filter(|c| try_from_opted::<Expr>(c.clone()).is_some())
-            .nth(0)
-            .unwrap();
+            .nth(0);
 
+        if infix.is_none() {
+            return Err(ASTError::for_src_and_err_span(
+                get_src_and_span_from_node(&node),
+                node.kind(),
+                "non-None and Expr::VarRef",
+            ));
+        }
+        let infix = infix.unwrap();
         let mut exprs = infix.children().filter_map(try_from_opted::<Expr>);
         let name_as_var_ref = exprs.next();
         let var_ref = if name_as_var_ref.is_none() {
@@ -321,7 +327,7 @@ fn try_from_opted<S: TryFrom<SyntaxNode, Error = ASTError>>(node: SyntaxNode) ->
         Err(ast_err) => {
             let report: Report = ast_err.into();
             println!("{:?}", report);
-            panic!("NOOO");
+            None
         }
     }
 }
@@ -403,5 +409,32 @@ impl TryFrom<SyntaxNode> for Stmt {
                 Ok(Self::Expr(e))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{parse_behaviors::IgnoreTrivia, parser::Parser};
+
+    fn parse(program: &str) -> Root {
+        let parse = Parser::new(program).parse::<IgnoreTrivia>();
+        Root::try_from(parse.syntax_node_root()).unwrap()
+    }
+    #[test]
+    /*
+    Root@0..5
+        VariableDef@0..4
+            LetKw@0..3 "let"
+            Recovered@3..4
+                Eq@3..4 "="
+        Literal@4..5
+            Number@4..5 "9"
+     */
+    fn try_from_var_def_malformed_with_no_name() {
+        let malformed = "let = 9";
+        let root = parse(&malformed);
+        let stmts = root.statements();
+        assert_eq!(0, stmts.collect::<Vec<_>>().len());
     }
 }

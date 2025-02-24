@@ -75,9 +75,9 @@ impl<'input> Parser<'input> {
         // }
     }
 
-    pub fn is_next(&mut self, expected_kind: SyntaxKind) -> bool {
+    pub fn is_next<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) -> bool {
         self.expected.push(expected_kind);
-        if let Some(Ok(token)) = self._peek() {
+        if let Some(Ok(token)) = self.peek::<B>() {
             let syntax: Syntax = token;
             syntax.is_of_kind(expected_kind)
         } else {
@@ -85,8 +85,8 @@ impl<'input> Parser<'input> {
         }
     }
 
-    pub fn check_next_syntax(&mut self, check: fn(&Syntax) -> bool) -> bool {
-        if let Some(Ok(syntax)) = self._peek() {
+    pub fn check_next_syntax<B: ASTBehavior>(&mut self, check: fn(&Syntax) -> bool) -> bool {
+        if let Some(Ok(syntax)) = self.peek::<B>() {
             check(&syntax)
         } else {
             false
@@ -95,7 +95,7 @@ impl<'input> Parser<'input> {
 
     pub fn expect_and_bump<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) {
         B::apply(&mut self.lexer, &mut self.event_holder);
-        if self.is_next(expected_kind) {
+        if self.is_next::<B>(expected_kind) {
             self.bump();
             return;
         }
@@ -123,8 +123,8 @@ impl<'input> Parser<'input> {
         }
     }
 
-    pub fn bump_iff_or_panic(&mut self, expectation: fn(&Syntax) -> bool) {
-        assert!(self.check_next_syntax(expectation));
+    pub fn bump_iff_or_panic<B: ASTBehavior>(&mut self, expectation: fn(&Syntax) -> bool) {
+        assert!(self.check_next_syntax::<B>(expectation));
         self.bump();
     }
 
