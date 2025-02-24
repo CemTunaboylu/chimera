@@ -216,6 +216,8 @@ mod tests {
         Idx::from_raw(RawIdx::from_u32(from))
     }
 
+    const MISSING: u32 = 0;
+
     #[test]
     fn lower_variable_def() {
         let root = parse("let foo = bar");
@@ -301,7 +303,7 @@ mod tests {
             hir,
             Stmt::VarDef {
                 name: "a".into(),
-                value: idx(0) // Expr::Missing index
+                value: idx(MISSING)
             }
         );
     }
@@ -309,6 +311,50 @@ mod tests {
     #[test]
     fn lower_malformed_var_def_no_name() {
         let root = parse("let = 9");
+        let hir = lower(&root).into_iter().next();
+
+        assert_eq!(hir, None);
+    }
+
+    #[test]
+    fn lower_infix_binary_expr_without_lhs() {
+        let root = parse(" +3");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(hir, Stmt::Expr(Expr::Literal(Literal(ast::Value::Num(3)))));
+    }
+    #[test]
+    fn lower_infix_binary_expr_without_rhs() {
+        let root = parse("3+ ");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(
+            hir,
+            Stmt::Expr(Expr::Infix(Infix::Binary {
+                op: BinaryOp::Add,
+                lhs: idx(1),
+                rhs: idx(MISSING),
+            }))
+        );
+    }
+
+    #[test]
+    fn lower_unary_prefix_expr_without_rhs() {
+        let root = parse("- ");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(
+            hir,
+            Stmt::Expr(Expr::Unary(Unary::Prefix {
+                op: UnaryOp::Neg,
+                expr: idx(MISSING),
+            })),
+        );
+    }
+
+    #[test]
+    fn lower_unary_postfix_expr_without_rhs() {
+        let root = parse(" ! ");
         let hir = lower(&root).into_iter().next();
 
         assert_eq!(hir, None);
