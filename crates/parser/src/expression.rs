@@ -18,20 +18,6 @@ impl OpType {
         parser.inject_expectations(expectations);
     }
 
-    fn should_recurse_with_recovery(&self, parser: &mut Parser) -> Option<()> {
-        match self {
-            OpType::Prefix(_) => {}
-            OpType::Infix(syntax_kind) => match syntax_kind {
-                SyntaxKind::Identifier | SyntaxKind::Literal => return Some(()),
-                SyntaxKind::RParen => {}
-                _ => {
-                    parser.recover();
-                }
-            },
-            OpType::Postfix(_) => {}
-        }
-        None
-    }
     fn parse<B: ASTBehavior>(
         self,
         parser: &mut Parser,
@@ -42,9 +28,11 @@ impl OpType {
         self.inject_expectations(parser);
         let op: Op = (&self).into();
         match op {
-            Op::None => self
-                .should_recurse_with_recovery(parser)
-                .and_then(|_| parse_expression_until_binding_power::<B>(parser, min_binding_power)),
+            Op::End => {
+                parser.end_this_branch();
+                None
+            }
+            Op::None => None,
             _ => {
                 let (left_binding_power, right_binding_power) = op.binding_power();
                 if left_binding_power < min_binding_power {
@@ -74,21 +62,40 @@ pub(crate) fn parse_expression_until_binding_power<B: ASTBehavior>(
         match parser.peek::<B>()? {
             Ok(syntax) => {
                 let kind = syntax.kind;
-                for op_type in [OpType::Postfix, OpType::Infix] {
-                    if let Some(marker) =
-                        op_type(kind).parse::<B>(parser, min_binding_power, Some(&lhs_marker))
-                    {
-                        lhs_marker = marker;
+                if let Some(marker) =
+                    OpType::Postfix(kind).parse::<B>(parser, min_binding_power, Some(&lhs_marker))
+                {
+                    lhs_marker = marker;
+                    continue 'parsing;
+                }
+
+                // no-op cases where we can parse parse more don't need to recover i.e. Identifier, Literal etc.
+                match kind {
+                    SyntaxKind::Identifier => {
+                        lhs_marker = variable_ref::<B>(parser);
                         continue 'parsing;
                     }
+                    SyntaxKind::Literal => {
+                        lhs_marker = literal::<B>(parser);
+                        continue 'parsing;
+                    }
+                    SyntaxKind::RParen => return None,
+                    _ => {}
                 }
+
+                if let Some(marker) =
+                    OpType::Infix(kind).parse::<B>(parser, min_binding_power, Some(&lhs_marker))
+                {
+                    lhs_marker = marker;
+                    continue 'parsing;
+                }
+                break;
             }
             Err(err) => {
                 println!("{:?}", err);
                 panic!("{:?}", format!("{:?}", err));
             }
         }
-        break;
     }
     Some(lhs_marker)
 }
@@ -110,13 +117,13 @@ fn left_hand_side<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete
                 literal::<B>(parser)
             }
             SyntaxKind::Identifier => variable_ref::<B>(parser),
-            SyntaxKind::Minus | SyntaxKind::Not => {
+            SyntaxKind::Minus | SyntaxKind::Not | SyntaxKind::SemiColon => {
                 OpType::Prefix(syntax.kind).parse::<B>(parser, 0, None)?
             }
             SyntaxKind::LParen => paren_expr::<B>(parser),
             SyntaxKind::RParen | SyntaxKind::PostFixUnaryOp => return None,
             _ => {
-                parser.recover();
+                parser.recover::<B>();
                 return None;
             }
         },

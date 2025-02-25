@@ -43,7 +43,6 @@ impl Marker<Incomplete> {
     ) -> Marker<Complete> {
         let index = self.checkpoint;
         let corresponding_event = event_holder.get_mut(index).unwrap();
-
         corresponding_event.validate_marker_event(index);
 
         *corresponding_event = Event::new_start_node_with(kind);

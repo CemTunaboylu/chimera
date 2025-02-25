@@ -6,7 +6,7 @@ use crate::{
     event::Event,
     event_holder::EventHolder,
     marker::{Complete, Marker},
-    parse_behaviors::ASTBehavior,
+    parse_behaviors::{ASTBehavior, IgnoreTrivia},
     s_expression::pratt_parser,
     sink::Sink,
 };
@@ -22,6 +22,7 @@ pub struct Parser<'input> {
     pub event_holder: EventHolder,
     program: &'input str,
     expected: Vec<SyntaxKind>,
+    end_branch: bool,
 }
 
 const RECOVERY_SET: [SyntaxKind; 1] = [SyntaxKind::LetKw];
@@ -33,6 +34,7 @@ impl<'input> Parser<'input> {
             event_holder: EventHolder::new(),
             program,
             expected: vec![],
+            end_branch: false,
         }
     }
     pub fn parse<B: ASTBehavior>(mut self) -> ConcreteSyntaxTree {
@@ -42,6 +44,11 @@ impl<'input> Parser<'input> {
     }
 
     pub fn peek<B: ASTBehavior>(&mut self) -> Option<MietteResult<Syntax>> {
+        B::apply(&mut self.lexer, &mut self.event_holder);
+        (!self.end_branch).then(|| self._peek())?
+    }
+
+    fn expect<B: ASTBehavior>(&mut self) -> Option<MietteResult<Syntax>> {
         B::apply(&mut self.lexer, &mut self.event_holder);
         self._peek()
     }
@@ -63,11 +70,28 @@ impl<'input> Parser<'input> {
             self.event_holder.push(Event::AddSyntax {
                 syntax: token.into(),
             });
-            self.expected.clear();
+            self.clear_expectations();
         }
         Some(())
     }
 
+    pub fn restart_a_branch(&mut self) {
+        self.end_branch = false;
+    }
+
+    pub fn end_this_branch(&mut self) -> Option<()> {
+        if self.is_next::<IgnoreTrivia>(SyntaxKind::SemiColon) {
+            if let Ok(_semi_colon) = self.lexer.next()? {
+                self.clear_expectations();
+                self.end_branch = true;
+            }
+        }
+        Some(())
+    }
+
+    pub fn clear_expectations(&mut self) {
+        self.expected.clear();
+    }
     pub fn inject_expectations(&mut self, expectations: &[SyntaxKind]) {
         // if !self.expected.ends_with(expectations) {
         self.expected = Vec::from(expectations);
@@ -77,16 +101,17 @@ impl<'input> Parser<'input> {
 
     pub fn is_next<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) -> bool {
         self.expected.push(expected_kind);
-        if let Some(Ok(token)) = self.peek::<B>() {
+        let result = if let Some(Ok(token)) = self.expect::<B>() {
             let syntax: Syntax = token;
             syntax.is_of_kind(expected_kind)
         } else {
             false
-        }
+        };
+        result
     }
 
     pub fn check_next_syntax<B: ASTBehavior>(&mut self, check: fn(&Syntax) -> bool) -> bool {
-        if let Some(Ok(syntax)) = self.peek::<B>() {
+        if let Some(Ok(syntax)) = self.expect::<B>() {
             check(&syntax)
         } else {
             false
@@ -94,22 +119,21 @@ impl<'input> Parser<'input> {
     }
 
     pub fn expect_and_bump<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) {
-        B::apply(&mut self.lexer, &mut self.event_holder);
         if self.is_next::<B>(expected_kind) {
             self.bump();
             return;
         }
 
-        self.recover();
+        self.recover::<B>();
     }
 
-    fn can_recover(&mut self) -> bool {
-        self._peek()
+    fn can_recover<B: ASTBehavior>(&mut self) -> bool {
+        self.expect::<B>()
             .is_some_and(|r| r.is_ok_and(|s| !RECOVERY_SET.contains(&s.kind)))
     }
 
-    pub fn recover(&mut self) {
-        let got = self._peek();
+    pub fn recover<B: ASTBehavior>(&mut self) {
+        let got = self.expect::<B>();
         self.event_holder.push(Event::Error {
             err: ParseError::unexpected_token(
                 self.program.to_string(),
@@ -118,7 +142,7 @@ impl<'input> Parser<'input> {
                 got,
             ),
         });
-        if self.can_recover() {
+        if self.can_recover::<B>() {
             self.bump_with_marker(SyntaxKind::Recovered);
         }
     }

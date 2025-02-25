@@ -8,6 +8,7 @@ use crate::{
 use syntax::syntax::SyntaxKind;
 
 pub(crate) fn statement<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
+    parser.restart_a_branch();
     let syntax = parser.peek::<B>()?;
     match syntax {
         Ok(syntax) if syntax.is_of_kind(SyntaxKind::LetKw) => variable_def::<B>(parser),
@@ -77,6 +78,28 @@ mod tests {
                         Identifier@10..11 "a""#]],
         );
     }
+    #[test]
+    fn recover_on_let_token_with_semicolon() {
+        check::<IgnoreTrivia>(
+            "let a =;let b = a",
+            expect![[r#"
+                Root@0..11
+                  VariableDef@0..5
+                    LetKw@0..3 "let"
+                    InfixBinaryOp@3..5
+                      VariableRef@3..4
+                        Identifier@3..4 "a"
+                      Eq@4..5 "="
+                  VariableDef@5..11
+                    LetKw@5..8 "let"
+                    InfixBinaryOp@8..11
+                      VariableRef@8..9
+                        Identifier@8..9 "b"
+                      Eq@9..10 "="
+                      VariableRef@10..11
+                        Identifier@10..11 "a""#]],
+        );
+    }
 
     #[test]
     fn parse_multiple_statements() {
@@ -94,6 +117,24 @@ mod tests {
                         Number@5..6 "1"
                       VariableRef@6..7
                         Identifier@6..7 "a""#]],
+        );
+    }
+    #[test]
+    fn parse_multiple_statements_with_semicolon() {
+        check::<IgnoreTrivia>(
+            "let a = 0; a",
+            expect![[r#"
+                Root@0..7
+                  VariableDef@0..6
+                    LetKw@0..3 "let"
+                    InfixBinaryOp@3..6
+                      VariableRef@3..4
+                        Identifier@3..4 "a"
+                      Eq@4..5 "="
+                      Literal@5..6
+                        Number@5..6 "0"
+                  VariableRef@6..7
+                    Identifier@6..7 "a""#]],
         );
     }
 
