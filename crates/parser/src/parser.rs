@@ -21,7 +21,7 @@ pub struct Parser<'input> {
     lexer: Lexer<'input>,
     pub event_holder: EventHolder,
     program: &'input str,
-    expected: Vec<SyntaxKind>,
+    expected: Vec<Vec<SyntaxKind>>,
     end_branch: bool,
 }
 
@@ -70,7 +70,7 @@ impl<'input> Parser<'input> {
             self.event_holder.push(Event::AddSyntax {
                 syntax: token.into(),
             });
-            self.clear_expectations();
+            self.pop_last_expectation();
         }
         Some(())
     }
@@ -82,7 +82,9 @@ impl<'input> Parser<'input> {
     pub fn end_this_branch(&mut self) -> Option<()> {
         if self.is_next::<IgnoreTrivia>(SyntaxKind::SemiColon) {
             if let Ok(_semi_colon) = self.lexer.next()? {
-                self.clear_expectations();
+                // TODO: in each case, when peek is called, in case it is in end branch mode
+                // it can pop expectations
+                self.pop_last_expectation();
                 self.end_branch = true;
             }
         }
@@ -92,15 +94,20 @@ impl<'input> Parser<'input> {
     pub fn clear_expectations(&mut self) {
         self.expected.clear();
     }
+
+    pub fn pop_last_expectation(&mut self) {
+        self.expected.pop();
+    }
     pub fn inject_expectations(&mut self, expectations: &[SyntaxKind]) {
         // if !self.expected.ends_with(expectations) {
-        self.expected = Vec::from(expectations);
+        // TODO: can become pretty big
+        self.expected.push(Vec::from(expectations));
         // self.expected.extend_from_slice(expectations);
         // }
     }
 
     pub fn is_next<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) -> bool {
-        self.expected.push(expected_kind);
+        // self.inject_expectations(&[expected_kind]);
         let result = if let Some(Ok(token)) = self.expect::<B>() {
             let syntax: Syntax = token;
             syntax.is_of_kind(expected_kind)
@@ -118,7 +125,9 @@ impl<'input> Parser<'input> {
         }
     }
 
+    // TODO: this should inject expectations
     pub fn expect_and_bump<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) {
+        self.inject_expectations(&[expected_kind]);
         if self.is_next::<B>(expected_kind) {
             self.bump();
             return;
@@ -138,7 +147,7 @@ impl<'input> Parser<'input> {
             err: ParseError::unexpected_token(
                 self.program.to_string(),
                 self.lexer.span().clone(),
-                mem::take(&mut self.expected),
+                self.expected.pop().unwrap_or(vec![]),
                 got,
             ),
         });

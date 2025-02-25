@@ -10,12 +10,24 @@ use syntax::syntax::SyntaxKind;
 impl OpType {
     fn inject_expectations(&self, parser: &mut Parser) {
         let expectations = match self {
-            OpType::Prefix(_) => &[SyntaxKind::PrefixUnaryOp], // left_hand_side has its own function
+            OpType::Prefix(_) => {
+                // left_hand_side injected each possibility, now we refine it
+                parser.pop_last_expectation();
+                &[SyntaxKind::PrefixUnaryOp]
+            }
             OpType::Infix(_) => &[SyntaxKind::InfixBinaryOp],
-            OpType::Postfix(_) => &[SyntaxKind::PostFixUnaryOp],
+            OpType::Postfix(_) => return,
         };
 
         parser.inject_expectations(expectations);
+    }
+
+    fn recover<B: ASTBehavior>(&self, parser: &mut Parser) {
+        match self {
+            OpType::Prefix(_) => {}
+            OpType::Infix(_) => parser.recover::<B>(),
+            OpType::Postfix(_) => {}
+        }
     }
 
     fn parse<B: ASTBehavior>(
@@ -32,7 +44,10 @@ impl OpType {
                 parser.end_this_branch();
                 None
             }
-            Op::None => None,
+            Op::None => {
+                self.recover::<B>(parser);
+                None
+            }
             _ => {
                 let (left_binding_power, right_binding_power) = op.binding_power();
                 if left_binding_power < min_binding_power {

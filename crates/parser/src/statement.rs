@@ -12,12 +12,31 @@ pub(crate) fn statement<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Co
     let syntax = parser.peek::<B>()?;
     match syntax {
         Ok(syntax) if syntax.is_of_kind(SyntaxKind::LetKw) => variable_def::<B>(parser),
+        Ok(syntax) if syntax.is_of_kind(SyntaxKind::RBrace) => block::<B>(parser),
         _ => parse_expression_until_binding_power::<B>(parser, 0),
     }
 }
 
 fn variable_def<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
     assert!(parser.is_next::<B>(SyntaxKind::LetKw));
+    let marker = parser.start();
+    parser.bump();
+    let _marker = parse_expression_until_binding_power::<B>(parser, 0);
+    if _marker.is_none() {
+        // recovering possibly no name VarDef let = <acceptable>
+        if parser.check_next_syntax::<B>(|syntax| {
+            syntax.kind.is_literal_value()
+                || matches!(syntax.kind, SyntaxKind::Identifier | SyntaxKind::LBrace)
+        }) {
+            // try again if something valid is there, it will be bumped
+            parse_expression_until_binding_power::<B>(parser, 0);
+        }
+    }
+    Some(marker.complete(&mut parser.event_holder, SyntaxKind::VariableDef))
+}
+
+fn block<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
+    assert!(parser.is_next::<B>(SyntaxKind::RBrace));
     let marker = parser.start();
     parser.bump();
     let _marker = parse_expression_until_binding_power::<B>(parser, 0);
