@@ -158,11 +158,11 @@ pub enum Infix {
     },
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct Literal(ast::Value);
+pub struct Literal(Option<ast::Value>);
 
 impl From<&ast::Literal> for Literal {
     fn from(value: &ast::Literal) -> Self {
-        Self(value.value())
+        Self(value.value().ok())
     }
 }
 
@@ -254,7 +254,9 @@ mod tests {
 
         assert_eq!(
             hir,
-            Stmt::Expr(Expr::Literal(Literal(ast::Value::Str("\"pi\"".into())))),
+            Stmt::Expr(Expr::Literal(Literal(Some(ast::Value::Str(
+                "\"pi\"".into()
+            ))))),
         );
     }
 
@@ -312,7 +314,6 @@ mod tests {
     fn lower_malformed_var_def_no_name() {
         let root = parse("let = 9");
         let hir = lower(&root).into_iter().next();
-
         assert_eq!(hir, None);
     }
 
@@ -321,7 +322,10 @@ mod tests {
         let root = parse(" +3");
         let hir = lower(&root).into_iter().next().unwrap();
 
-        assert_eq!(hir, Stmt::Expr(Expr::Literal(Literal(ast::Value::Num(3)))));
+        assert_eq!(
+            hir,
+            Stmt::Expr(Expr::Literal(Literal(Some(ast::Value::Num(3)))))
+        );
     }
     #[test]
     fn lower_infix_binary_expr_without_rhs() {
@@ -358,5 +362,13 @@ mod tests {
         let hir = lower(&root).into_iter().next();
 
         assert_eq!(hir, None);
+    }
+
+    #[test]
+    fn lower_literal_expr_overflowed_usize() {
+        let root = parse("18446744073709551616");
+        let hir = lower(&root).into_iter().next().unwrap();
+
+        assert_eq!(hir, Stmt::Expr(Expr::Literal(Literal(None))),);
     }
 }

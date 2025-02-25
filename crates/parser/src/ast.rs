@@ -1,7 +1,8 @@
 #![allow(dead_code)]
+
 use std::ops::Range;
 
-use miette::{Diagnostic, Report};
+use miette::{Diagnostic, Report, Result as MietteResult};
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
     language::{SyntaxElement, SyntaxNode, SyntaxToken},
@@ -9,51 +10,60 @@ use syntax::{
 };
 use thiserror::Error;
 
-use crate::errors::{Inner, Stringer};
+use crate::errors::{HasSpan, Inner, Stringer};
 
 // AST is a pseudo abstract syntax tree because it is built on
 // top of the CST that's constructed by rowan.
 
+pub type ASTResult<R> = MietteResult<R, ASTError>;
+
 #[derive(Clone, Diagnostic, Debug, PartialEq, Error)]
-pub enum ASTError {
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Unexpected(#[from] Inner),
-}
-
-type SrcTextAndErrSpan = (String, Range<usize>);
-
-fn get_src_and_span_from_node(node: &SyntaxNode) -> SrcTextAndErrSpan {
-    (node.text().to_string(), node.text_range().into())
-}
-
-fn get_src_and_span_from_token(token: &SyntaxToken) -> SrcTextAndErrSpan {
-    (token.text().to_string(), token.text_range().into())
+#[error("ASTError")]
+pub struct ASTError {
+    #[source]
+    #[diagnostic_source]
+    cause: Inner,
 }
 
 impl ASTError {
-    fn for_src_and_err_span(
-        src_and_span: SrcTextAndErrSpan,
-        got: SyntaxKind,
-        exp: impl Stringer,
-    ) -> Self {
-        let inner = Inner::new(src_and_span.0, src_and_span.1, exp, got);
-        Self::Unexpected(inner)
+    fn new(span: Range<usize>, got: impl Stringer, exp: impl Stringer) -> Self {
+        let cause = Inner::new("".to_string(), span, exp, got);
+        Self { cause }
+    }
+    fn for_has_span(spanned: impl HasSpan, got: impl Stringer, exp: impl Stringer) -> Self {
+        let cause = Inner::new("".to_string(), spanned.get_span(), exp, got);
+        Self { cause }
     }
 
     fn for_expr(expr: Expr, exp: impl Stringer) -> Self {
-        let src_and_span = expr.get_src_and_span();
-        let inner = Inner::new(src_and_span.0, src_and_span.1, exp, expr);
-        Self::Unexpected(inner)
+        let span = expr.get_as_has_span().get_span();
+        let cause = Inner::new("".to_string(), span, exp, expr);
+        Self { cause }
     }
 }
 
 #[derive(Debug)]
-pub struct Root(SyntaxNode);
+pub struct Root(pub SyntaxNode);
 
 impl Root {
+    fn inject_src_to_captured_err(&self, ast_err: &mut ASTError) {
+        let src = self.0.text().to_string();
+        match ast_err {
+            &mut ASTError { ref mut cause } => (*cause).src = src,
+        }
+    }
     pub fn statements(&self) -> impl Iterator<Item = Stmt> {
-        self.0.children().filter_map(try_from_opted::<Stmt>)
+        self.0
+            .children()
+            .filter_map(|syntax_node| match Stmt::try_from(syntax_node) {
+                Ok(s) => Some(s),
+                Err(mut ast_err) => {
+                    self.inject_src_to_captured_err(&mut ast_err);
+                    let report: Report = ast_err.into();
+                    println!("{:?}", report);
+                    None
+                }
+            })
     }
 }
 
@@ -65,11 +75,7 @@ impl TryFrom<SyntaxNode> for Root {
             Ok(Self(node))
         } else {
             let kind = node.kind();
-            Err(ASTError::for_src_and_err_span(
-                get_src_and_span_from_node(&node),
-                kind,
-                SyntaxKind::Root,
-            ))
+            Err(ASTError::for_has_span(&node, kind, SyntaxKind::Root))
         }
     }
 }
@@ -84,10 +90,6 @@ impl Infix {
         match self {
             Self::Binary(syntax_node) => syntax_node,
         }
-    }
-    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
-        let node = self.get_syntax_node();
-        get_src_and_span_from_node(node)
     }
 
     pub fn lhs(&self) -> Option<Expr> {
@@ -135,19 +137,29 @@ impl TryFrom<SyntaxNode> for VarDef {
             .nth(0);
 
         if infix.is_none() {
-            return Err(ASTError::for_src_and_err_span(
-                get_src_and_span_from_node(&node),
-                node.kind(),
-                "non-None and Expr::VarRef",
+            let recovered = node
+                .children()
+                .filter(|node| node.kind() == SyntaxKind::Recovered)
+                .nth(0)
+                .unwrap()
+                .parent()
+                .unwrap();
+
+            let got = recovered.text().to_string();
+            return Err(ASTError::for_has_span(
+                &recovered,
+                got.as_str(),
+                "a valid assignment",
             ));
         }
         let infix = infix.unwrap();
         let mut exprs = infix.children().filter_map(try_from_opted::<Expr>);
         let name_as_var_ref = exprs.next();
         let var_ref = if name_as_var_ref.is_none() {
-            return Err(ASTError::for_src_and_err_span(
-                get_src_and_span_from_node(&infix),
-                infix.kind(),
+            let got = infix.kind();
+            return Err(ASTError::for_has_span(
+                &infix,
+                got,
                 "non-None and Expr::VarRef",
             ));
         } else {
@@ -176,8 +188,8 @@ impl VarRef {
             .to_smolstr()
     }
 
-    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
-        get_src_and_span_from_node(&self.0)
+    fn get_syntax_node(&self) -> &SyntaxNode {
+        &self.0
     }
 }
 
@@ -196,22 +208,21 @@ pub enum LiteralValue {
     Num(SyntaxToken),
 }
 
+fn value_parsing_error(syntax_token: &SyntaxToken, err_str: &str) -> ASTError {
+    ASTError::for_has_span(syntax_token, syntax_token.text(), err_str)
+}
 impl LiteralValue {
-    pub fn value(&self) -> Value {
+    pub fn value(&self) -> ASTResult<Value> {
         match self {
-            LiteralValue::Char(syntax_token) => Value::Char(
-                syntax_token
-                    .text()
-                    .parse::<char>()
-                    .expect("should have been a char dammit"),
+            LiteralValue::Char(syntax_token) => syntax_token.text().parse::<char>().map_or_else(
+                |err| Err(value_parsing_error(syntax_token, err.to_string().as_str())),
+                |ch| Ok(Value::Char(ch)),
             ),
-            LiteralValue::Str(syntax_token) => Value::Str(syntax_token.text().to_smolstr()),
-            LiteralValue::Num(syntax_token) => Value::Num(
-                syntax_token
-                    .text()
-                    .to_string()
-                    .parse::<usize>()
-                    .expect("should have been parsable to uisize dammit"),
+
+            LiteralValue::Str(syntax_token) => Ok(Value::Str(syntax_token.text().to_smolstr())),
+            LiteralValue::Num(syntax_token) => syntax_token.text().parse::<usize>().map_or_else(
+                |err| Err(value_parsing_error(syntax_token, err.to_string().as_str())),
+                |num| Ok(Value::Num(num)),
             ),
         }
     }
@@ -225,8 +236,8 @@ impl TryFrom<SyntaxToken> for LiteralValue {
             SyntaxKind::CharLiteral => Self::Char(node),
             SyntaxKind::Number => Self::Num(node),
             kind => {
-                return Err(ASTError::for_src_and_err_span(
-                    get_src_and_span_from_token(&node),
+                return Err(ASTError::for_has_span(
+                    &node,
                     kind,
                     [
                         SyntaxKind::StringLiteral,
@@ -245,17 +256,16 @@ impl TryFrom<SyntaxToken> for LiteralValue {
 pub struct Literal(LiteralValue);
 
 impl Literal {
-    pub fn value(&self) -> Value {
+    pub fn value(&self) -> ASTResult<Value> {
         self.0.value()
     }
 
-    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
-        let token = match &self.0 {
+    fn get_syntax_token(&self) -> &SyntaxToken {
+        match &self.0 {
             LiteralValue::Char(syntax_token) => syntax_token,
             LiteralValue::Str(syntax_token) => syntax_token,
             LiteralValue::Num(syntax_token) => syntax_token,
-        };
-        get_src_and_span_from_token(token)
+        }
     }
 }
 
@@ -269,10 +279,7 @@ impl TryFrom<SyntaxNode> for Literal {
             .find_map(SyntaxElement::into_token)
             .unwrap();
 
-        let literal_value = LiteralValue::try_from(node_containing_value)
-            .expect("child should have been convertible to LiteralValue");
-
-        Ok(Self(literal_value))
+        LiteralValue::try_from(node_containing_value).map(|literal_value| Self(literal_value))
     }
 }
 
@@ -284,8 +291,8 @@ impl Paren {
         self.0.children().find_map(try_from_opted::<Expr>)
     }
 
-    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
-        get_src_and_span_from_node(&self.0)
+    fn get_syntax_node(&self) -> &SyntaxNode {
+        &self.0
     }
 }
 
@@ -301,10 +308,6 @@ impl Unary {
             Self::Prefix(syntax_node) => syntax_node,
             Self::Postfix(syntax_node) => syntax_node,
         }
-    }
-    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
-        let node = self.get_syntax_node();
-        get_src_and_span_from_node(node)
     }
     pub fn expr(&self) -> Option<Expr> {
         let syntax_node = self.get_syntax_node();
@@ -325,8 +328,8 @@ fn try_from_opted<S: TryFrom<SyntaxNode, Error = ASTError>>(node: SyntaxNode) ->
     match S::try_from(node) {
         Ok(s) => Some(s),
         Err(ast_err) => {
-            let report: Report = ast_err.into();
-            println!("{:?}", report);
+            // let report: Report = ast_err.into();
+            // println!("{:?}", report);
             None
         }
     }
@@ -341,14 +344,15 @@ pub enum Expr {
 }
 
 impl Expr {
-    fn get_src_and_span(&self) -> SrcTextAndErrSpan {
-        match self {
-            Expr::Infix(infix) => infix.get_src_and_span(),
-            Expr::Unary(unary) => unary.get_src_and_span(),
-            Expr::Paren(paren) => paren.get_src_and_span(),
-            Expr::VarRef(var_ref) => var_ref.get_src_and_span(),
-            Expr::Literal(literal) => literal.get_src_and_span(),
-        }
+    fn get_as_has_span(&self) -> Box<dyn HasSpan + '_> {
+        let node = match self {
+            Expr::Infix(infix) => infix.get_syntax_node(),
+            Expr::Unary(unary) => unary.get_syntax_node(),
+            Expr::Paren(paren) => paren.get_syntax_node(),
+            Expr::VarRef(var_ref) => var_ref.get_syntax_node(),
+            Expr::Literal(literal) => return Box::new(literal.get_syntax_token()),
+        };
+        Box::new(node)
     }
 }
 
@@ -364,8 +368,8 @@ impl TryFrom<SyntaxNode> for Expr {
             SyntaxKind::ParenExpr => Self::Paren(Paren(node)),
             SyntaxKind::VariableRef => Self::VarRef(VarRef(node)),
             kind => {
-                return Err(ASTError::for_src_and_err_span(
-                    get_src_and_span_from_node(&node),
+                return Err(ASTError::for_has_span(
+                    &node,
                     kind,
                     [
                         SyntaxKind::InfixBinaryOp,
@@ -400,14 +404,14 @@ impl TryFrom<SyntaxNode> for Stmt {
 
     fn try_from(node: SyntaxNode) -> Result<Self, Self::Error> {
         match node.kind() {
-            SyntaxKind::VariableDef => {
-                let v = VarDef::try_from(node)?;
-                Ok(Self::VarDef(v))
-            }
-            _ => {
-                let e = Expr::try_from(node)?;
-                Ok(Self::Expr(e))
-            }
+            SyntaxKind::VariableDef => match VarDef::try_from(node) {
+                Ok(var_def) => Ok(Self::VarDef(var_def)),
+                Err(err) => Err(err),
+            },
+            _ => match Expr::try_from(node) {
+                Ok(expr) => Ok(Self::Expr(expr)),
+                Err(err) => Err(err),
+            },
         }
     }
 }
@@ -436,5 +440,84 @@ mod tests {
         let root = parse(&malformed);
         let stmts = root.statements();
         assert_eq!(0, stmts.collect::<Vec<_>>().len());
+    }
+
+    #[test]
+    /*
+    Root@0..27
+        VariableDef@0..27
+            LetKw@0..3 "let"
+            InfixBinaryOp@3..27
+                VariableRef@3..4
+                    Identifier@3..4 "a"
+                Eq@4..5 "="
+                InfixBinaryOp@5..27
+                    Literal@5..6
+                        Number@5..6 "9"
+                    Plus@6..7 "+"
+                    Literal@7..27
+                        Number@7..27 "18446744073709551616"
+
+    VarDef(
+            VarDef(
+                VarRef(
+                    VariableRef@3..4
+                      Identifier@3..4 "a"
+                ),
+                Some(
+                    Infix(
+                        Binary(
+                            InfixBinaryOp@5..27
+                              Literal@5..6
+                                Number@5..6 "9"
+                              Plus@6..7 "+"
+                              Literal@7..27
+                                Number@7..27 "18446744073709551616"
+                        ),
+                    ),
+                ),
+            ),
+        ),
+       */
+
+    fn try_from_overflowing_number() {
+        let overflowing = "let a = 9 + 18446744073709551616";
+        let root = parse(&overflowing);
+        let stmt = root.statements().next().unwrap();
+        let var_def = if let Stmt::VarDef(var_def) = stmt {
+            var_def
+        } else {
+            panic!("Stmt should have been a variable definition");
+        };
+        let name = var_def.name();
+        assert_eq!(name.as_str(), "a");
+        let infix = if let Expr::Infix(infix) = var_def.value().unwrap() {
+            infix
+        } else {
+            panic!("Expr should have been an infix operation");
+        };
+        let op = infix.op().unwrap();
+        assert_eq!(op.kind(), SyntaxKind::Plus);
+
+        let lhs_literal = match infix.lhs().unwrap() {
+            Expr::Literal(literal) => literal,
+            _ => unreachable!(),
+        };
+
+        assert_eq!(lhs_literal.value(), ASTResult::Ok(Value::Num(9)));
+        let rhs_literal = match infix.rhs().unwrap() {
+            Expr::Literal(literal) => literal,
+            _ => unreachable!(),
+        };
+
+        assert!(rhs_literal.value().is_err());
+        assert_eq!(
+            rhs_literal.value(),
+            Err(ASTError::new(
+                7..27,
+                "18446744073709551616",
+                "number too large to fit in target type"
+            ))
+        );
     }
 }

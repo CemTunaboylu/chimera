@@ -2,18 +2,37 @@ use miette::{Diagnostic, Report};
 use thiserror::Error;
 
 use std::ops::Range;
-use syntax::syntax::{Syntax, SyntaxKind};
+use syntax::{
+    language::{SyntaxNode, SyntaxToken},
+    syntax::{Syntax, SyntaxKind},
+};
 
 #[derive(Clone, Diagnostic, Debug, PartialEq, Error)]
 #[diagnostic()]
 #[error("Parsing error")]
 pub struct Inner {
     #[source_code]
-    src: String,
+    pub src: String,
     #[label = "Here"]
     err_span: Range<usize>,
     #[help]
     expected_but_found: String,
+}
+
+pub trait HasSpan {
+    fn get_span(&self) -> Range<usize>;
+}
+
+impl HasSpan for &SyntaxNode {
+    fn get_span(&self) -> Range<usize> {
+        self.text_range().into()
+    }
+}
+
+impl HasSpan for &SyntaxToken {
+    fn get_span(&self) -> Range<usize> {
+        self.text_range().into()
+    }
 }
 
 pub trait Stringer {
