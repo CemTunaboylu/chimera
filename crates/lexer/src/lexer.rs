@@ -188,6 +188,7 @@ mod tests {
             left_square_brac: ("[", TokenKind::LeftSquareBrac),
             less_than: ("<", TokenKind::LessThan),
             line_comment: ("// line comment \n", TokenKind::LineComment),
+            line_comment_no_newline: ("// line comment ", TokenKind::LineComment),
             minus: ("-", TokenKind::Minus),
             minus_eq: ("-=", TokenKind::MinusEq),
             modulus: ("%", TokenKind::Modulus),

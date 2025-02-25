@@ -24,6 +24,7 @@ pub enum SyntaxKind {
     Comma,
     Colon,
     SemiColon,
+    NullTerminator,
     // kw
     FnKw,
     LetKw,
@@ -117,7 +118,7 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::CharLiteral => Self::CharLiteral,
             TokenKind::Colon => Self::Colon,
             TokenKind::Comma => Self::Comma,
-            TokenKind::Dot => SyntaxKind::Dot,
+            TokenKind::Dot => Self::Dot,
             TokenKind::Eq => Self::Eq,
             TokenKind::Exclamation => Self::Exclamation,
             TokenKind::GreaterThan => Self::GreaterThan,
@@ -134,6 +135,7 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::Not => Self::Not,
             TokenKind::NotEq => Self::NotEq,
             TokenKind::Number => Self::Number,
+            TokenKind::NullTerminator => Self::NullTerminator,
             TokenKind::Or => Self::Or,
             TokenKind::Plus => Self::Plus,
             TokenKind::RightBrace => Self::RBrace,
@@ -162,7 +164,10 @@ pub struct Syntax {
 #[allow(dead_code)]
 impl Syntax {
     pub fn is_trivia(&self) -> bool {
-        matches!(self.kind, SyntaxKind::Whitespace | SyntaxKind::Comment)
+        matches!(
+            self.kind,
+            SyntaxKind::Whitespace | SyntaxKind::NullTerminator | SyntaxKind::Comment
+        )
     }
     pub fn is_of_kind(&self, kind: SyntaxKind) -> bool {
         self.kind == kind

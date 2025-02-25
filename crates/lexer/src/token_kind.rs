@@ -134,6 +134,8 @@ pub enum TokenKind {
     NotEq,
     #[regex("[0-9]+")]
     Number,
+    #[regex("\0*")]
+    NullTerminator,
     #[token("|")]
     Or,
     #[token("|=")]
