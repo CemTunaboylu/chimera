@@ -23,6 +23,11 @@ pub enum TokenKind {
     BlockCommentRightStarMissing,
     #[regex("[\'].[\']")]
     CharLiteral,
+    // possible errors to catch for BlockComment
+    #[regex("[\']([^\'])+")]
+    CharLiteralMissingRight,
+    #[regex("([^\'^/])+[\']")]
+    CharLiteralMissingLeft,
     #[token(":")]
     Colon,
     #[token(",")]
