@@ -48,10 +48,18 @@ pub enum TokenKind {
     Exclamation,
     #[token("=>")]
     FatRightArrow,
+    #[regex("([0-9]*[.][0-9]+|[0-9]+[.][0-9]*)")]
+    Float,
     #[token(">")]
     GreaterThan,
     #[regex("[A-Za-z][A-Za-z0-9_]*")]
     Identifier,
+    #[regex("[0-9]+[A-Za-z][A-Za-z0-9_]*")]
+    IdentifierCannotBegin,
+    #[regex("[0-9]+")]
+    Integer,
+    #[regex("[0-9]+[^0-9^'^.^,]+[0-9]+")]
+    IntegerHasNonDigit,
     #[token("break")]
     KwBreak,
     #[token("const")]
@@ -142,8 +150,6 @@ pub enum TokenKind {
     Not,
     #[token("!=")]
     NotEq,
-    #[regex("[0-9]+")]
-    Number,
     #[regex("\0*")]
     NullTerminator,
     #[token("|")]
