@@ -192,6 +192,10 @@ pub enum TokenKind {
     StarEq,
     #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*""#)]
     StringLiteral,
+    #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*"#)]
+    StringLiteralMissingRightDoubleQuote,
+    #[regex(r#"([^"^'^/\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))+""#)]
+    StringLiteralMissingLeftDoubleQuote,
     #[regex("\t+")]
     Tab,
     #[token("bool")]
