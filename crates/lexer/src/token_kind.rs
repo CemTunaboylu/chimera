@@ -36,8 +36,6 @@ pub enum TokenKind {
     Dot,
     #[token("..")]
     DotDot,
-    #[token("...")]
-    DotDotDot,
     // #[token("..=")]
     // DotDotEq,
     #[token("=")]
@@ -88,6 +86,8 @@ pub enum TokenKind {
     KwIn,
     #[token("let")]
     KwLet,
+    #[token("match")]
+    KwMatch,
     #[token("mod")]
     KwModule,
     #[token("mut")]
@@ -141,15 +141,13 @@ pub enum TokenKind {
     #[token("-=")]
     MinusEq,
     #[token("%")]
-    Modulus,
+    Percent,
     #[token("%=")]
-    ModulusEq,
+    PercentEq,
     #[token("::")]
     NamespaceSep,
     #[regex("(\\r\\n|\\r|\\n)+")] // [<windows line break> | <linux> | <mac> ]
     Newline,
-    #[token("~")]
-    Not,
     #[token("!=")]
     NotEq,
     #[regex("\0*")]
