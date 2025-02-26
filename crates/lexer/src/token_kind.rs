@@ -134,6 +134,8 @@ pub enum TokenKind {
     LessThan,
     #[regex("//[^\n]*\n?")]
     LineComment,
+    #[regex("/[^\n^*^/^=]+")]
+    LineCommentMissingSlash,
     #[token("-")]
     Minus,
     #[token("-=")]

@@ -181,6 +181,7 @@ mod tests {
             less_than: ("<", TokenKind::LessThan),
             line_comment: ("// line comment \n", TokenKind::LineComment),
             line_comment_no_newline: ("// line comment ", TokenKind::LineComment),
+            line_comment_missing_slash: ("/ line comment with missing slash", TokenKind::LineCommentMissingSlash),
             minus: ("-", TokenKind::Minus),
             minus_eq: ("-=", TokenKind::MinusEq),
             modulus: ("%", TokenKind::Modulus),
