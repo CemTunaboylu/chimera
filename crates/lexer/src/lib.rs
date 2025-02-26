@@ -1,3 +1,4 @@
+pub mod errors;
 pub mod lexer;
 pub mod token_kind;
 
@@ -7,7 +8,7 @@ mod tests {
     use parameterized_test::{AnyhowResult, create};
     use std::{env, fs::read_to_string, path::PathBuf};
 
-    use super::lexer::{LexError, Lexer};
+    use super::{errors::LexError, lexer::Lexer};
 
     const TEST_DIR: &str = "test_programs";
 

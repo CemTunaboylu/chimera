@@ -1,25 +1,10 @@
 use std::ops::Range;
 
-use miette::{Diagnostic, Result as MietteResult, SourceSpan};
-use thiserror::Error;
+use miette::Result as MietteResult;
 
-use crate::token_kind::TokenKind;
+use crate::{errors::LexError, token_kind::TokenKind};
 
 use logos::Logos;
-
-#[derive(Clone, Default, Diagnostic, Debug, PartialEq, Error)]
-#[diagnostic()]
-#[error("LexError")]
-pub struct LexError {
-    #[source_code]
-    src: String,
-
-    #[label = "Here"]
-    err_span: Range<usize>,
-
-    #[label("Related")]
-    related: Option<SourceSpan>,
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
@@ -70,11 +55,7 @@ impl Iterator for Lexer<'_> {
             Err(_) => {
                 let src = self.inner_lexer.source().to_string();
                 let err_span = self.inner_lexer.span();
-                Err(LexError {
-                    src,
-                    err_span,
-                    related: None,
-                })
+                Err(LexError::new(src, err_span))
             }
         };
         Some(result)
