@@ -2,17 +2,21 @@ use crate::token_kind::TokenKind;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum TokenType {
-    Root, // special kind since only logos needs it
+    // special kind since only logos needs it
+    Root,
     Attribute,
     Branch,
-    ClosingDelimiter,
+    ClosingDelimiter(TokenKind),
     Comment,
-    Error(TokenKind), // has a TokenKind to suggest
+    // has a TokenKind to suggest
+    Error(TokenKind),
     Identifier,
     Keyword,
     Literal,
-    MayNeedSep, // Vec<Vec<_>> at the end produces RightShift rather than 2 GreaterThan, thus needs separation
-    OpeningDelimiter(TokenKind), // expects the TokenKind to be closed afterwards
+    // Vec<Vec<_>> at the end produces RightShift rather than 2 GreaterThan, thus needs separation
+    MayNeedSep,
+    // expects the TokenKind to be closed afterwards
+    OpeningDelimiter(TokenKind),
     Operator,
     ReturnTypeIndicator,
     Semi,
@@ -33,12 +37,10 @@ impl From<TokenKind> for TokenType {
             | TokenKind::AndEq
             | TokenKind::Colon
             | TokenKind::Dot
-            | TokenKind::DotDot
             | TokenKind::Eq
             | TokenKind::EqEq
             | TokenKind::Exclamation
             | TokenKind::GreaterThan
-            | TokenKind::LeftArrow
             | TokenKind::LeftShiftEq
             | TokenKind::LessThan
             | TokenKind::Minus
@@ -56,7 +58,8 @@ impl From<TokenKind> for TokenType {
             | TokenKind::Slash
             | TokenKind::SlashEq
             | TokenKind::Star
-            | TokenKind::StarEq => Self::Operator,
+            | TokenKind::StarEq
+            | TokenKind::Underscore => Self::Operator,
             TokenKind::Identifier => Self::Identifier,
             TokenKind::IdentifierCannotBegin => Self::Error(TokenKind::Identifier),
             TokenKind::KwBreak
@@ -84,25 +87,25 @@ impl From<TokenKind> for TokenType {
             | TokenKind::Kwself => Self::Keyword,
             TokenKind::LeftBrace => Self::OpeningDelimiter(TokenKind::RightBrace),
             TokenKind::LeftParen => Self::OpeningDelimiter(TokenKind::RightParen),
-            TokenKind::RightBrace | TokenKind::RightParen => Self::ClosingDelimiter,
-            TokenKind::LeftShift | TokenKind::RightShift | TokenKind::RightShiftEq => {
-                Self::MayNeedSep
-            }
+            TokenKind::RightBrace => Self::ClosingDelimiter(TokenKind::LeftBrace),
+            TokenKind::RightParen => Self::ClosingDelimiter(TokenKind::LeftParen),
+            TokenKind::LeftShift                        // << OR <<T as> ..>
+            | TokenKind::RightShift                     // >> OR T<_> > T<_>
+            | TokenKind::RightShiftEq                   // >>= OR T<T<>>= 
+            | TokenKind::LeftArrow => Self::MayNeedSep, // <- OR -2<-1
             TokenKind::LeftSquareBrac | TokenKind::RightSquareBrac => Self::Operator,
             TokenKind::RightArrow => Self::ReturnTypeIndicator,
             TokenKind::SemiColon => Self::Semi,
             // literals
-            TokenKind::CharLiteral
-            | TokenKind::Float
-            | TokenKind::Integer
+            TokenKind::CharLiteral(_)
+            | TokenKind::Float(_)
+            | TokenKind::Integer(_)
             | TokenKind::StringLiteral => Self::Literal,
-            TokenKind::CharLiteralMissingRight | TokenKind::CharLiteralMissingLeft => {
-                Self::Error(TokenKind::CharLiteral)
-            }
-            TokenKind::IntegerHasNonDigit => Self::Error(TokenKind::Integer),
 
-            TokenKind::StringLiteralMissingRightDoubleQuote
-            | TokenKind::StringLiteralMissingLeftDoubleQuote => {
+            TokenKind::IntegerHasNonDigit(i) => Self::Error(TokenKind::Integer(i)),
+            TokenKind::CharLiteralMissingRight => Self::Error(TokenKind::CharLiteral(' ')),
+
+            TokenKind::StringLiteralMissingRightDoubleQuote => {
                 Self::Error(TokenKind::StringLiteral)
             }
 
@@ -121,7 +124,6 @@ impl From<TokenKind> for TokenType {
             TokenKind::BlockCommentLeftStarMissing | TokenKind::BlockCommentRightStarMissing => {
                 Self::Error(TokenKind::BlockComment)
             }
-            TokenKind::LineCommentMissingSlash => Self::Error(TokenKind::LineComment),
         }
     }
 }

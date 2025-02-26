@@ -1,6 +1,47 @@
+use std::{
+    char::ParseCharError,
+    num::{ParseFloatError, ParseIntError},
+};
+
 use logos::Logos;
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum ParseError {
+    Char(ParseCharError),
+    I32(ParseIntError),
+    F32(ParseFloatError),
+    #[default]
+    No,
+}
+
+fn to_i32(lex: &mut logos::Lexer<TokenKind>) -> Result<i32, ParseError> {
+    let slice = lex.slice();
+    slice.parse::<i32>().map_err(|e| ParseError::I32(e))
+}
+
+fn to_char(lex: &mut logos::Lexer<TokenKind>) -> Result<char, ParseError> {
+    let slice = lex.slice();
+    let last = slice.len() - 1;
+    slice[1..last]
+        .parse::<char>()
+        .map_err(|e| ParseError::Char(e))
+}
+
+fn to_f32(lex: &mut logos::Lexer<TokenKind>) -> Result<f32, ParseError> {
+    let slice = lex.slice();
+    slice.parse().map_err(|e| ParseError::F32(e))
+}
+fn i32_recover(lex: &mut logos::Lexer<TokenKind>) -> Result<i32, ParseError> {
+    let slice = lex.slice();
+    slice
+        .chars()
+        .filter(|ch| ch.is_ascii_digit())
+        .collect::<String>()
+        .parse::<i32>()
+        .map_err(|e| ParseError::I32(e))
+}
 #[derive(Copy, Clone, Debug, Logos, PartialEq)]
+#[logos(error = ParseError)]
 pub enum TokenKind {
     Root,
     #[token("&")]
@@ -21,21 +62,17 @@ pub enum TokenKind {
     BlockCommentLeftStarMissing,
     #[regex(r"/\*([^*/])*")]
     BlockCommentRightStarMissing,
-    #[regex("[\'].[\']")]
-    CharLiteral,
-    // possible errors to catch for BlockComment
-    #[regex("[\']([^\'])+")]
+    #[regex("[\'].[\']", to_char)]
+    CharLiteral(char),
+    // possible errors to catch for CharLiteral
+    #[regex("[\']([^\'])*")]
     CharLiteralMissingRight,
-    #[regex("([^\'^/])+[\']")]
-    CharLiteralMissingLeft,
     #[token(":")]
     Colon,
     #[token(",")]
     Comma,
     #[token(".")]
     Dot,
-    #[token("..")]
-    DotDot,
     // #[token("..=")]
     // DotDotEq,
     #[token("=")]
@@ -46,18 +83,18 @@ pub enum TokenKind {
     Exclamation,
     #[token("=>")]
     FatRightArrow,
-    #[regex("([0-9]*[.][0-9]+|[0-9]+[.][0-9]*)")]
-    Float,
+    #[regex(r"([0-9]*[.][0-9]+|[0-9]+[.][0-9]*)", to_f32)]
+    Float(f32),
     #[token(">")]
     GreaterThan,
     #[regex("[A-Za-z][A-Za-z0-9_]*")]
     Identifier,
     #[regex("[0-9]+[A-Za-z][A-Za-z0-9_]*")]
     IdentifierCannotBegin,
-    #[regex("[0-9]+")]
-    Integer,
-    #[regex("[0-9]+[^0-9^'^.^,]+[0-9]+")]
-    IntegerHasNonDigit,
+    #[regex("[0-9]+", to_i32)]
+    Integer(i32),
+    #[regex(r"\d+[^\d^'^.^,^\s]+\d+", i32_recover)]
+    IntegerHasNonDigit(i32),
     #[token("break")]
     KwBreak,
     #[token("const")]
@@ -134,8 +171,6 @@ pub enum TokenKind {
     LessThan,
     #[regex("//[^\n]*\n?")]
     LineComment,
-    #[regex("/[^\n^*^/^=]+")]
-    LineCommentMissingSlash,
     #[token("-")]
     Minus,
     #[token("-=")]
@@ -192,8 +227,6 @@ pub enum TokenKind {
     StringLiteral,
     #[regex(r#""([^"\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))*"#)]
     StringLiteralMissingRightDoubleQuote,
-    #[regex(r#"([^"^'^/\\\x00-\x1F]|\\(["\\bnfrt/]|u[a-fA-F0-9]{4}))+""#)]
-    StringLiteralMissingLeftDoubleQuote,
     #[regex("\t+")]
     Tab,
     #[token("bool")]
@@ -218,7 +251,6 @@ pub enum TokenKind {
     TypeU32,
     // #[token("u64")]
     // TypeU64,
-    // non-critical, will be dealt with later if time permits
-    // #[token("_")] // a number can be written with _ to separate and easen reading
-    // Underscore,
+    #[token("_")] // range operator
+    Underscore,
 }

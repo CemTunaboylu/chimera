@@ -52,10 +52,10 @@ impl Iterator for Lexer<'_> {
                 ttype: kind.clone().into(),
                 span: self.inner_lexer.span(),
             }),
-            Err(_) => {
+            Err(parse_error) => {
                 let src = self.inner_lexer.source().to_string();
                 let err_span = self.inner_lexer.span();
-                Err(LexError::new(src, err_span))
+                Err(LexError::new(src, err_span, format!("{:?}", parse_error)))
             }
         };
         Some(result)
@@ -70,12 +70,12 @@ mod tests {
 
     #[test]
     fn ensure_peek_works() {
-        let program = "1 2";
+        let program = "1 ";
         let mut lexer = Lexer::new(program);
         assert_eq!(
             Some(&Ok(Token {
-                kind: TokenKind::Integer,
-                ttype: TokenKind::Integer.into(),
+                kind: TokenKind::Integer(1),
+                ttype: TokenKind::Integer(1).into(),
                 span: 0..1
             })),
             lexer.peek()
@@ -83,8 +83,8 @@ mod tests {
 
         assert_eq!(
             Some(Ok(Token {
-                kind: TokenKind::Integer,
-                ttype: TokenKind::Integer.into(),
+                kind: TokenKind::Integer(1),
+                ttype: TokenKind::Integer(1).into(),
                 span: 0..1
             })),
             lexer.next()
@@ -115,6 +115,18 @@ mod tests {
             assert_token_kind(prog, expected_kind);
         }
     }
+
+    create! {
+        create_lexer_test_multiple_tokens_exp,
+        (prog, expected_tokens), {
+        let mut lexer = Lexer::new(prog);
+        for exp in expected_tokens {
+            let token = lexer.next().unwrap();
+            assert_eq!(exp, &token.expect("expected a token"));
+        }
+        assert!(lexer.next().is_none());
+        }
+    }
     create_lexer_test! {
             and: ("&", TokenKind::And),
             andand: ("&&", TokenKind::AndAnd),
@@ -123,27 +135,28 @@ mod tests {
             attribute: ("@", TokenKind::Attribute),
             block_comment: ("/* block comment */", TokenKind::BlockComment),
             block_comment_left_star_missing: ("/ block * comment */", TokenKind::BlockCommentLeftStarMissing),
+            block_comment_spaced_left_star: ("/ *spa*ced*/", TokenKind::BlockCommentLeftStarMissing),
+            block_comment_start_line_comment_end_block_comment: ("// *spa*ced*/", TokenKind::BlockCommentLeftStarMissing),
             block_comment_right_star_missing: ("/* block comment /", TokenKind::BlockCommentRightStarMissing),
-            char_literal: ("'c'", TokenKind::CharLiteral),
+            block_comment_right_star_missing_ends_line_comment: ("/* block comment //", TokenKind::BlockCommentRightStarMissing),
+            char_literal: ("'c'", TokenKind::CharLiteral('c')),
             char_literal_multiple_char: ("'ch", TokenKind::CharLiteralMissingRight),
-            char_literal_missing_left_single_quote: ("c'", TokenKind::CharLiteralMissingLeft),
             char_literal_missing_right_single_quote: ("'c", TokenKind::CharLiteralMissingRight),
+            char_literal_single_quote_only: ("'", TokenKind::CharLiteralMissingRight),
             colon: (":", TokenKind::Colon),
             comma: (",", TokenKind::Comma),
             dot: (".", TokenKind::Dot),
-            dotdot: ("..", TokenKind::DotDot),
             eq: ("=", TokenKind::Eq),
             eqeq: ("==", TokenKind::EqEq),
             exclamation: ("!", TokenKind::Exclamation),
             fat_right_arrow: ("=>", TokenKind::FatRightArrow),
-            float_full: ("3.14", TokenKind::Float),
-            float_no_left: (".14", TokenKind::Float),
-            float_no_right: ("3.", TokenKind::Float),
+            float_full: ("3.14", TokenKind::Float(3.14)),
+            float_no_left: (".14", TokenKind::Float(0.14)),
+            float_no_right: ("3.", TokenKind::Float(3.0)),
             greater_than: (">", TokenKind::GreaterThan),
             identifier: ("l0n9_id3nt1f13r", TokenKind::Identifier),
-            integer: ("314", TokenKind::Integer),
-            integer_having_letters_in_it: ("3l4", TokenKind::IntegerHasNonDigit),
-            integer_having_under_in_it: ("3_4", TokenKind::IntegerHasNonDigit),
+            identifier_first_digits: ("9l0n9_id3nt1f13r", TokenKind::IdentifierCannotBegin),
+            integer: ("314", TokenKind::Integer(314)),
             kw_break: ("break", TokenKind::KwBreak),
             kw_const: ("const", TokenKind::KwConst),
             kw_continue: ("continue", TokenKind::KwContinue),
@@ -184,7 +197,6 @@ mod tests {
             less_than: ("<", TokenKind::LessThan),
             line_comment: ("// line comment \n", TokenKind::LineComment),
             line_comment_no_newline: ("// line comment ", TokenKind::LineComment),
-            line_comment_missing_slash: ("/ line comment with missing slash", TokenKind::LineCommentMissingSlash),
             minus: ("-", TokenKind::Minus),
             minus_eq: ("-=", TokenKind::MinusEq),
             modulus: ("%", TokenKind::Percent),
@@ -213,8 +225,8 @@ mod tests {
             star: ("*", TokenKind::Star),
             star_eq: ("*=", TokenKind::StarEq),
             string_literal: ("\"string literal.\"", TokenKind::StringLiteral),
-            string_literal_missing_left_double_quote: ("string literal.\"", TokenKind::StringLiteralMissingLeftDoubleQuote),
             string_literal_missing_right_double_quote: ("\"string literal.", TokenKind::StringLiteralMissingRightDoubleQuote),
+            string_literal_missing_rigith_double_quote_with_a_single_quote_following: ("\" '", TokenKind::StringLiteralMissingRightDoubleQuote),
             string_literal_only_one_double_quote: ("\"", TokenKind::StringLiteralMissingRightDoubleQuote),
             tab: ("\t", TokenKind::Tab),
             two_tabs: ("\t\t", TokenKind::Tab),
@@ -229,7 +241,104 @@ mod tests {
             type_string: ("String", TokenKind::TypeString),
             type_u32: ("u32", TokenKind::TypeU32),
             // type_u64: ("u64", TokenKind::TypeU64),
-            // underscore: ("_", TokenKind::Underscore),
+            underscore: ("_", TokenKind::Underscore),
 
+    }
+    create_lexer_test_multiple_tokens_exp! {
+        block_comment_multiple_line_comments_within: ("/* // nested comments // */", &[
+            Token {
+            kind: TokenKind::BlockComment,
+            ttype: TokenKind::BlockComment.into(),
+            span: 0..27
+            },
+        ]),
+        block_comment_right_star_missing: ("/* /////", &[
+            Token {
+            kind: TokenKind::BlockCommentRightStarMissing,
+            ttype: TokenKind::BlockCommentRightStarMissing.into(),
+            span: 0..8
+            },
+        ]),
+        block_comment_nested: ("/* /* nested block comment */ */", &[
+            Token {
+            kind: TokenKind::BlockComment,
+            ttype: TokenKind::BlockComment.into(),
+            span: 0..29
+            },
+            Token{
+            kind: TokenKind::Space,
+            ttype: TokenKind::Space.into(),
+            span: 29..30
+            },
+            Token{
+            kind: TokenKind::Star,
+            ttype: TokenKind::Star.into(),
+            span: 30..31
+            },
+            Token{
+            kind: TokenKind::Slash,
+            ttype: TokenKind::Slash.into(),
+            span: 31..32
+            },
+        ]),
+        float_with_two_dots: ("3..14", &[
+            Token {
+            kind: TokenKind::Float(3.0),
+            ttype: TokenKind::Float(3.0).into(),
+            span: 0..2
+            },
+            Token {
+            kind: TokenKind::Float(0.14),
+            ttype: TokenKind::Float(0.14).into(),
+            span: 2..5
+            },
+        ]),
+
+        integer_space_in_between: ("3 1", &[
+            Token{
+            kind: TokenKind::Integer(3),
+            ttype: TokenKind::Integer(3).into(),
+            span: 0..1
+            },
+            Token{
+            kind: TokenKind::Space,
+            ttype: TokenKind::Space.into(),
+            span: 1..2
+            },
+            Token{
+            kind: TokenKind::Integer(1),
+            ttype: TokenKind::Integer(1).into(),
+            span: 2..3
+            },
+        ]),
+        integer_comma_in_between: ("3,1", &[
+            Token{
+            kind: TokenKind::Integer(3),
+            ttype: TokenKind::Integer(3).into(),
+            span: 0..1
+            },
+            Token{
+            kind: TokenKind::Comma,
+            ttype: TokenKind::Comma.into(),
+            span: 1..2
+            },
+            Token{
+            kind: TokenKind::Integer(1),
+            ttype: TokenKind::Integer(1).into(),
+            span: 2..3
+            },
+        ]),
+        integer_single_quote_in_between: ("3'1", &[
+            Token{
+            kind: TokenKind::Integer(3),
+            ttype: TokenKind::Integer(3).into(),
+            span: 0..1
+            },
+            Token{
+            kind: TokenKind::CharLiteralMissingRight,
+            ttype: TokenKind::CharLiteralMissingRight.into(),
+            span: 1..3
+            },
+        ]),
     }
 }

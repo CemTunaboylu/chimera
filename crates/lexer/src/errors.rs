@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use miette::{Diagnostic, SourceSpan};
+use miette::Diagnostic;
 use thiserror::Error;
 
 #[derive(Clone, Default, Diagnostic, Debug, PartialEq, Error)]
@@ -13,16 +13,16 @@ pub struct LexError {
     #[label = "Here"]
     err_span: Range<usize>,
 
-    #[label("Related")]
-    related: Option<SourceSpan>,
+    #[help]
+    help: String,
 }
 
 impl LexError {
-    pub(crate) fn new(src: String, err_span: Range<usize>) -> Self {
+    pub(crate) fn new(src: String, err_span: Range<usize>, help: String) -> Self {
         LexError {
             src,
             err_span,
-            related: None,
+            help,
         }
     }
 }
