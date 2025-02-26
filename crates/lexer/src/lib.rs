@@ -1,6 +1,7 @@
 pub mod errors;
 pub mod lexer;
 pub mod token_kind;
+pub mod token_type;
 
 #[cfg(test)]
 mod tests {

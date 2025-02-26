@@ -1,18 +1,17 @@
 use std::ops::Range;
 
-use miette::Result as MietteResult;
-
-use crate::{errors::LexError, token_kind::TokenKind};
+use crate::{errors::LexError, token_kind::TokenKind, token_type::TokenType};
 
 use logos::Logos;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
+    pub ttype: TokenType,
     pub span: Range<usize>,
 }
 
-pub type LexResult = MietteResult<Token, LexError>;
+pub type LexResult = Result<Token, LexError>;
 #[derive(Debug)]
 pub struct Lexer<'input> {
     inner_lexer: logos::Lexer<'input, TokenKind>,
@@ -50,6 +49,7 @@ impl Iterator for Lexer<'_> {
         let result = match self.inner_lexer.next()? {
             Ok(kind) => Ok(Token {
                 kind,
+                ttype: kind.clone().into(),
                 span: self.inner_lexer.span(),
             }),
             Err(_) => {
@@ -74,7 +74,8 @@ mod tests {
         let mut lexer = Lexer::new(program);
         assert_eq!(
             Some(&Ok(Token {
-                kind: TokenKind::Number,
+                kind: TokenKind::Integer,
+                ttype: TokenKind::Integer.into(),
                 span: 0..1
             })),
             lexer.peek()
@@ -82,7 +83,8 @@ mod tests {
 
         assert_eq!(
             Some(Ok(Token {
-                kind: TokenKind::Number,
+                kind: TokenKind::Integer,
+                ttype: TokenKind::Integer.into(),
                 span: 0..1
             })),
             lexer.next()
@@ -91,6 +93,7 @@ mod tests {
         assert_eq!(
             Some(&Ok(Token {
                 kind: TokenKind::Space,
+                ttype: TokenKind::Space.into(),
                 span: 1..2
             })),
             lexer.peek()
@@ -101,7 +104,8 @@ mod tests {
         let mut lexer = Lexer::new(with);
         let result = lexer.next().unwrap();
         let span = 0..with.len();
-        let token = Token { kind, span };
+        let ttype: TokenType = kind.clone().into();
+        let token = Token { kind, ttype, span };
         assert_eq!(token, result.expect("expected a tokenkind"));
     }
 
