@@ -16,6 +16,11 @@ pub enum TokenKind {
     Attribute,
     #[regex(r"/\*([^*]|\*[^*/])*\*/")]
     BlockComment,
+    // possible errors to catch for BlockComment
+    #[regex(r"/([^*]|\*[^*/])*\*/")] // / ... */
+    BlockCommentLeftStarMissing,
+    #[regex(r"/\*([^*/])*")]
+    BlockCommentRightStarMissing,
     #[regex("[\'].[\']")]
     CharLiteral,
     #[token(":")]

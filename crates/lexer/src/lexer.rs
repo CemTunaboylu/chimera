@@ -118,6 +118,8 @@ mod tests {
             // as_: ("as", TokenKind::As),
             attribute: ("@", TokenKind::Attribute),
             block_comment: ("/* block comment */", TokenKind::BlockComment),
+            block_comment_left_star_missing: ("/ block * comment */", TokenKind::BlockCommentLeftStarMissing),
+            block_comment_right_star_missing: ("/* block comment /", TokenKind::BlockCommentRightStarMissing),
             char_literal: ("'c'", TokenKind::CharLiteral),
             colon: (":", TokenKind::Colon),
             comma: (",", TokenKind::Comma),
