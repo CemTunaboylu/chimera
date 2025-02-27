@@ -37,6 +37,9 @@ impl<'input> Lexer<'input> {
         }
         self.peeked.as_ref().unwrap().as_ref()
     }
+    pub fn source(&self) -> &str {
+        self.inner_lexer.source().as_ref()
+    }
 }
 
 impl Iterator for Lexer<'_> {
@@ -53,9 +56,8 @@ impl Iterator for Lexer<'_> {
                 span: self.inner_lexer.span(),
             }),
             Err(parse_error) => {
-                let src = self.inner_lexer.source().to_string();
                 let err_span = self.inner_lexer.span();
-                Err(LexError::new(src, err_span, format!("{:?}", parse_error)))
+                Err(LexError::new(err_span, format!("{:?}", parse_error)))
             }
         };
         Some(result)
@@ -134,9 +136,6 @@ mod tests {
             // as_: ("as", TokenKind::As),
             attribute: ("@", TokenKind::Attribute),
             block_comment: ("/* block comment */", TokenKind::BlockComment),
-            block_comment_left_star_missing: ("/ block * comment */", TokenKind::BlockCommentLeftStarMissing),
-            block_comment_spaced_left_star: ("/ *spa*ced*/", TokenKind::BlockCommentLeftStarMissing),
-            block_comment_start_line_comment_end_block_comment: ("// *spa*ced*/", TokenKind::BlockCommentLeftStarMissing),
             block_comment_right_star_missing: ("/* block comment /", TokenKind::BlockCommentRightStarMissing),
             block_comment_right_star_missing_ends_line_comment: ("/* block comment //", TokenKind::BlockCommentRightStarMissing),
             char_literal: ("'c'", TokenKind::CharLiteral('c')),
@@ -144,6 +143,7 @@ mod tests {
             char_literal_missing_right_single_quote: ("'c", TokenKind::CharLiteralMissingRight),
             char_literal_single_quote_only: ("'", TokenKind::CharLiteralMissingRight),
             colon: (":", TokenKind::Colon),
+            colon_colon: ("::", TokenKind::ColonColon),
             comma: (",", TokenKind::Comma),
             dot: (".", TokenKind::Dot),
             eq: ("=", TokenKind::Eq),
@@ -154,8 +154,9 @@ mod tests {
             float_no_left: (".14", TokenKind::Float(0.14)),
             float_no_right: ("3.", TokenKind::Float(3.0)),
             greater_than: (">", TokenKind::GreaterThan),
+            greater_than_or_eq: (">=", TokenKind::GreaterThanOrEq),
             identifier: ("l0n9_id3nt1f13r", TokenKind::Identifier),
-            identifier_first_digits: ("9l0n9_id3nt1f13r", TokenKind::IdentifierCannotBegin),
+            identifier_first_digit: ("9l0n9_id3nt1f13r", TokenKind::IdentifierCannotBegin),
             integer: ("314", TokenKind::Integer(314)),
             kw_break: ("break", TokenKind::KwBreak),
             kw_const: ("const", TokenKind::KwConst),
@@ -195,13 +196,13 @@ mod tests {
             left_shift_eq: ("<<=", TokenKind::LeftShiftEq),
             left_square_brac: ("[", TokenKind::LeftSquareBrac),
             less_than: ("<", TokenKind::LessThan),
+            less_than_or_eq: ("<=", TokenKind::LessThanOrEq),
             line_comment: ("// line comment \n", TokenKind::LineComment),
             line_comment_no_newline: ("// line comment ", TokenKind::LineComment),
             minus: ("-", TokenKind::Minus),
             minus_eq: ("-=", TokenKind::MinusEq),
             modulus: ("%", TokenKind::Percent),
             modulus_eq: ("%=", TokenKind::PercentEq),
-            namespace_sep: ("::", TokenKind::NamespaceSep),
             newline: ("\n", TokenKind::Newline),
             two_newlines: ("\n\n", TokenKind::Newline),
             not_eq: ("!=", TokenKind::NotEq),
@@ -239,9 +240,10 @@ mod tests {
             // type_i64: ("i64", TokenKind::TypeI64),
             type_str_slice: ("str", TokenKind::TypeStrSlice),
             type_string: ("String", TokenKind::TypeString),
-            type_u32: ("u32", TokenKind::TypeU32),
+            // type_u32: ("u32", TokenKind::TypeU32),
             // type_u64: ("u64", TokenKind::TypeU64),
             underscore: ("_", TokenKind::Underscore),
+            xor: ("^", TokenKind::Xor),
 
     }
     create_lexer_test_multiple_tokens_exp! {
@@ -338,6 +340,43 @@ mod tests {
             kind: TokenKind::CharLiteralMissingRight,
             ttype: TokenKind::CharLiteralMissingRight.into(),
             span: 1..3
+            },
+        ]),
+        member_and_two_bin_op: ("h.w+1/2", &[
+            Token{
+            kind: TokenKind::Identifier,
+            ttype: TokenKind::Identifier.into(),
+            span: 0..1
+            },
+            Token{
+            kind: TokenKind::Dot,
+            ttype: TokenKind::Dot.into(),
+            span: 1..2
+            },
+            Token{
+            kind: TokenKind::Identifier,
+            ttype: TokenKind::Identifier.into(),
+            span: 2..3
+            },
+            Token{
+            kind: TokenKind::Plus,
+            ttype: TokenKind::Plus.into(),
+            span: 3..4
+            },
+            Token{
+            kind: TokenKind::Integer(1),
+            ttype: TokenKind::Integer(1).into(),
+            span: 4..5
+            },
+            Token{
+            kind: TokenKind::Slash,
+            ttype: TokenKind::Slash.into(),
+            span: 5..6
+            },
+            Token{
+            kind: TokenKind::Integer(2),
+            ttype: TokenKind::Integer(2).into(),
+            span: 6..7
             },
         ]),
     }

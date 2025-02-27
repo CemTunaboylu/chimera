@@ -1,3 +1,5 @@
+use thin_vec::{ThinVec, thin_vec};
+
 use crate::token_kind::TokenKind;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -18,6 +20,7 @@ pub enum TokenType {
     // expects the TokenKind to be closed afterwards
     OpeningDelimiter(TokenKind),
     Operator,
+    OperatorEq(TokenKind),
     ReturnTypeIndicator,
     Semi,
     Seperator,
@@ -25,104 +28,141 @@ pub enum TokenType {
     WhiteSpace,
 }
 
+impl TokenType {
+    pub fn operators() -> ThinVec<TokenKind>{
+        use TokenKind::*;
+        thin_vec![
+            And
+            ,AndAnd
+            ,Colon
+            ,Dot
+            ,Eq
+            ,EqEq
+            ,Exclamation
+            ,GreaterThan
+            ,GreaterThanOrEq
+            ,LessThan
+            ,LessThanOrEq
+            ,Minus
+            ,Percent
+            ,ColonColon
+            ,Or
+            ,OrOr
+            ,Plus
+            ,QuestionMark
+            ,Slash
+            ,Star
+            ,Underscore 
+            ,Xor
+            ]
+
+    }
+}
+
 impl From<TokenKind> for TokenType {
     fn from(value: TokenKind) -> Self {
+        use TokenKind::*;
         match value {
-            TokenKind::Root => Self::Root,
-            TokenKind::Attribute => Self::Attribute,
-            TokenKind::FatRightArrow => Self::Branch,
-            TokenKind::Comma => Self::Seperator,
-            TokenKind::And
-            | TokenKind::AndAnd
-            | TokenKind::AndEq
-            | TokenKind::Colon
-            | TokenKind::Dot
-            | TokenKind::Eq
-            | TokenKind::EqEq
-            | TokenKind::Exclamation
-            | TokenKind::GreaterThan
-            | TokenKind::LeftShiftEq
-            | TokenKind::LessThan
-            | TokenKind::Minus
-            | TokenKind::MinusEq
-            | TokenKind::Percent
-            | TokenKind::PercentEq
-            | TokenKind::NamespaceSep
-            | TokenKind::NotEq
-            | TokenKind::Or
-            | TokenKind::OrEq
-            | TokenKind::OrOr
-            | TokenKind::Plus
-            | TokenKind::PlusEq
-            | TokenKind::QuestionMark
-            | TokenKind::Slash
-            | TokenKind::SlashEq
-            | TokenKind::Star
-            | TokenKind::StarEq
-            | TokenKind::Underscore => Self::Operator,
-            TokenKind::Identifier => Self::Identifier,
-            TokenKind::IdentifierCannotBegin => Self::Error(TokenKind::Identifier),
-            TokenKind::KwBreak
-            | TokenKind::KwConst
-            | TokenKind::KwContinue
-            | TokenKind::KwElif
-            | TokenKind::KwElse
-            | TokenKind::KwEnum
-            | TokenKind::KwFalse
-            | TokenKind::KwFn
-            | TokenKind::KwFor
-            | TokenKind::KwIf
-            | TokenKind::KwImport
-            | TokenKind::KwIn
-            | TokenKind::KwLet
-            | TokenKind::KwMatch
-            | TokenKind::KwModule
-            | TokenKind::KwMut
-            | TokenKind::KwReturn
-            | TokenKind::KwSelf
-            | TokenKind::KwStruct
-            | TokenKind::KwTrue
-            | TokenKind::KwType
-            | TokenKind::KwWhile
-            | TokenKind::Kwself => Self::Keyword,
-            TokenKind::LeftBrace => Self::OpeningDelimiter(TokenKind::RightBrace),
-            TokenKind::LeftParen => Self::OpeningDelimiter(TokenKind::RightParen),
-            TokenKind::RightBrace => Self::ClosingDelimiter(TokenKind::LeftBrace),
-            TokenKind::RightParen => Self::ClosingDelimiter(TokenKind::LeftParen),
-            TokenKind::LeftShift                        // << OR <<T as> ..>
-            | TokenKind::RightShift                     // >> OR T<_> > T<_>
-            | TokenKind::RightShiftEq                   // >>= OR T<T<>>= 
-            | TokenKind::LeftArrow => Self::MayNeedSep, // <- OR -2<-1
-            TokenKind::LeftSquareBrac | TokenKind::RightSquareBrac => Self::Operator,
-            TokenKind::RightArrow => Self::ReturnTypeIndicator,
-            TokenKind::SemiColon => Self::Semi,
+            Root => Self::Root,
+            Attribute => Self::Attribute,
+            FatRightArrow => Self::Branch,
+            Comma => Self::Seperator,
+            AndEq => Self::OperatorEq(TokenKind::And),
+            LeftShiftEq => Self::OperatorEq(TokenKind::LeftShift),
+            MinusEq => Self::OperatorEq(TokenKind::Minus),
+            PercentEq => Self::OperatorEq(TokenKind::Percent),
+            NotEq=> Self::OperatorEq(TokenKind::Exclamation),
+            OrEq=> Self::OperatorEq(TokenKind::Or),
+            PlusEq=> Self::OperatorEq(TokenKind::Plus),
+            SlashEq=> Self::OperatorEq(TokenKind::Slash),
+            StarEq=> Self::OperatorEq(TokenKind::Star),
+            And
+            | AndAnd
+            | Colon
+            | Dot
+            | Eq
+            | EqEq
+            | Exclamation
+            | GreaterThan
+            | GreaterThanOrEq
+            | LessThan
+            | LessThanOrEq
+            | Minus
+            | Percent
+            | ColonColon
+            | Or
+            | OrOr
+            | Plus
+            | QuestionMark
+            | Slash
+            | Star
+            | Underscore 
+            | Xor
+            => Self::Operator,
+            Identifier => Self::Identifier,
+            IdentifierCannotBegin => Self::Error(TokenKind::Identifier),
+            KwBreak
+            | KwConst
+            | KwContinue
+            | KwElif
+            | KwElse
+            | KwEnum
+            | KwFalse
+            | KwFn
+            | KwFor
+            | KwIf
+            | KwImport
+            | KwIn
+            | KwLet
+            | KwMatch
+            | KwModule
+            | KwMut
+            | KwReturn
+            | KwSelf
+            | KwStruct
+            | KwTrue
+            | KwType
+            | KwWhile
+            | Kwself => Self::Keyword,
+            LeftBrace => Self::OpeningDelimiter(RightBrace),
+            LeftParen => Self::OpeningDelimiter(RightParen),
+            RightBrace => Self::ClosingDelimiter(LeftBrace),
+            RightParen => Self::ClosingDelimiter(LeftParen),
+            LeftSquareBrac => Self::OpeningDelimiter(RightSquareBrac),
+            RightSquareBrac => Self::ClosingDelimiter(LeftSquareBrac),
+
+            LeftShift                        // << OR <<T as> ..>
+            | RightShift                     // >> OR T<_> > T<_>
+            | RightShiftEq                   // >>= OR T<T<>>= 
+            | LeftArrow => Self::MayNeedSep, // <- OR -2<-1
+            RightArrow => Self::ReturnTypeIndicator,
+            SemiColon => Self::Semi,
             // literals
-            TokenKind::CharLiteral(_)
-            | TokenKind::Float(_)
-            | TokenKind::Integer(_)
-            | TokenKind::StringLiteral => Self::Literal,
+            CharLiteral(_)
+            | Float(_)
+            | Integer(_)
+            | StringLiteral => Self::Literal,
 
-            TokenKind::IntegerHasNonDigit(i) => Self::Error(TokenKind::Integer(i)),
-            TokenKind::CharLiteralMissingRight => Self::Error(TokenKind::CharLiteral(' ')),
+            CharLiteralMissingRight => Self::Error(CharLiteral(' ')),
 
-            TokenKind::StringLiteralMissingRightDoubleQuote => {
-                Self::Error(TokenKind::StringLiteral)
+            StringLiteralMissingRightDoubleQuote => {
+                Self::Error(StringLiteral)
             }
 
-            TokenKind::Space | TokenKind::Newline | TokenKind::Tab | TokenKind::NullTerminator => {
+            Space | Newline | Tab | NullTerminator => {
                 Self::WhiteSpace
             }
-            TokenKind::TypeBool
-            | TokenKind::TypeByte
-            | TokenKind::TypeChar
-            | TokenKind::TypeF32
-            | TokenKind::TypeI32
-            | TokenKind::TypeStrSlice
-            | TokenKind::TypeString
-            | TokenKind::TypeU32 => Self::Type,
-            TokenKind::BlockComment | TokenKind::LineComment => Self::Comment,
-            TokenKind::BlockCommentLeftStarMissing | TokenKind::BlockCommentRightStarMissing => {
-                Self::Error(TokenKind::BlockComment)
+            TypeBool
+            | TypeByte
+            | TypeChar
+            | TypeF32
+            | TypeI32
+            | TypeStrSlice
+            | TypeString => Self::Type,
+            BlockComment | LineComment => Self::Comment,
+            // BlockCommentLeftStarMissing | 
+            BlockCommentRightStarMissing => {
+                Self::Error(BlockComment)
             }
         }
     }

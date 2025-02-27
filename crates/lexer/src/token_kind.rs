@@ -4,9 +4,10 @@ use std::{
 };
 
 use logos::Logos;
+use thin_vec::{ThinVec, thin_vec};
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub enum ParseError {
+pub enum ParsingFromStringError {
     Char(ParseCharError),
     I32(ParseIntError),
     F32(ParseFloatError),
@@ -14,34 +15,28 @@ pub enum ParseError {
     No,
 }
 
-fn to_i32(lex: &mut logos::Lexer<TokenKind>) -> Result<i32, ParseError> {
+fn to_i32(lex: &mut logos::Lexer<TokenKind>) -> Result<i32, ParsingFromStringError> {
     let slice = lex.slice();
-    slice.parse::<i32>().map_err(|e| ParseError::I32(e))
+    slice
+        .parse::<i32>()
+        .map_err(|e| ParsingFromStringError::I32(e))
 }
 
-fn to_char(lex: &mut logos::Lexer<TokenKind>) -> Result<char, ParseError> {
+fn to_char(lex: &mut logos::Lexer<TokenKind>) -> Result<char, ParsingFromStringError> {
     let slice = lex.slice();
     let last = slice.len() - 1;
     slice[1..last]
         .parse::<char>()
-        .map_err(|e| ParseError::Char(e))
+        .map_err(|e| ParsingFromStringError::Char(e))
 }
 
-fn to_f32(lex: &mut logos::Lexer<TokenKind>) -> Result<f32, ParseError> {
+fn to_f32(lex: &mut logos::Lexer<TokenKind>) -> Result<f32, ParsingFromStringError> {
     let slice = lex.slice();
-    slice.parse().map_err(|e| ParseError::F32(e))
+    slice.parse().map_err(|e| ParsingFromStringError::F32(e))
 }
-fn i32_recover(lex: &mut logos::Lexer<TokenKind>) -> Result<i32, ParseError> {
-    let slice = lex.slice();
-    slice
-        .chars()
-        .filter(|ch| ch.is_ascii_digit())
-        .collect::<String>()
-        .parse::<i32>()
-        .map_err(|e| ParseError::I32(e))
-}
+
 #[derive(Copy, Clone, Debug, Logos, PartialEq)]
-#[logos(error = ParseError)]
+#[logos(error = ParsingFromStringError)]
 pub enum TokenKind {
     Root,
     #[token("&")]
@@ -58,9 +53,9 @@ pub enum TokenKind {
     #[regex(r"/\*([^*]|\*[^*/])*\*/")]
     BlockComment,
     // possible errors to catch for BlockComment
-    #[regex(r"/([^*]|\*[^*/])*\*/")] // / ... */
-    BlockCommentLeftStarMissing,
-    #[regex(r"/\*([^*/])*")]
+    // #[regex(r"/([^*]|\*[^*/])*\*/")] // / ... */
+    // BlockCommentLeftStarMissing,
+    #[regex(r"/\*([^*/])*/*")]
     BlockCommentRightStarMissing,
     #[regex("[\'].[\']", to_char)]
     CharLiteral(char),
@@ -69,6 +64,8 @@ pub enum TokenKind {
     CharLiteralMissingRight,
     #[token(":")]
     Colon,
+    #[token("::")]
+    ColonColon,
     #[token(",")]
     Comma,
     #[token(".")]
@@ -87,14 +84,14 @@ pub enum TokenKind {
     Float(f32),
     #[token(">")]
     GreaterThan,
+    #[token(">=")]
+    GreaterThanOrEq,
     #[regex("[A-Za-z][A-Za-z0-9_]*")]
     Identifier,
     #[regex("[0-9]+[A-Za-z][A-Za-z0-9_]*")]
     IdentifierCannotBegin,
     #[regex("[0-9]+", to_i32)]
     Integer(i32),
-    #[regex(r"\d+[^\d^'^.^,^\s]+\d+", i32_recover)]
-    IntegerHasNonDigit(i32),
     #[token("break")]
     KwBreak,
     #[token("const")]
@@ -169,6 +166,8 @@ pub enum TokenKind {
     LeftSquareBrac,
     #[token("<")]
     LessThan,
+    #[token("<=")]
+    LessThanOrEq,
     #[regex("//[^\n]*\n?")]
     LineComment,
     #[token("-")]
@@ -179,8 +178,6 @@ pub enum TokenKind {
     Percent,
     #[token("%=")]
     PercentEq,
-    #[token("::")]
-    NamespaceSep,
     #[regex("(\\r\\n|\\r|\\n)+")] // [<windows line break> | <linux> | <mac> ]
     Newline,
     #[token("!=")]
@@ -247,10 +244,28 @@ pub enum TokenKind {
     TypeStrSlice,
     #[token("String")]
     TypeString,
-    #[token("u32")]
-    TypeU32,
+    // #[token("u32")]
+    // TypeU32,
     // #[token("u64")]
     // TypeU64,
     #[token("_")] // range operator
     Underscore,
+    #[token("^")] // range operator
+    Xor,
+}
+
+impl TokenKind {
+    pub fn other_delimiters(&self) -> Option<ThinVec<TokenKind>> {
+        use TokenKind::*;
+        let others = match self {
+            LeftParen => thin_vec![LeftBrace, LeftSquareBrac],
+            LeftBrace => thin_vec![LeftParen, LeftSquareBrac],
+            LeftSquareBrac => thin_vec![LeftParen, LeftBrace],
+            RightParen => thin_vec![RightBrace, RightSquareBrac],
+            RightBrace => thin_vec![RightParen, RightSquareBrac],
+            RightSquareBrac => thin_vec![RightParen, RightBrace],
+            _ => return None,
+        };
+        Some(others)
+    }
 }
