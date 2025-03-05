@@ -4,13 +4,14 @@ use crate::sink::Sink;
 use syntax::{ParsedValue, language::SyntaxNode};
 
 use miette::Report;
+use thin_vec::ThinVec;
 
 pub type IndicedParsedValues = HashMap<Range<usize>, ParsedValue>;
 #[derive(Debug)]
 pub struct ConcreteSyntaxTree {
     pub root: SyntaxNode,
     pub parsed_values: IndicedParsedValues,
-    pub errors: Vec<Report>,
+    pub errors: ThinVec<Report>,
 }
 
 impl ConcreteSyntaxTree {
