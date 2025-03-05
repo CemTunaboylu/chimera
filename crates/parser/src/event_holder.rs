@@ -1,11 +1,12 @@
 use syntax::syntax_kind::SyntaxKind;
+use thin_vec::ThinVec;
 
 use crate::event::Event;
 
 #[derive(Debug, Default)]
 pub struct EventHolder {
-    events: Vec<Event>,
-    ignored: Vec<(usize, Event)>,
+    events: ThinVec<Event>,
+    ignored: ThinVec<(usize, Event)>,
 }
 
 impl EventHolder {
@@ -47,7 +48,7 @@ impl EventHolder {
 
     pub fn include_ignored(&mut self) {
         let capacity = self.events.len() + self.ignored.len();
-        let mut merged = Vec::with_capacity(capacity);
+        let mut merged = ThinVec::with_capacity(capacity);
 
         let mut left: usize = 0;
 
@@ -62,7 +63,7 @@ impl EventHolder {
     }
 }
 
-impl From<EventHolder> for Vec<Event> {
+impl From<EventHolder> for ThinVec<Event> {
     fn from(val: EventHolder) -> Self {
         val.events
     }
@@ -71,24 +72,25 @@ impl From<EventHolder> for Vec<Event> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use thin_vec::thin_vec;
 
     use syntax::syntax_kind::SyntaxKind;
 
     #[test]
     fn include_ignored() {
-        let ignored = vec![
+        let ignored = thin_vec![
             (1, Event::new_start_node_with(SyntaxKind::Whitespace)),
             (3, Event::new_start_node_with(SyntaxKind::Whitespace)),
             (5, Event::new_start_node_with(SyntaxKind::Whitespace)),
         ];
-        let events = vec![Event::FinishNode; 5];
+        let events = thin_vec![Event::FinishNode; 5];
 
         let total_length = ignored.len() + events.len();
 
         let mut event_holder = EventHolder { events, ignored };
         event_holder.include_ignored();
 
-        let event_vector: Vec<Event> = event_holder.into();
+        let event_vector: ThinVec<Event> = event_holder.into();
 
         assert_eq!(event_vector.len(), total_length);
 
