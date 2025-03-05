@@ -1,0 +1,268 @@
+use lexer::token_kind::TokenKind;
+use num_derive::{FromPrimitive, ToPrimitive};
+use thin_vec::ThinVec;
+
+#[derive(Copy, Clone, Debug, FromPrimitive, Eq, Hash, Ord, PartialEq, PartialOrd, ToPrimitive)]
+pub enum SyntaxKind {
+    // recovering
+    Recovered,
+    Errored,
+    // required for CST
+    Root,
+    // token-tree roots for n-ary operators
+    InfixBinOp,
+    PrefixUnaryOp,
+    PostFixUnaryOp,
+    // token-tree roots for expressions/sub-expressions
+    CharLit,
+    FnCall,
+    Literal,
+    ParenExpr,
+    ParamDecl,
+    RetType,
+    Semi,
+    StrLit,
+    StructRef,
+    StructAsType,
+    VarRef,
+    // token-tree roots for statements
+    ArrRef,
+    Block,
+    FnDef,
+    FnArg,
+    StructDef,
+    VarDef,
+    // mirrored
+    And,
+    AndAnd,
+    AndEq,
+    Colon,
+    ColonColon,
+    Comma,
+    Comment,
+    Dot,
+    Eq,
+    EqEq,
+    Excl,
+    Float,
+    Gt,
+    Ge,
+    Ident,
+    Int,
+    KwBreak,
+    KwConst,
+    KwContinue,
+    KwElif,
+    KwElse,
+    KwEnum,
+    KwFalse,
+    KwFn,
+    KwFor,
+    KwIf,
+    KwImport,
+    KwIn,
+    KwLet,
+    KwMatch,
+    KwModule,
+    KwMut,
+    KwReturn,
+    KwSelf,
+    KwStruct,
+    KwTrue,
+    KwType,
+    KwWhile,
+    Kwself,
+    LBrace,
+    LParen,
+    LShift,
+    LShiftEq,
+    // TOOD: arr[<expr>] -> [<expr>] is actually a 'composite' postfix operator
+    LBrack,
+    Lt,
+    Le,
+    Minus,
+    MinusEq,
+    NotEq,
+    NullTerm,
+    Or,
+    OrEq,
+    OrOr,
+    Percent,
+    PercentEq,
+    Plus,
+    PlusEq,
+    QMark,
+    RArrow,
+    RBrace,
+    RParen,
+    RShift,
+    RShiftEq,
+    RBrack,
+    Slash,
+    SlashEq,
+    Star,
+    StarEq,
+    TyBool,
+    TyByte,
+    TyChar,
+    TyF32,
+    TyI32,
+    TyStr,
+    TyStrSlc,
+    TyU32,
+    Under,
+    Whitespace,
+    Xor,
+}
+
+pub fn from_token_kinds(token_kinds: ThinVec<TokenKind>) -> ThinVec<SyntaxKind> {
+    token_kinds
+        .iter()
+        .map(|token_kind| SyntaxKind::from(*token_kind))
+        .collect::<ThinVec<_>>()
+}
+impl SyntaxKind {
+    pub fn is_delimiter(&self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, LBrace | LParen | LBrack | RBrace | RParen | RBrack)
+    }
+    pub fn is_opening_delimiter(&self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, LBrace | LParen | LBrack)
+    }
+    pub fn is_closing_delimiter(&self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, RBrace | RParen | RBrack)
+    }
+    pub fn is_literal_value(&self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, Int | Float | StrLit | CharLit | KwTrue | KwFalse)
+    }
+
+    pub fn is_binary_operator(&self) -> bool {
+        use SyntaxKind::*;
+        (self >= &And && self <= &ColonColon)
+            || (self >= &Dot && self <= &Excl)
+            || (self >= &Lt && self <= &NotEq)
+            || (self >= &Or && self <= &QMark)
+            || (self >= &Slash && self <= &StarEq)
+            || matches!(
+                self,
+                Gt | LShift | LShiftEq | RShift | RShiftEq | Under | Xor
+            )
+    }
+
+    pub fn is_unary_operator(&self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, And | Minus | Excl | Star | QMark)
+    }
+
+    pub fn is_prefix_unary_operator(&self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, And | Minus | Excl | Star)
+    }
+
+    pub fn is_posfix_unary_operator(&self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, QMark)
+    }
+
+    pub fn is_trivia(self) -> bool {
+        use SyntaxKind::*;
+        matches!(self, Whitespace | Comment | NullTerm)
+    }
+}
+
+impl From<TokenKind> for SyntaxKind {
+    fn from(token_kind: TokenKind) -> Self {
+        use TokenKind::*;
+        match token_kind {
+            And => Self::And,
+            AndAnd => Self::AndAnd,
+            AndEq => Self::AndEq,
+            BlockComment | LineComment => Self::Comment,
+            CharLiteral(_) => Self::CharLit,
+            Colon => Self::Colon,
+            ColonColon => Self::ColonColon,
+            Comma => Self::Comma,
+            Dot => Self::Dot,
+            Eq => Self::Eq,
+            EqEq => Self::EqEq,
+            Exclamation => Self::Excl,
+            Float(_) => Self::Float,
+            GreaterThan => Self::Gt,
+            GreaterThanOrEq => Self::Ge,
+            Identifier => Self::Ident,
+            Integer(_) => Self::Int,
+            KwBreak => Self::KwBreak,
+            KwConst => Self::KwConst,
+            KwContinue => Self::KwContinue,
+            KwElif => Self::KwElif,
+            KwElse => Self::KwElse,
+            KwEnum => Self::KwEnum,
+            KwFalse => Self::KwFalse,
+            KwFn => Self::KwFn,
+            KwFor => Self::KwFor,
+            KwIf => Self::KwIf,
+            KwImport => Self::KwImport,
+            KwIn => Self::KwIn,
+            KwLet => Self::KwLet,
+            KwMatch => Self::KwMatch,
+            KwModule => Self::KwModule,
+            KwMut => Self::KwMut,
+            KwReturn => Self::KwReturn,
+            KwSelf => Self::KwSelf,
+            KwStruct => Self::KwStruct,
+            KwTrue => Self::KwTrue,
+            KwType => Self::KwType,
+            KwWhile => Self::KwWhile,
+            Kwself => Self::Kwself,
+            LeftBrace => Self::LBrace,
+            LeftParen => Self::LParen,
+            LeftShift => Self::LShift,
+            LeftShiftEq => Self::LShiftEq,
+            LeftSquareBrac => Self::LBrack,
+            LessThan => Self::Lt,
+            LessThanOrEq => Self::Le,
+            Minus => Self::Minus,
+            MinusEq => Self::MinusEq,
+            NotEq => Self::NotEq,
+            NullTerminator => Self::NullTerm,
+            Or => Self::Or,
+            OrEq => Self::OrEq,
+            OrOr => Self::OrOr,
+            Percent => Self::Percent,
+            PercentEq => Self::PercentEq,
+            Plus => Self::Plus,
+            PlusEq => Self::PlusEq,
+            QuestionMark => Self::QMark,
+            RightArrow => Self::RArrow,
+            RightBrace => Self::RBrace,
+            RightParen => Self::RParen,
+            RightShift => Self::RShift,
+            RightShiftEq => Self::RShiftEq,
+            RightSquareBrac => Self::RBrack,
+            Root => SyntaxKind::Root,
+            SemiColon => Self::Semi,
+            Slash => Self::Slash,
+            SlashEq => Self::SlashEq,
+            Space | Newline | Tab => Self::Whitespace,
+            Star => Self::Star,
+            StarEq => Self::StarEq,
+            StringLiteral => Self::StrLit,
+            TypeBool => Self::TyBool,
+            TypeByte => Self::TyByte,
+            TypeChar => Self::TyChar,
+            TypeF32 => Self::TyF32,
+            TypeI32 => Self::TyI32,
+            TypeStrSlice => Self::TyStrSlc,
+            TypeString => Self::TyStr,
+            Underscore => Self::Under,
+            Xor => Self::Xor,
+            _ => {
+                let msg = format!("{:?} don't have a corresponding syntaxkind", token_kind);
+                panic!("{}", msg)
+            }
+        }
+    }
+}

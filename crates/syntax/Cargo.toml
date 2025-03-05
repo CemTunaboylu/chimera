@@ -9,3 +9,4 @@ rowan = "0.16.1"
 
 num-derive = "0.4.2"
 num-traits = "0.2.19"
+thin-vec = "0.2.13"
