@@ -23,7 +23,9 @@ impl<'input> Parser<'input> {
                 format!("{:?}", err).as_str(),
             ),
         });
-        self.lexer.next();
+        if self.can_recover() {
+            self.lexer.next();
+        }
     }
 
     pub fn recover_with_msg(&mut self, msg: &str, got: impl Stringer) {
