@@ -5,5 +5,8 @@ edition = "2024"
 
 [dependencies]
 parser = { path = "../parser" }
+ast = { path = "../ast" }
+hir = { path = "../hir" }
+
 miette = { version = "7.5.0", features = ["fancy"] }
 clap = { version = "4.5.30", features = ["derive"] }

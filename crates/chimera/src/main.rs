@@ -1,11 +1,9 @@
 use miette::{Context, IntoDiagnostic, Report, Result as MietteResult};
-use parser::{
-    ast::{Root, Stmt as AstStmt},
-    cst::ConcreteSyntaxTree,
-    hir::lower,
-    parse_behaviors::{IgnoreTrivia, NonIgnoring},
-    parser::Parser as ChimeraParser,
-};
+use parser::{cst::ConcreteSyntaxTree, parser::Parser as ChimeraParser};
+
+use ast::{ast::Root, statement::Stmt as AstStmt};
+// use hir::lower;
+
 use std::path::PathBuf;
 use std::{
     fs::read_to_string,
@@ -44,7 +42,7 @@ fn main() -> MietteResult<()> {
         Commands::Hir => display_as_hir,
         Commands::Parse { filename } => {
             let content = get_file_contents(filename)?;
-            let cst = ChimeraParser::new(&content).parse::<NonIgnoring>();
+            let cst = ChimeraParser::new(&content).parse();
             display_as_cst(&cst);
             return Ok(());
         }
@@ -57,7 +55,7 @@ fn main() -> MietteResult<()> {
 
         stdin.read_line(&mut input).into_diagnostic()?;
 
-        let parse = ChimeraParser::new(&input).parse::<IgnoreTrivia>();
+        let parse = ChimeraParser::new(&input).parse();
         display(&parse);
 
         input.clear();
@@ -65,18 +63,16 @@ fn main() -> MietteResult<()> {
 }
 
 fn display_as_cst(cst: &ConcreteSyntaxTree) {
-    if cst.errors.is_empty() {
-        println!("{}", cst.debug_tree());
-    } else {
-        for err in &cst.errors {
-            let report: Report = err.clone().into();
+    if !cst.errors.is_empty() {
+        for report in &cst.errors {
             println!("{:?}", report);
         }
     }
+    println!("{}", cst.debug_tree());
 }
 
 fn display_as_ast(cst: &ConcreteSyntaxTree) {
-    let ast = Root::try_from(cst.syntax_node_root()).unwrap();
+    let ast = Root::try_from(cst).unwrap();
     dbg!(
         ast.statements()
             .filter_map(|stmt| match stmt {
@@ -94,14 +90,15 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
 
 fn display_as_hir(cst: &ConcreteSyntaxTree) {
     display_as_cst(cst);
-    let ast_root = Root::try_from(cst.syntax_node_root()).unwrap();
-    println!("{:?}", ast_root);
-    let mut expr_arena = lower(&ast_root);
-    dbg!("{:?}", &expr_arena);
+    let ast_root = Root::try_from(cst).unwrap();
+    println!("ast_root {:?}", ast_root);
+    // let mut expr_arena = lower(&ast_root);
+    // dbg!("begin: {expr_arena :?}", &expr_arena);
 
-    for elm in &mut expr_arena {
-        println!("{:?}", elm);
-    }
+    // for elm in &mut expr_arena {
+    //     println!("{:?}", elm);
+    // }
+    // dbg!("fin: {expr_arena :?}", &expr_arena);
 }
 
 fn get_file_contents(file_name: PathBuf) -> MietteResult<String> {
