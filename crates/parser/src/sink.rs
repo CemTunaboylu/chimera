@@ -2,26 +2,27 @@ use std::mem;
 
 use miette::Report;
 use rowan::{GreenNode, GreenNodeBuilder, Language};
+use thin_vec::{ThinVec, thin_vec};
 
-use crate::{cst::IndicedParsedValues, errors::ParseError, event::Event};
+use crate::{cst::IndicedParsedValues, event::Event};
 
 use syntax::{language::ChimeraLanguage, syntax_kind::SyntaxKind};
 
 pub(super) struct Sink<'input> {
     builder: GreenNodeBuilder<'static>,
     program: &'input str,
-    events: Vec<Event>,
-    errors: Vec<Report>,
+    events: ThinVec<Event>,
+    errors: ThinVec<Report>,
     parsed_values: IndicedParsedValues,
 }
 
 impl<'input> Sink<'input> {
-    pub(super) fn new(events: Vec<Event>, program: &'input str) -> Self {
+    pub(super) fn new(events: ThinVec<Event>, program: &'input str) -> Self {
         Self {
             builder: GreenNodeBuilder::new(),
             events,
             program,
-            errors: vec![],
+            errors: thin_vec![],
             parsed_values: IndicedParsedValues::new(),
         }
     }
@@ -31,8 +32,8 @@ impl<'input> Sink<'input> {
         mut ix: usize,
         kind: SyntaxKind,
         mut forward_parent: Option<usize>,
-    ) -> Vec<SyntaxKind> {
-        let mut kinds = vec![kind];
+    ) -> ThinVec<SyntaxKind> {
+        let mut kinds = thin_vec![kind];
 
         while let Some(forward_parent_index) = forward_parent {
             ix += forward_parent_index;
@@ -51,7 +52,7 @@ impl<'input> Sink<'input> {
         kinds
     }
 
-    pub(super) fn finish(mut self) -> (GreenNode, IndicedParsedValues, Vec<Report>) {
+    pub(super) fn finish(mut self) -> (GreenNode, IndicedParsedValues, ThinVec<Report>) {
         for ix in 0..self.events.len() {
             match mem::replace(&mut self.events[ix], Event::Moved) {
                 Event::StartNode {
