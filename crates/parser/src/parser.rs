@@ -1,59 +1,62 @@
-use std::mem;
-
 use crate::{
-    cst::ConcreteSyntaxTree,
-    errors::ParseError,
     event::Event,
     event_holder::EventHolder,
-    marker::{Complete, Marker},
-    parse_behaviors::{ASTBehavior, IgnoreTrivia},
-    s_expression::pratt_parser,
-    sink::Sink,
+    marker::{Complete, Incomplete, Marker},
 };
 
 use lexer::lexer::Lexer;
-use syntax::syntax::{Syntax, SyntaxKind};
+use syntax::{Syntax, bitset::SyntaxKindBitSet, context::ParserContext, syntax_kind::SyntaxKind};
 
 use miette::Result as MietteResult;
+use thin_vec::{ThinVec, thin_vec};
 
 #[derive(Debug)]
 pub struct Parser<'input> {
-    lexer: Lexer<'input>,
+    pub(super) lexer: Lexer<'input>,
     pub event_holder: EventHolder,
-    program: &'input str,
-    expected: Vec<Vec<SyntaxKind>>,
-    end_branch: bool,
+    pub context: ParserContext,
+    // when looking ahead, we omit whitespaces and errors for a second, we store them here to deal with later on
+    pub buffer: ThinVec<Syntax>,
 }
 
-const RECOVERY_SET: [SyntaxKind; 1] = [SyntaxKind::LetKw];
+use SyntaxKind::*;
 
 impl<'input> Parser<'input> {
     pub fn new(program: &'input str) -> Self {
+        // let is by default in recovery set, i.e. it won't be bumped in a recovery case
+        let mut context = ParserContext::new();
+        context.disallow_recovery_of([KwLet].as_ref());
+
         Self {
             lexer: Lexer::new(program),
             event_holder: EventHolder::new(),
-            program,
-            expected: vec![],
-            end_branch: false,
+            context,
+            buffer: thin_vec![],
         }
     }
-    pub fn parse<B: ASTBehavior>(mut self) -> ConcreteSyntaxTree {
-        pratt_parser::<B>(&mut self);
-        let sink = Sink::new(self.event_holder.into(), self.program);
-        ConcreteSyntaxTree::from(sink)
+
+    pub fn peek(&mut self) -> Option<MietteResult<Syntax>> {
+        let mut peeked = self.raw_peek()?;
+        if let Ok(ref syntax) = peeked {
+            if syntax.is_trivia() {
+                self.buffer.push(syntax.clone());
+                self.lexer.next();
+                peeked = self.raw_peek()?
+            }
+        }
+        Some(peeked)
     }
 
-    pub fn peek<B: ASTBehavior>(&mut self) -> Option<MietteResult<Syntax>> {
-        B::apply(&mut self.lexer, &mut self.event_holder);
-        (!self.end_branch).then(|| self._peek())?
+    pub fn clean_buffer(&mut self) {
+        self.buffer.iter().for_each(|syntax| {
+            self.event_holder.push(Event::AddSyntax {
+                syntax: syntax.clone(),
+            });
+        });
+        self.buffer.clear();
     }
 
-    fn expect<B: ASTBehavior>(&mut self) -> Option<MietteResult<Syntax>> {
-        B::apply(&mut self.lexer, &mut self.event_holder);
-        self._peek()
-    }
-
-    fn _peek(&mut self) -> Option<MietteResult<Syntax>> {
+    fn raw_peek(&mut self) -> Option<MietteResult<Syntax>> {
         let result = match self.lexer.peek()? {
             Ok(token) => Ok(token.clone().into()),
             Err(err) => Err(err.clone().into()),
@@ -64,51 +67,8 @@ impl<'input> Parser<'input> {
     pub fn is_at_the_end(&mut self) -> bool {
         self.lexer.peek().is_none()
     }
-
-    pub fn bump(&mut self) -> Option<()> {
-        if let Ok(token) = self.lexer.next()? {
-            self.event_holder.push(Event::AddSyntax {
-                syntax: token.into(),
-            });
-            self.pop_last_expectation();
-        }
-        Some(())
-    }
-
-    pub fn restart_a_branch(&mut self) {
-        self.end_branch = false;
-    }
-
-    pub fn end_this_branch(&mut self) -> Option<()> {
-        if self.is_next::<IgnoreTrivia>(SyntaxKind::SemiColon) {
-            if let Ok(_semi_colon) = self.lexer.next()? {
-                // TODO: in each case, when peek is called, in case it is in end branch mode
-                // it can pop expectations
-                self.pop_last_expectation();
-                self.end_branch = true;
-            }
-        }
-        Some(())
-    }
-
-    pub fn clear_expectations(&mut self) {
-        self.expected.clear();
-    }
-
-    pub fn pop_last_expectation(&mut self) {
-        self.expected.pop();
-    }
-    pub fn inject_expectations(&mut self, expectations: &[SyntaxKind]) {
-        // if !self.expected.ends_with(expectations) {
-        // TODO: can become pretty big
-        self.expected.push(Vec::from(expectations));
-        // self.expected.extend_from_slice(expectations);
-        // }
-    }
-
-    pub fn is_next<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) -> bool {
-        // self.inject_expectations(&[expected_kind]);
-        let result = if let Some(Ok(token)) = self.expect::<B>() {
+    pub fn is_next(&mut self, expected_kind: SyntaxKind) -> bool {
+        let result = if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;
             syntax.is_of_kind(expected_kind)
         } else {
@@ -117,86 +77,130 @@ impl<'input> Parser<'input> {
         result
     }
 
-    pub fn check_next_syntax<B: ASTBehavior>(&mut self, check: fn(&Syntax) -> bool) -> bool {
-        if let Some(Ok(syntax)) = self.expect::<B>() {
-            check(&syntax)
+    pub fn is_next_f(&mut self, expect: fn(Syntax) -> bool) -> bool {
+        let result = if let Some(Ok(token)) = self.peek() {
+            let syntax: Syntax = token;
+            expect(syntax)
         } else {
             false
-        }
+        };
+        result
     }
-
-    // TODO: this should inject expectations
-    pub fn expect_and_bump<B: ASTBehavior>(&mut self, expected_kind: SyntaxKind) {
-        self.inject_expectations(&[expected_kind]);
-        if self.is_next::<B>(expected_kind) {
+    // expect injects the syntax kind to expectations if not met
+    pub fn expect(&mut self, kind: SyntaxKind) -> Option<()> {
+        self.is_next(kind).then(|| ()).or_else(|| {
+            self.context.expect(kind);
+            None
+        })
+    }
+    // expect_and_bump injects the syntax kind to expectations before acting
+    pub fn expect_and_bump(&mut self, expected_kind: SyntaxKind) {
+        self.context.expect(expected_kind);
+        if self.is_next(expected_kind) {
             self.bump();
             return;
         }
-
-        self.recover::<B>();
+        self.recover();
     }
 
-    fn can_recover<B: ASTBehavior>(&mut self) -> bool {
-        self.expect::<B>()
-            .is_some_and(|r| r.is_ok_and(|s| !RECOVERY_SET.contains(&s.kind)))
-    }
-
-    pub fn recover<B: ASTBehavior>(&mut self) {
-        let got = self.expect::<B>();
-        self.event_holder.push(Event::Error {
-            err: ParseError::unexpected_token(
-                self.program.to_string(),
-                self.lexer.span().clone(),
-                self.expected.pop().unwrap_or(vec![]),
-                got,
-            ),
-        });
-        if self.can_recover::<B>() {
-            self.bump_with_marker(SyntaxKind::Recovered);
+    pub fn expect_f_and_bump(&mut self, expect: fn(Syntax) -> bool) {
+        if self.is_next_f(expect) {
+            self.bump();
+            return;
         }
+        self.recover();
     }
 
-    pub fn bump_iff_or_panic<B: ASTBehavior>(&mut self, expectation: fn(&Syntax) -> bool) {
-        assert!(self.check_next_syntax::<B>(expectation));
-        self.bump();
+    pub fn complete_marker_with(
+        &mut self,
+        marker: Marker<Incomplete>,
+        kind: SyntaxKind,
+    ) -> Marker<Complete> {
+        let completed = marker.complete();
+        self.event_holder
+            .update_corresponding_marker_event(completed.get_checkpoint(), kind);
+        completed
+    }
+    pub fn precede_marker_with(&mut self, marker: &Marker<Complete>) -> Marker<Incomplete> {
+        let new = self.start();
+        let forward_parent_index = marker.forward_parent_index_from(&new);
+        self.event_holder
+            .add_forward_parent_marker_event(marker.get_checkpoint(), forward_parent_index);
+        new
+    }
+
+    // expect_and_bump_with_marker injects the syntax kind to expectations before acting
+    pub fn expect_and_bump_with_marker(
+        &mut self,
+        expected_kind: SyntaxKind,
+        bump_with: SyntaxKind,
+    ) -> Option<Marker<Complete>> {
+        self.context.expect(expected_kind);
+        if self.is_next(expected_kind) {
+            return Some(self.bump_with_marker(bump_with));
+        }
+        self.recover();
+        None
     }
 
     pub fn bump_with_marker(&mut self, kind: SyntaxKind) -> Marker<Complete> {
         let marker = self.start();
-        self.bump();
-        marker.complete(&mut self.event_holder, kind)
+        self.bump_no_buffer_action();
+        let finished = self.complete_marker_with(marker, kind);
+        self.clean_buffer();
+        finished
     }
+    pub fn impose_restrictions_of(&mut self, syntax: Syntax) {
+        let context_updates = syntax.imposed_restrictions();
+        let matching_bitsets = [
+            self.context.get_expectations(),
+            self.context.get_recovery_set(),
+            self.context.get_allowed(),
+        ];
+
+        let applied: ThinVec<SyntaxKindBitSet> = matching_bitsets
+            .iter()
+            .zip(context_updates.iter())
+            .map(|(bs, rtype)| rtype.apply(*bs))
+            .collect();
+
+        self.context = applied.into();
+    }
+
     pub fn start(&mut self) -> Marker {
         let checkpoint = self.event_holder.checkpoint();
         self.event_holder.push(Event::Marker { checkpoint });
         Marker::new(checkpoint)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ops::Range;
-
-    fn check_err(
-        input: &str,
-        expected: Vec<SyntaxKind>,
-        found: Option<SyntaxKind>,
-        range: Range<usize>,
-        output: &str,
-    ) {
-        let error = ParseError::unexpected_token(input.to_string(), range, expected, found);
-        assert_eq!(format!("{:?}", error), output);
+    pub fn bump_no_buffer_action(&mut self) -> Option<()> {
+        if let Ok(token) = self.lexer.next()? {
+            let syntax: Syntax = token.into();
+            let kind = syntax.get_kind();
+            self.context.del_expectation(kind);
+            self.event_holder.push(Event::AddSyntax { syntax: syntax });
+        }
+        Some(())
+    }
+    // bump removes the syntax kind from expectations if succesful
+    pub fn bump(&mut self) -> Option<()> {
+        self.clean_buffer();
+        if let Ok(token) = self.lexer.next()? {
+            let syntax: Syntax = token.into();
+            let kind = syntax.get_kind();
+            self.context.del_expectation(kind);
+            self.event_holder.push(Event::AddSyntax { syntax: syntax });
+        }
+        Some(())
     }
 
-    #[test]
-    fn one_expected_did_find() {
-        check_err(
-            "let a = ",
-            vec![SyntaxKind::Literal],
-            None,
-            8..9,
-            "UnexpectedToken(Inner { src: \"let a = \", err_span: 8..9, expected_but_found: \"expected Literal, but got ''\" })",
-        );
+    pub fn ignore_if(&mut self, kind: SyntaxKind) {
+        if self.is_next(kind) {
+            self.lexer.next();
+        }
+    }
+
+    pub fn ignore(&mut self) {
+        self.lexer.next();
     }
 }

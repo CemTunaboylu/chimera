@@ -1,16 +1,18 @@
 use std::mem;
 
+use miette::Report;
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 
-use crate::{errors::ParseError, event::Event};
+use crate::{cst::IndicedParsedValues, errors::ParseError, event::Event};
 
-use syntax::{language::ChimeraLanguage, syntax::SyntaxKind};
+use syntax::{language::ChimeraLanguage, syntax_kind::SyntaxKind};
 
 pub(super) struct Sink<'input> {
     builder: GreenNodeBuilder<'static>,
     program: &'input str,
     events: Vec<Event>,
-    errors: Vec<ParseError>,
+    errors: Vec<Report>,
+    parsed_values: IndicedParsedValues,
 }
 
 impl<'input> Sink<'input> {
@@ -20,6 +22,7 @@ impl<'input> Sink<'input> {
             events,
             program,
             errors: vec![],
+            parsed_values: IndicedParsedValues::new(),
         }
     }
 
@@ -48,7 +51,7 @@ impl<'input> Sink<'input> {
         kinds
     }
 
-    pub(super) fn finish(mut self) -> (GreenNode, Vec<ParseError>) {
+    pub(super) fn finish(mut self) -> (GreenNode, IndicedParsedValues, Vec<Report>) {
         for ix in 0..self.events.len() {
             match mem::replace(&mut self.events[ix], Event::Moved) {
                 Event::StartNode {
@@ -63,16 +66,27 @@ impl<'input> Sink<'input> {
                             .start_node(ChimeraLanguage::kind_to_raw(*forward_parent_kind));
                     }
                 }
-                Event::AddSyntax { syntax } => self.builder.token(
-                    ChimeraLanguage::kind_to_raw(syntax.kind),
-                    &self.program[syntax.span],
-                ),
+                Event::AddSyntax { syntax } => {
+                    if let Some(parsed_value) = syntax.get_parsed_value() {
+                        self.parsed_values
+                            .insert(syntax.get_span(), parsed_value.clone());
+                    }
+                    self.builder.token(
+                        ChimeraLanguage::kind_to_raw(syntax.get_kind()),
+                        &self.program[syntax.get_span()],
+                    );
+                }
                 Event::FinishNode => self.builder.finish_node(),
                 Event::Marker { .. } => unreachable!(),
                 Event::Moved => {}
-                Event::Error { err } => self.errors.push(err),
+                Event::Error { err } => {
+                    let report: Report = err.into();
+                    let source = self.program;
+                    self.errors
+                        .push(report.with_source_code(source.to_string()))
+                }
             }
         }
-        (self.builder.finish(), self.errors)
+        (self.builder.finish(), self.parsed_values, self.errors)
     }
 }

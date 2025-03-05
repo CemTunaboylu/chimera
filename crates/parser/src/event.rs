@@ -1,6 +1,6 @@
 use crate::errors::ParseError;
 
-use syntax::syntax::{Syntax, SyntaxKind};
+use syntax::{Syntax, syntax_kind::SyntaxKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {

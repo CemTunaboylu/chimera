@@ -1,56 +1,39 @@
 use crate::{
     expression::parse_expression_until_binding_power,
     marker::{Complete, Marker},
-    parse_behaviors::ASTBehavior,
+    parse_behaviors::SyntaxingBehavior,
     parser::Parser,
 };
 
-use syntax::syntax::SyntaxKind;
+use syntax::syntax_kind::SyntaxKind;
 
-pub(crate) fn statement<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
-    parser.restart_a_branch();
+pub(crate) fn statement<B: SyntaxingBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
     let syntax = parser.peek::<B>()?;
-    match syntax {
-        Ok(syntax) if syntax.is_of_kind(SyntaxKind::LetKw) => variable_def::<B>(parser),
-        Ok(syntax) if syntax.is_of_kind(SyntaxKind::RBrace) => block::<B>(parser),
+    let semi_marker = parser.start();
+    let _opt_marker = match syntax {
+        Ok(syntax) if syntax.is_of_kind(SyntaxKind::KwLet) => variable_def::<B>(parser),
         _ => parse_expression_until_binding_power::<B>(parser, 0),
-    }
+    };
+    parser.expect_and_bump::<B>(SyntaxKind::Semi);
+    Some(semi_marker.complete(&mut parser.event_holder, SyntaxKind::Semi))
 }
 
-fn variable_def<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
-    assert!(parser.is_next::<B>(SyntaxKind::LetKw));
+fn variable_def<B: SyntaxingBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
+    assert!(parser.is_next::<B>(SyntaxKind::KwLet));
     let marker = parser.start();
     parser.bump();
     let _marker = parse_expression_until_binding_power::<B>(parser, 0);
     if _marker.is_none() {
         // recovering possibly no name VarDef let = <acceptable>
         if parser.check_next_syntax::<B>(|syntax| {
-            syntax.kind.is_literal_value()
-                || matches!(syntax.kind, SyntaxKind::Identifier | SyntaxKind::LBrace)
+            syntax.get_kind().is_literal_value()
+                || matches!(syntax.get_kind(), SyntaxKind::Ident | SyntaxKind::LBrace)
         }) {
             // try again if something valid is there, it will be bumped
             parse_expression_until_binding_power::<B>(parser, 0);
         }
     }
-    Some(marker.complete(&mut parser.event_holder, SyntaxKind::VariableDef))
-}
-
-fn block<B: ASTBehavior>(parser: &mut Parser) -> Option<Marker<Complete>> {
-    assert!(parser.is_next::<B>(SyntaxKind::RBrace));
-    let marker = parser.start();
-    parser.bump();
-    let _marker = parse_expression_until_binding_power::<B>(parser, 0);
-    if _marker.is_none() {
-        // recovering possibly no name VarDef let = <acceptable>
-        if parser.check_next_syntax::<B>(|syntax| {
-            syntax.kind.is_literal_value()
-                || matches!(syntax.kind, SyntaxKind::Identifier | SyntaxKind::LBrace)
-        }) {
-            // try again if something valid is there, it will be bumped
-            parse_expression_until_binding_power::<B>(parser, 0);
-        }
-    }
-    Some(marker.complete(&mut parser.event_holder, SyntaxKind::VariableDef))
+    Some(marker.complete(&mut parser.event_holder, SyntaxKind::VarDef))
 }
 
 #[cfg(test)]
@@ -157,6 +140,63 @@ mod tests {
         );
     }
 
+    #[test]
+    fn recover_on_let_token_in_block() {
+        check::<IgnoreTrivia>(
+            "{let a =\n{let b =} 10 }",
+            expect![[r#"
+                Root@0..16
+                  Block@0..16
+                    LBrace@0..1 "{"
+                    VariableDef@1..15
+                      LetKw@1..4 "let"
+                      InfixBinaryOp@4..15
+                        VariableRef@4..5
+                          Identifier@4..5 "a"
+                        Eq@5..6 "="
+                        Block@6..13
+                          LBrace@6..7 "{"
+                          VariableDef@7..12
+                            LetKw@7..10 "let"
+                            InfixBinaryOp@10..12
+                              VariableRef@10..11
+                                Identifier@10..11 "b"
+                              Eq@11..12 "="
+                          RBrace@12..13 "}"
+                        Recovered@13..15
+                          Number@13..15 "10"
+                    RBrace@15..16 "}""#]],
+        );
+    }
+
+    #[test]
+    fn recover_on_let_token_in_block_with_semicolon() {
+        check::<IgnoreTrivia>(
+            "{let a =\n{let b =}; 10 }",
+            expect![[r#"
+                Root@0..16
+                  Block@0..16
+                    LBrace@0..1 "{"
+                    VariableDef@1..15
+                      LetKw@1..4 "let"
+                      InfixBinaryOp@4..15
+                        VariableRef@4..5
+                          Identifier@4..5 "a"
+                        Eq@5..6 "="
+                        Block@6..13
+                          LBrace@6..7 "{"
+                          VariableDef@7..12
+                            LetKw@7..10 "let"
+                            InfixBinaryOp@10..12
+                              VariableRef@10..11
+                                Identifier@10..11 "b"
+                              Eq@11..12 "="
+                          RBrace@12..13 "}"
+                        Literal@13..15
+                          Number@13..15 "10"
+                    RBrace@15..16 "}""#]],
+        );
+    }
     /*
     {
       let a = {

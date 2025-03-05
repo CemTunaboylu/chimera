@@ -1,29 +1,33 @@
-use rowan::GreenNode;
+use std::{collections::HashMap, ops::Range};
 
-use crate::{errors::ParseError, sink::Sink};
-use syntax::language::SyntaxNode;
+use crate::sink::Sink;
+use syntax::{ParsedValue, language::SyntaxNode};
 
+use miette::Report;
+
+pub type IndicedParsedValues = HashMap<Range<usize>, ParsedValue>;
 #[derive(Debug)]
 pub struct ConcreteSyntaxTree {
-    pub green_node: GreenNode,
-    pub errors: Vec<ParseError>,
+    pub root: SyntaxNode,
+    pub parsed_values: IndicedParsedValues,
+    pub errors: Vec<Report>,
 }
 
 impl ConcreteSyntaxTree {
     pub fn debug_tree(&self) -> String {
-        let syntax_node = SyntaxNode::new_root(self.green_node.clone());
+        let syntax_node = self.root.clone();
         let formatted = format!("{:#?}", syntax_node);
         formatted[0..formatted.len() - 1].to_string()
-    }
-
-    pub fn syntax_node_root(&self) -> SyntaxNode {
-        SyntaxNode::new_root(self.green_node.clone())
     }
 }
 
 impl From<Sink<'_>> for ConcreteSyntaxTree {
     fn from(sink: Sink) -> Self {
-        let (green_node, errors) = sink.finish();
-        Self { green_node, errors }
+        let (green_node, parsed_values, errors) = sink.finish();
+        Self {
+            root: SyntaxNode::new_root(green_node),
+            parsed_values,
+            errors,
+        }
     }
 }

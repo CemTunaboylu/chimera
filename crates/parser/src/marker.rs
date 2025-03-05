@@ -1,9 +1,5 @@
-use std::marker::PhantomData;
-
-use crate::{event::Event, event_holder::EventHolder, parser::Parser};
-
 use drop_bomb::DropBomb;
-use syntax::syntax::SyntaxKind;
+use std::marker::PhantomData;
 
 mod private {
     pub trait Sealed {}
@@ -11,9 +7,11 @@ mod private {
 
 pub trait MarkerState: private::Sealed {}
 
+#[derive(Debug)]
 pub enum Incomplete {}
 impl MarkerState for Incomplete {}
 impl private::Sealed for Incomplete {}
+#[derive(Debug)]
 pub enum Complete {}
 impl MarkerState for Complete {}
 impl private::Sealed for Complete {}
@@ -23,6 +21,12 @@ pub struct Marker<S: MarkerState = Incomplete> {
     checkpoint: usize,
     bomb: DropBomb,
     __state: PhantomData<S>,
+}
+
+impl<S: MarkerState> Marker<S> {
+    pub fn get_checkpoint(&self) -> usize {
+        self.checkpoint
+    }
 }
 
 pub static MARKER_BOMB_MSG: &str = "Markers cannot be left incomplete";
@@ -36,19 +40,8 @@ impl Marker<Incomplete> {
         }
     }
 
-    pub fn complete(
-        mut self,
-        event_holder: &mut EventHolder,
-        kind: SyntaxKind,
-    ) -> Marker<Complete> {
-        let index = self.checkpoint;
-        let corresponding_event = event_holder.get_mut(index).unwrap();
-        corresponding_event.validate_marker_event(index);
-
-        *corresponding_event = Event::new_start_node_with(kind);
-        event_holder.push(Event::FinishNode);
+    pub fn complete(mut self) -> Marker<Complete> {
         self.bomb.defuse();
-
         Marker::<Complete> {
             checkpoint: self.checkpoint,
             bomb: self.bomb,
@@ -58,14 +51,7 @@ impl Marker<Incomplete> {
 }
 
 impl Marker<Complete> {
-    pub fn precede(&self, parser: &mut Parser) -> Marker<Incomplete> {
-        let new_marker = parser.start();
-        let forward_parent_index = new_marker.checkpoint - self.checkpoint;
-        match parser.event_holder.get_mut(self.checkpoint) {
-            // add_forward_parent_to_start_node panics if it is not a start node
-            Some(event) => event.add_forward_parent_to_start_node(forward_parent_index),
-            None => unreachable!(),
-        }
-        new_marker
+    pub fn forward_parent_index_from(&self, new_marker: &Marker<Incomplete>) -> usize {
+        new_marker.checkpoint - self.checkpoint
     }
 }

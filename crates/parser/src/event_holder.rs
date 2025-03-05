@@ -1,3 +1,5 @@
+use syntax::syntax_kind::SyntaxKind;
+
 use crate::event::Event;
 
 #[derive(Debug, Default)]
@@ -11,8 +13,23 @@ impl EventHolder {
         Self::default()
     }
 
-    pub fn get_mut(&mut self, pos: usize) -> Option<&mut Event> {
-        self.events.get_mut(pos)
+    pub fn update_corresponding_marker_event(&mut self, checkpoint: usize, kind: SyntaxKind) {
+        let corresponding_event = self.events.get_mut(checkpoint).unwrap();
+        corresponding_event.validate_marker_event(checkpoint);
+        *corresponding_event = Event::new_start_node_with(kind);
+        self.push(Event::FinishNode);
+    }
+
+    pub fn add_forward_parent_marker_event(
+        &mut self,
+        checkpoint: usize,
+        forward_parent_index: usize,
+    ) {
+        match self.events.get_mut(checkpoint) {
+            // add_forward_parent_to_start_node panics if it is not a start node
+            Some(event) => event.add_forward_parent_to_start_node(forward_parent_index),
+            None => unreachable!(),
+        }
     }
 
     pub fn ignore(&mut self, event: Event) {
@@ -55,7 +72,7 @@ impl From<EventHolder> for Vec<Event> {
 mod test {
     use super::*;
 
-    use syntax::syntax::SyntaxKind;
+    use syntax::syntax_kind::SyntaxKind;
 
     #[test]
     fn include_ignored() {

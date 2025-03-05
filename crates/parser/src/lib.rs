@@ -1,16 +1,17 @@
-pub mod ast;
 pub mod cst;
 pub mod errors;
 mod event;
 mod event_holder;
-pub mod expression;
-pub mod hir;
+pub mod func;
+pub mod parse;
+mod recovery;
+// pub mod expression;
 pub mod marker;
-pub mod parse_behaviors;
+mod operator;
+// pub mod parse_behaviors;
 pub mod parser;
-pub mod s_expression;
 mod sink;
-pub mod statement;
+// pub mod statement;
 
 #[cfg(test)]
 mod tests {
@@ -20,17 +21,15 @@ mod tests {
         path::PathBuf,
     };
 
-    extern crate glob;
-    use crate::{
-        parse_behaviors::{IgnoreTrivia, NonIgnoring},
-        parser::Parser,
-    };
+    use crate::parser::Parser;
+
+    // use crate::{parse_behaviors::IgnoreTrivia, parser::Parser};
 
     const TEST_DIR: &str = "test_programs";
     const OK: &str = "ok";
     const ERRD: &str = "errd";
 
-    fn get_file_contents(file_name: PathBuf) -> MietteResult<String> {
+    fn get_file_contents(file_name: &PathBuf) -> MietteResult<String> {
         let file_contents = read_to_string(&file_name)
             .into_diagnostic()
             .wrap_err_with(|| format!("reading '{}' failed", file_name.display()))?;
@@ -43,21 +42,21 @@ mod tests {
             file_path.to_str().unwrap().ends_with(".chi"),
             "{file_path:?}"
         );
-        let file_contents = get_file_contents(file_path).expect("expected a valid file");
+        let file_name = file_path.file_name().unwrap();
+        let file_contents = get_file_contents(&file_path).expect("expected a valid file");
         let parser = Parser::new(file_contents.as_str());
-        let cst = parser.parse::<NonIgnoring>();
+        let cst = parser.parse();
         match (expect_errs, cst.errors.is_empty()) {
             (true, false) => {}
             (false, true) => {}
             (true, true) => {
-                panic!("expected errors");
+                panic!("expected errors for {:?}", file_name);
             }
             (false, false) => {
-                for err in &cst.errors {
-                    let report: Report = err.clone().into();
+                for report in &cst.errors {
                     println!("{:?}", report);
                 }
-                panic!("expected no error");
+                panic!("expected no error {:?}", file_name);
             }
         }
     }
