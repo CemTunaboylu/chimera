@@ -62,11 +62,16 @@ impl Stringer for Option<SyntaxKind> {
 
 impl Stringer for Option<Result<Syntax, Report>> {
     fn into(self) -> String {
-        let kind_opt = self.map(|r| {
-            r.map(|s| s.get_kind())
-                .expect("expected syntax kind while recovering")
-        });
-        <Option<SyntaxKind> as Stringer>::into(kind_opt)
+        if let Some(result) = self {
+            match result {
+                Ok(syntax) => <SyntaxKind as Stringer>::into(syntax.get_kind()),
+                Err(report) => {
+                    format!("{:?}", report)
+                }
+            }
+        } else {
+            "".to_string()
+        }
     }
 }
 
