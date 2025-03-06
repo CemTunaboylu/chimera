@@ -14,17 +14,18 @@ pub type Started = Marker<Incomplete>;
 use SyntaxKind::*;
 
 impl<'input> Parser<'input> {
-    pub fn parse(mut self) -> ConcreteSyntaxTree {
+    pub fn parse(self) -> ConcreteSyntaxTree {
         let root = self.start();
         while !self.is_at_the_end() {
             self.parse_statement();
         }
         self.complete_marker_with(root, Root);
 
-        let sink = Sink::new(self.event_holder.into(), self.lexer.source());
+        let lexer = self.lexer.borrow();
+        let sink = Sink::new(self.event_holder.into_inner().into(), lexer.source());
         ConcreteSyntaxTree::from(sink)
     }
-    fn parse_statement(&mut self) -> Option<Finished> {
+    fn parse_statement(&self) -> Option<Finished> {
         let mut syntax = self.peek()?;
         while let Err(err) = syntax {
             self.recover_from_err(err);
@@ -39,7 +40,7 @@ impl<'input> Parser<'input> {
             if marker.is_some() {
                 // let semi = marker?.precede(self);
                 // self.bump();
-                self.lexer.next();
+                self.ignore();
                 // Some(semi.complete(&mut self.event_holder, Semi))
             } else {
                 self.recover();
@@ -48,11 +49,11 @@ impl<'input> Parser<'input> {
         marker
     }
 
-    fn parse_variable_def(&mut self) -> Option<Finished> {
+    fn parse_variable_def(&self) -> Option<Finished> {
         self.clean_buffer();
         let marker = self.start();
         self.expect_and_bump(KwLet);
-        self.context.expect(Ident);
+        self.context.borrow().expect(Ident);
         if self
             .parse_expression_until_binding_power(starting_precedence())
             .is_none()
@@ -67,10 +68,7 @@ impl<'input> Parser<'input> {
         Some(self.complete_marker_with(marker, VarDef))
     }
 
-    pub fn parse_expression_until_binding_power(
-        &mut self,
-        min_precedence: Bound,
-    ) -> Option<Finished> {
+    pub fn parse_expression_until_binding_power(&self, min_precedence: Bound) -> Option<Finished> {
         let mut lhs_marker = self.parse_left_hand_side()?;
         // let checkpoint = self.context.clone();
         // TODO: implement a type constraint as well
@@ -80,7 +78,9 @@ impl<'input> Parser<'input> {
                 // note: recovery is handled within specialized parse methods
                 // this is just for debugging
                 Err(parse_err) => {
-                    panic!("{:?}", format!("{:?}", parse_err));
+                    self.recover_from_err(parse_err);
+                    return None;
+                    // panic!("{:?}", format!("{:?}", parse_err));
                 }
                 Ok(syntax) => {
                     let kind = syntax.get_kind();
@@ -114,7 +114,7 @@ impl<'input> Parser<'input> {
         Some(lhs_marker)
     }
 
-    fn parse_left_hand_side(&mut self) -> Option<Marker<Complete>> {
+    fn parse_left_hand_side(&self) -> Option<Marker<Complete>> {
         use SyntaxKind::*;
         // note: after with a bump, expectations will be cleared
         let syntax = match self.peek()? {
@@ -127,13 +127,13 @@ impl<'input> Parser<'input> {
         self.clean_buffer();
         let kind = syntax.get_kind();
         let marker = match kind {
-            Ident => self.parse_variable_ref_or_fn_call(),
+            Ident => self.parse_var_ref_or_fn_call_or_arr(),
             Int | Float | StrLit | CharLit => self.parse_literal(kind),
             LParen => self.parse_paren_expr(syntax),
             LBrace => self.parse_block(),
             Minus | Excl => self.parse_prefix_unary_operation(kind),
             delimiter if delimiter.is_closing_delimiter() => {
-                if !self.context.is_allowed(delimiter) {
+                if !self.context.borrow().is_allowed(delimiter) {
                     println!("delimiter not allowed: {:?}", delimiter);
                     self.recover_restricted(delimiter);
                 }
@@ -144,9 +144,9 @@ impl<'input> Parser<'input> {
                     || operator.is_posfix_unary_operator()
                     || operator.is_prefix_unary_operator() =>
             {
-                if !self.context.is_expected(operator) {
+                if !self.context.borrow().is_expected(operator) {
                     self.recover_unmet_expectation();
-                } else if !self.context.is_allowed(operator) {
+                } else if !self.context.borrow().is_allowed(operator) {
                     self.recover_restricted(operator);
                 }
                 None
@@ -157,10 +157,9 @@ impl<'input> Parser<'input> {
         marker
     }
 
-    fn parse_variable_ref_or_fn_call(&mut self) -> Option<Finished> {
-        self.context.expect(Ident);
+    fn parse_var_ref_or_fn_call_or_arr(&self) -> Option<Finished> {
         let marker = self.start();
-        self.bump();
+        self.expect_and_bump(Ident);
 
         // function call
         let finished = if self.is_next(LParen) {
@@ -174,8 +173,7 @@ impl<'input> Parser<'input> {
             self.expect_and_bump(RBrack);
             self.complete_marker_with(marker, ArrRef)
         } else {
-            let var_ref_marker = self.complete_marker_with(marker, VarRef);
-            var_ref_marker
+            self.complete_marker_with(marker, VarRef)
         };
 
         // above is_next puts further whitespaces in the buffer to look ahead,
@@ -185,39 +183,43 @@ impl<'input> Parser<'input> {
         Some(finished)
     }
 
-    fn parse_literal(&mut self, kind: SyntaxKind) -> Option<Finished> {
+    fn parse_literal(&self, kind: SyntaxKind) -> Option<Finished> {
         self.expect_and_bump_with_marker(kind, SyntaxKind::Literal)
     }
 
     // TODO: wrap this with a parse_delimited method
-    fn parse_paren_expr(&mut self, syntax: Syntax) -> Option<Finished> {
+    #[allow(unused_variables)] // for rollback anchor
+    fn parse_paren_expr(&self, syntax: Syntax) -> Option<Finished> {
         // TODO: LParen should inject RParen expectations
         use SyntaxKind::*;
         let marker = self.start();
         self.expect_and_bump(LParen);
-        let checkpoint = self.context.clone();
+        let rollback_when_dropped = self.roll_back_context_after_drop();
         // restricts ], } (recovers them by erroring), expects )
         self.impose_restrictions_of(syntax);
         _ = self.parse_expression_until_binding_power(starting_precedence());
         self.expect_and_bump(RParen);
-        self.context = checkpoint;
         let finished = self.complete_marker_with(marker, SyntaxKind::ParenExpr);
         self.clean_buffer();
         Some(finished)
     }
 
-    pub fn parse_block(&mut self) -> Option<Finished> {
+    #[allow(unused_variables)] // for rollback anchor
+    pub fn parse_block(&self) -> Option<Finished> {
         let marker = self.start();
         self.expect_and_bump(LBrace);
-        let checkpoint = self.context.clone();
-        self.context.disallow_recovery_of(RBrace);
+
+        let rollback_when_dropped = self.roll_back_context_after_drop();
+        let ctx = self.context.borrow();
+        ctx.allow(RBrace);
+        ctx.disallow_recovery_of(RBrace);
+
         while self.parse_statement().is_some() {}
         self.expect_and_bump(RBrace);
-        self.context = checkpoint;
         Some(self.complete_marker_with(marker, Block))
     }
 
-    fn parse_prefix_unary_operation(&mut self, kind: SyntaxKind) -> Option<Finished> {
+    fn parse_prefix_unary_operation(&self, kind: SyntaxKind) -> Option<Finished> {
         // TODO: I can expect a SyntaxKind::{PrefixUnaryOp or PostFixUnaryOp}
         let prefix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let marker = self.start();
@@ -228,7 +230,7 @@ impl<'input> Parser<'input> {
     }
 
     fn parse_postfix_unary_operation(
-        &mut self,
+        &self,
         kind: SyntaxKind,
         min_precedence: &Bound,
         marker: &Marker<Complete>,
@@ -245,8 +247,9 @@ impl<'input> Parser<'input> {
         Some(self.complete_marker_with(marker, postfix_unary_op.into()))
     }
 
+    #[allow(unused_variables)] // for rollback anchor
     fn parse_binary_operation(
-        &mut self,
+        &self,
         syntax: Syntax,
         min_precedence: &Bound,
         marker: &Marker<Complete>,
@@ -260,10 +263,9 @@ impl<'input> Parser<'input> {
         let marker = self.precede_marker_with(marker);
         self.expect_and_bump(kind);
         let bounded_precedence = Bound::from_op(binary_op.clone());
-        let checkpoint = self.context.clone();
+        let rollback_when_dropped = self.roll_back_context_after_drop();
         self.impose_restrictions_of(syntax);
         self.parse_expression_until_binding_power(bounded_precedence);
-        self.context = checkpoint;
         Some(self.complete_marker_with(marker, binary_op.into()))
     }
 }
@@ -818,13 +820,14 @@ Root@0..4
     fn several_valid_comma_separated_parameter_declarations() {
         use SyntaxKind::*;
         let params = "me:human, lang: Language, pet: Cat)";
-        let mut parser = Parser::new(params);
+        let parser = Parser::new(params);
         let root = parser.start();
         parser.parse_comma_separated_typed_declarations_until(|syntax: Syntax| {
             !syntax.is_of_kind(RParen)
         });
         parser.complete_marker_with(root, Root);
-        let sink = Sink::new(parser.event_holder.into(), parser.lexer.source());
+        let lexer = parser.lexer.borrow();
+        let sink = Sink::new(parser.event_holder.take().into(), lexer.source());
         let cst = ConcreteSyntaxTree::from(sink);
 
         let expect = expect![[r#"
