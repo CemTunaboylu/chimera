@@ -42,23 +42,13 @@ impl<'input> Parser<'input> {
         self.context.borrow().disallow_recovery_of(LBrace);
         self.expect_and_bump(RParen);
 
-        match self.peek() {
-            Some(Ok(syntax)) => {
-                if matches!(syntax.get_kind(), RArrow) {
-                    self.expect_and_bump(RArrow);
-                    self.bump_with_marker(RetType);
-                }
-            }
-            Some(Err(err)) => {
-                self.recover_from_err(err);
-            }
-            _ => {
-                let rollback_when_dropped = self.roll_back_context_after_drop();
-                self.context.borrow().expect(Block);
-                self.recover_unmet_expectation();
-            }
+        if self.is_next(RArrow) {
+            let ret_type_marker = self.start();
+            self.expect_and_bump(RArrow);
+            self.expect_f_and_bump(ident_or_type);
+            self.complete_marker_with(ret_type_marker, RetType);
         }
-        self.clean_buffer();
+
         self.parse_block();
         Some(self.complete_marker_with(marker, SyntaxKind::FnDef))
     }

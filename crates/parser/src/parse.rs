@@ -237,7 +237,7 @@ impl<'input> Parser<'input> {
     }
 
     #[allow(unused_variables)]
-    fn parse_break_expr(&self) -> Option<Finished> {
+    fn parse_break(&self) -> Option<Finished> {
         let marker = self.start();
         self.expect_and_bump(KwBreak);
 
@@ -246,7 +246,7 @@ impl<'input> Parser<'input> {
 
         self.parse_expression_until_binding_power(starting_precedence());
 
-        let finished_as_expr = self.complete_marker_with(marker, BreakExpr);
+        let finished_as_expr = self.complete_marker_with(marker, Jump);
         if self.is_next(Semi) {
             let semi_marker = self.precede_marker_with(&finished_as_expr);
             self.expect_and_bump(Semi);
@@ -256,15 +256,39 @@ impl<'input> Parser<'input> {
         }
     }
 
+    #[allow(unused_variables)]
+    fn parse_return(&self) -> Option<Finished> {
+        let marker = self.start();
+        self.expect_and_bump(KwReturn);
+
+        let rollback_after_drop = self.roll_back_context_after_drop();
+        self.context.borrow().expect(Semi);
+
+        self.parse_expression_until_binding_power(starting_precedence());
+
+        let finished_as_expr = self.complete_marker_with(marker, Jump);
+        let semi_marker = self.precede_marker_with(&finished_as_expr);
+        self.expect_and_bump(Semi);
+        Some(self.complete_marker_with(semi_marker, Semi))
+    }
+    fn parse_continue(&self) -> Option<Finished> {
+        let marker = self.start();
+        self.expect_and_bump(KwContinue);
+        self.expect_and_bump(Semi);
+        Some(self.complete_marker_with(marker, Jump))
+    }
+
     pub fn parse_keyword_expression(&self, keyword: Syntax) -> Option<Finished> {
         match keyword.get_kind() {
-            KwBreak => self.parse_break_expr(),
+            KwBreak => self.parse_break(),
+            KwContinue => self.parse_continue(),
             // A variable definition is a statement, thus will be recovered
+            KwIf => self.parse_conditionals(),
             KwLet => {
                 self.recover();
                 None
             }
-            KwIf => self.parse_conditionals(),
+            KwReturn => self.parse_return(),
             nope => {
                 println!("{:?} is not implemented yet", nope);
                 todo!()
@@ -764,8 +788,8 @@ Root@0..4
                     Ident@3..8 "empty"
                     LParen@8..9 "("
                     RParen@9..10 ")"
-                    Whitespace@10..11 " "
-                    Block@11..13
+                    Block@10..13
+                      Whitespace@10..11 " "
                       LBrace@11..12 "{"
                       RBrace@12..13 "}""#]],
         ),
@@ -783,8 +807,8 @@ Root@0..4
                       Colon@15..16 ":"
                       TyI32@16..19 "i32"
                     RParen@19..20 ")"
-                    Whitespace@20..21 " "
-                    Block@21..23
+                    Block@20..23
+                      Whitespace@20..21 " "
                       LBrace@21..22 "{"
                       RBrace@22..23 "}""#]],
         ),
@@ -813,16 +837,16 @@ Root@0..4
                       Whitespace@37..38 " "
                       Ident@38..47 "Structure"
                     RParen@47..48 ")"
-                    Whitespace@48..49 " "
-                    Block@49..51
+                    Block@48..51
+                      Whitespace@48..49 " "
                       LBrace@49..50 "{"
                       RBrace@50..51 "}""#]],
         ),
 
-        function_def_with_multiple_parameters_with_actual_body: ("fn empty(first:i32, second:char) {let sum_1 = first + second; let sum_2 = second+first; first == check}",
+        function_def_with_multiple_parameters_with_actual_body: ("fn empty(first:i32, second:char) -> bool {let sum_1 = first + second; let sum_2 = second+first; first == check}",
             expect![[r#"
-                Root@0..102
-                  FnDef@0..102
+                Root@0..110
+                  FnDef@0..110
                     KwFn@0..2 "fn"
                     Whitespace@2..3 " "
                     Ident@3..8 "empty"
@@ -837,54 +861,101 @@ Root@0..4
                       Colon@25..26 ":"
                       TyChar@26..30 "char"
                     RParen@30..31 ")"
-                    Whitespace@31..32 " "
-                    Block@32..102
-                      LBrace@32..33 "{"
-                      VarDef@33..60
-                        KwLet@33..36 "let"
-                        Whitespace@36..37 " "
-                        InfixBinOp@37..59
-                          VarRef@37..42
-                            Ident@37..42 "sum_1"
-                          Whitespace@42..43 " "
-                          Eq@43..44 "="
-                          Whitespace@44..45 " "
-                          InfixBinOp@45..59
-                            VarRef@45..50
-                              Ident@45..50 "first"
-                            Whitespace@50..51 " "
-                            Plus@51..52 "+"
-                            Whitespace@52..53 " "
-                            VarRef@53..59
-                              Ident@53..59 "second"
-                        Semi@59..60 ";"
-                      Whitespace@60..61 " "
-                      VarDef@61..86
-                        KwLet@61..64 "let"
-                        Whitespace@64..65 " "
-                        InfixBinOp@65..85
-                          VarRef@65..70
-                            Ident@65..70 "sum_2"
-                          Whitespace@70..71 " "
-                          Eq@71..72 "="
-                          Whitespace@72..73 " "
-                          InfixBinOp@73..85
-                            VarRef@73..79
-                              Ident@73..79 "second"
-                            Plus@79..80 "+"
-                            VarRef@80..85
-                              Ident@80..85 "first"
-                        Semi@85..86 ";"
-                      Whitespace@86..87 " "
-                      InfixBinOp@87..101
-                        VarRef@87..92
-                          Ident@87..92 "first"
-                        Whitespace@92..93 " "
-                        EqEq@93..95 "=="
-                        Whitespace@95..96 " "
-                        VarRef@96..101
-                          Ident@96..101 "check"
-                      RBrace@101..102 "}""#]],
+                    RetType@31..39
+                      Whitespace@31..32 " "
+                      RArrow@32..34 "->"
+                      Whitespace@34..35 " "
+                      TyBool@35..39 "bool"
+                    Block@39..110
+                      Whitespace@39..40 " "
+                      LBrace@40..41 "{"
+                      VarDef@41..68
+                        KwLet@41..44 "let"
+                        Whitespace@44..45 " "
+                        InfixBinOp@45..67
+                          VarRef@45..50
+                            Ident@45..50 "sum_1"
+                          Whitespace@50..51 " "
+                          Eq@51..52 "="
+                          Whitespace@52..53 " "
+                          InfixBinOp@53..67
+                            VarRef@53..58
+                              Ident@53..58 "first"
+                            Whitespace@58..59 " "
+                            Plus@59..60 "+"
+                            Whitespace@60..61 " "
+                            VarRef@61..67
+                              Ident@61..67 "second"
+                        Semi@67..68 ";"
+                      Whitespace@68..69 " "
+                      VarDef@69..94
+                        KwLet@69..72 "let"
+                        Whitespace@72..73 " "
+                        InfixBinOp@73..93
+                          VarRef@73..78
+                            Ident@73..78 "sum_2"
+                          Whitespace@78..79 " "
+                          Eq@79..80 "="
+                          Whitespace@80..81 " "
+                          InfixBinOp@81..93
+                            VarRef@81..87
+                              Ident@81..87 "second"
+                            Plus@87..88 "+"
+                            VarRef@88..93
+                              Ident@88..93 "first"
+                        Semi@93..94 ";"
+                      Whitespace@94..95 " "
+                      InfixBinOp@95..109
+                        VarRef@95..100
+                          Ident@95..100 "first"
+                        Whitespace@100..101 " "
+                        EqEq@101..103 "=="
+                        Whitespace@103..104 " "
+                        VarRef@104..109
+                          Ident@104..109 "check"
+                      RBrace@109..110 "}""#]],
+        ),
+
+        function_def_with_return: ("fn sum(a:i32, b:i32) -> i32 { return a+b; }",
+            expect![[r#"
+                Root@0..42
+                  FnDef@0..42
+                    KwFn@0..2 "fn"
+                    Whitespace@2..3 " "
+                    Ident@3..6 "sum"
+                    LParen@6..7 "("
+                    ParamDecl@7..12
+                      Ident@7..8 "a"
+                      Colon@8..9 ":"
+                      TyI32@9..12 "i32"
+                    Whitespace@12..13 " "
+                    ParamDecl@13..18
+                      Ident@13..14 "b"
+                      Colon@14..15 ":"
+                      TyI32@15..18 "i32"
+                    RParen@18..19 ")"
+                    RetType@19..26
+                      Whitespace@19..20 " "
+                      RArrow@20..22 "->"
+                      Whitespace@22..23 " "
+                      TyI32@23..26 "i32"
+                    Block@26..42
+                      Whitespace@26..27 " "
+                      LBrace@27..28 "{"
+                      Whitespace@28..29 " "
+                      Semi@29..40
+                        Jump@29..39
+                          KwReturn@29..35 "return"
+                          Whitespace@35..36 " "
+                          InfixBinOp@36..39
+                            VarRef@36..37
+                              Ident@36..37 "a"
+                            Plus@37..38 "+"
+                            VarRef@38..39
+                              Ident@38..39 "b"
+                        Semi@39..40 ";"
+                      Whitespace@40..41 " "
+                      RBrace@41..42 "}""#]],
         ),
 
         function_call_with_single_parameter: ("empty(single)",
@@ -1131,7 +1202,7 @@ Root@0..4
                       LBrace@11..12 "{"
                       Whitespace@12..13 " "
                       Semi@13..19
-                        BreakExpr@13..18
+                        Jump@13..18
                           KwBreak@13..18 "break"
                         Semi@18..19 ";"
                       Whitespace@19..20 " "
@@ -1161,12 +1232,34 @@ Root@0..4
                       LBrace@20..21 "{"
                       Whitespace@21..22 " "
                       Semi@22..28
-                        BreakExpr@22..27
+                        Jump@22..27
                           KwBreak@22..27 "break"
                         Semi@27..28 ";"
                       Whitespace@28..29 " "
                       RBrace@29..30 "}""#]],
         ),
+
+
+        while_loop_with_continue: ("while true { continue; }",
+            expect![[r#"
+                Root@0..24
+                  WhileLoop@0..24
+                    KwWhile@0..5 "while"
+                    Whitespace@5..6 " "
+                    Condition@6..10
+                      KwTrue@6..10 "true"
+                    Block@10..24
+                      Whitespace@10..11 " "
+                      LBrace@11..12 "{"
+                      Whitespace@12..13 " "
+                      Jump@13..22
+                        KwContinue@13..21 "continue"
+                        Semi@21..22 ";"
+                      Whitespace@22..23 " "
+                      RBrace@23..24 "}""#]],
+        ),
+
+
 
         while_loop_to_be_recovered: ("while { break; }",
             expect![[r#"
@@ -1179,7 +1272,7 @@ Root@0..4
                       LBrace@6..7 "{"
                       Whitespace@7..8 " "
                       Semi@8..14
-                        BreakExpr@8..13
+                        Jump@8..13
                           KwBreak@8..13 "break"
                         Semi@13..14 ";"
                       Whitespace@14..15 " "
@@ -1200,7 +1293,7 @@ Root@0..4
                       LBrace@9..10 "{"
                       Whitespace@10..11 " "
                       Semi@11..17
-                        BreakExpr@11..16
+                        Jump@11..16
                           KwBreak@11..16 "break"
                         Semi@16..17 ";"
                       Whitespace@17..18 " "
@@ -1231,7 +1324,7 @@ Root@0..4
                       LBrace@19..20 "{"
                       Whitespace@20..21 " "
                       Semi@21..27
-                        BreakExpr@21..26
+                        Jump@21..26
                           KwBreak@21..26 "break"
                         Semi@26..27 ";"
                       Whitespace@27..28 " "
