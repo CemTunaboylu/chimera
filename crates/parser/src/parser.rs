@@ -12,7 +12,7 @@ use syntax::{
 };
 
 use miette::Result as MietteResult;
-use thin_vec::{ThinVec, thin_vec};
+use thin_vec::ThinVec;
 
 #[derive(Debug)]
 pub struct Parser<'input> {
@@ -30,6 +30,7 @@ impl<'input> Parser<'input> {
         // let is by default in recovery set, i.e. it won't be bumped in a recovery case
         let context = ParserContext::new();
         context.disallow_recovery_of([KwLet].as_ref());
+        context.forbid_only([RParen, RBrace, RBrack].as_ref());
 
         Self {
             lexer: RefCell::new(Lexer::new(program)),
@@ -37,6 +38,69 @@ impl<'input> Parser<'input> {
             context: RefCell::new(context),
             buffer: RefCell::new(None),
         }
+    }
+
+    pub fn start(&self) -> Marker {
+        let checkpoint = self.event_holder.borrow_mut().push_marker_event();
+        Marker::new(checkpoint)
+    }
+
+    pub fn complete_marker_with(
+        &self,
+        marker: Marker<Incomplete>,
+        kind: SyntaxKind,
+    ) -> Marker<Complete> {
+        let completed = marker.complete();
+        self.event_holder
+            .borrow_mut()
+            .update_corresponding_marker_event(completed.get_checkpoint(), kind);
+        completed
+    }
+    pub fn precede_marker_with(&self, marker: &Marker<Complete>) -> Marker<Incomplete> {
+        let new = self.start();
+        let forward_parent_index = marker.forward_parent_index_from(&new);
+        self.event_holder
+            .borrow_mut()
+            .add_forward_parent_marker_event(marker.get_checkpoint(), forward_parent_index);
+        new
+    }
+
+    pub fn push_event(&self, event: Event) {
+        self.event_holder.borrow_mut().push(event);
+    }
+
+    pub fn clean_buffer(&self) {
+        self.buffer.take().iter().for_each(|syntax| {
+            self.push_event(Event::AddSyntax {
+                syntax: syntax.clone(),
+            });
+        });
+    }
+
+    pub fn roll_back_context_after_drop(&self) -> RollingBackAnchor {
+        let ctx = self.context.as_ptr();
+        let anchor = ParserContext::rolling_back_anchor(ctx);
+        anchor
+    }
+
+    pub fn impose_restrictions_of(&self, syntax: Syntax) {
+        let context_updates = syntax.imposed_restrictions();
+        let matching_bitsets = {
+            let ctx = self.context.borrow();
+            let e = ctx.get_expectations();
+            let rc = ctx.get_recovery_set();
+            let a = ctx.get_allowed();
+
+            [e, rc, a]
+        };
+
+        let applied: ThinVec<SyntaxKindBitSet> = matching_bitsets
+            .into_iter()
+            .zip(context_updates.iter())
+            .map(|(bs, rtype)| rtype.apply(bs))
+            .collect();
+
+        self.context.borrow().take(applied.as_ref().into());
     }
 
     pub fn peek(&self) -> Option<MietteResult<Syntax>> {
@@ -55,14 +119,6 @@ impl<'input> Parser<'input> {
         Some(peeked)
     }
 
-    pub fn clean_buffer(&self) {
-        self.buffer.take().iter().for_each(|syntax| {
-            self.event_holder.borrow_mut().push(Event::AddSyntax {
-                syntax: syntax.clone(),
-            });
-        });
-    }
-
     fn raw_peek(&self) -> Option<MietteResult<Syntax>> {
         let result = match self.lexer.borrow_mut().peek()? {
             Ok(token) => Ok(token.clone().into()),
@@ -74,6 +130,7 @@ impl<'input> Parser<'input> {
     pub fn is_at_the_end(&self) -> bool {
         self.lexer.borrow_mut().peek().is_none()
     }
+
     pub fn is_next(&self, expected_kind: SyntaxKind) -> bool {
         let result = if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;
@@ -118,26 +175,6 @@ impl<'input> Parser<'input> {
         self.recover();
     }
 
-    pub fn complete_marker_with(
-        &self,
-        marker: Marker<Incomplete>,
-        kind: SyntaxKind,
-    ) -> Marker<Complete> {
-        let completed = marker.complete();
-        self.event_holder
-            .borrow_mut()
-            .update_corresponding_marker_event(completed.get_checkpoint(), kind);
-        completed
-    }
-    pub fn precede_marker_with(&self, marker: &Marker<Complete>) -> Marker<Incomplete> {
-        let new = self.start();
-        let forward_parent_index = marker.forward_parent_index_from(&new);
-        self.event_holder
-            .borrow_mut()
-            .add_forward_parent_marker_event(marker.get_checkpoint(), forward_parent_index);
-        new
-    }
-
     // expect_and_bump_with_marker injects the syntax kind to expectations before acting
     pub fn expect_and_bump_with_marker(
         &self,
@@ -160,45 +197,12 @@ impl<'input> Parser<'input> {
         finished
     }
 
-    pub fn roll_back_context_after_drop(&self) -> RollingBackAnchor {
-        let ctx = self.context.as_ptr();
-        let anchor = ParserContext::rolling_back_anchor(ctx);
-        anchor
-    }
-
-    pub fn impose_restrictions_of(&self, syntax: Syntax) {
-        let context_updates = syntax.imposed_restrictions();
-        let matching_bitsets = {
-            let ctx = self.context.borrow();
-            let e = ctx.get_expectations();
-            let rc = ctx.get_recovery_set();
-            let a = ctx.get_allowed();
-
-            [e, rc, a]
-        };
-
-        let applied: ThinVec<SyntaxKindBitSet> = matching_bitsets
-            .into_iter()
-            .zip(context_updates.iter())
-            .map(|(bs, rtype)| rtype.apply(bs))
-            .collect();
-
-        self.context.borrow().take(applied.as_ref().into());
-    }
-
-    pub fn start(&self) -> Marker {
-        let checkpoint = self.event_holder.borrow_mut().push_marker_event();
-        Marker::new(checkpoint)
-    }
-
     pub fn bump_no_buffer_action(&self) -> Option<()> {
         if let Ok(token) = self.lexer.borrow_mut().next()? {
             let syntax: Syntax = token.into();
             let kind = syntax.get_kind();
             self.context.borrow().del_expectation(kind);
-            self.event_holder
-                .borrow_mut()
-                .push(Event::AddSyntax { syntax: syntax });
+            self.push_event(Event::AddSyntax { syntax: syntax });
         }
         Some(())
     }
@@ -209,16 +213,14 @@ impl<'input> Parser<'input> {
             let syntax: Syntax = token.into();
             let kind = syntax.get_kind();
             self.context.borrow().del_expectation(kind);
-            self.event_holder
-                .borrow_mut()
-                .push(Event::AddSyntax { syntax: syntax });
+            self.push_event(Event::AddSyntax { syntax: syntax });
         }
         Some(())
     }
 
     pub fn ignore_if(&self, kind: SyntaxKind) {
         if self.is_next(kind) {
-            self.lexer.borrow_mut().next();
+            self.ignore();
         }
     }
 
