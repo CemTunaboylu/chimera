@@ -464,25 +464,23 @@ mod tests {
             ]]),
 
         binary_dot_member: ("structure.member",
-            expect![[
-r#"Root@0..16
-  InfixBinOp@0..16
-    VarRef@0..9
-      Ident@0..9 "structure"
-    Dot@9..10 "."
-    VarRef@10..16
-      Ident@10..16 "member""#
-            ]]),
+            expect![[r#"
+                Root@0..16
+                  InfixBinOp@0..16
+                    VarRef@0..9
+                      Ident@0..9 "structure"
+                    Dot@9..10 "."
+                    VarRef@10..16
+                      Ident@10..16 "member""#]]),
         binary_dot_member_with_semicolon: ("structure.member;",
-            expect![[
-r#"Root@0..16
-  InfixBinOp@0..16
-    VarRef@0..9
-      Ident@0..9 "structure"
-    Dot@9..10 "."
-    VarRef@10..16
-      Ident@10..16 "member""#
-            ]]),
+            expect![[r#"
+                Root@0..16
+                  InfixBinOp@0..16
+                    VarRef@0..9
+                      Ident@0..9 "structure"
+                    Dot@9..10 "."
+                    VarRef@10..16
+                      Ident@10..16 "member""#]]),
 
         binary_dot_member_precedence: ("human.weight + 1 / 100",
             expect![[r#"
@@ -554,63 +552,53 @@ r#"Root@0..16
         ),
 
         prefix_not_var_ref: ("!a",
-            expect![[
-r#"
-Root@0..2
-  PrefixUnaryOp@0..2
-    Excl@0..1 "!"
-    VarRef@1..2
-      Ident@1..2 "a""#
-            ]]
+            expect![[r#"
+                Root@0..2
+                  PrefixUnaryOp@0..2
+                    Excl@0..1 "!"
+                    VarRef@1..2
+                      Ident@1..2 "a""#]]
         ),
 
         prefix_not_var_ref_with_semicolon: ("!a;",
-            expect![[
-r#"
-Root@0..2
-  PrefixUnaryOp@0..2
-    Excl@0..1 "!"
-    VarRef@1..2
-      Ident@1..2 "a""#
-            ]]
+            expect![[r#"
+                Root@0..2
+                  PrefixUnaryOp@0..2
+                    Excl@0..1 "!"
+                    VarRef@1..2
+                      Ident@1..2 "a""#]]
         ),
         postfix_excl_prefix_neg_precedence: ("-9?",
-            expect![[
-r#"
-Root@0..3
-  PrefixUnaryOp@0..3
-    Minus@0..1 "-"
-    PostFixUnaryOp@1..3
-      Literal@1..2
-        Int@1..2 "9"
-      QMark@2..3 "?""#
-            ]]
+            expect![[r#"
+                Root@0..3
+                  PrefixUnaryOp@0..3
+                    Minus@0..1 "-"
+                    PostFixUnaryOp@1..3
+                      Literal@1..2
+                        Int@1..2 "9"
+                      QMark@2..3 "?""#]]
         ),
         postfix_excl_prefix_neg_precedence_with_semicolon: ("-9?;",
-            expect![[
-r#"
-Root@0..3
-  PrefixUnaryOp@0..3
-    Minus@0..1 "-"
-    PostFixUnaryOp@1..3
-      Literal@1..2
-        Int@1..2 "9"
-      QMark@2..3 "?""#
-            ]]
+            expect![[r#"
+                Root@0..3
+                  PrefixUnaryOp@0..3
+                    Minus@0..1 "-"
+                    PostFixUnaryOp@1..3
+                      Literal@1..2
+                        Int@1..2 "9"
+                      QMark@2..3 "?""#]]
         ),
         postfix_excl_infix_mul_precedence: ("1*9?",
-            expect![[
-r#"
-Root@0..4
-  InfixBinOp@0..4
-    Literal@0..1
-      Int@0..1 "1"
-    Star@1..2 "*"
-    PostFixUnaryOp@2..4
-      Literal@2..3
-        Int@2..3 "9"
-      QMark@3..4 "?""#
-            ]]
+            expect![[r#"
+                Root@0..4
+                  InfixBinOp@0..4
+                    Literal@0..1
+                      Int@0..1 "1"
+                    Star@1..2 "*"
+                    PostFixUnaryOp@2..4
+                      Literal@2..3
+                        Int@2..3 "9"
+                      QMark@3..4 "?""#]]
         ),
         prefix_minus_sum_precedence: ("-3+14",
             expect![[
