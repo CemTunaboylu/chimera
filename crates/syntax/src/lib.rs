@@ -1,3 +1,4 @@
+pub mod anchor;
 pub mod bitset;
 pub mod context;
 pub mod language;
