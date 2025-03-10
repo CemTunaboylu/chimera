@@ -5,7 +5,7 @@ use thin_vec::ThinVec;
 use crate::{
     cst::ConcreteSyntaxTree,
     marker::{Complete, Incomplete, Marker},
-    operator::{AssocBinOp, AssocUnOp, Bound, Op, starting_precedence},
+    operator::{AssocBinOp, AssocUnOp, Bound, Op, is_an_operator, starting_precedence},
     parser::Parser,
     sink::Sink,
 };
@@ -73,6 +73,18 @@ impl<'input> Parser<'input> {
         Some(())
     }
 
+    pub fn parse_condition(&self) -> Option<Finished> {
+        let marker = if self.is_next_f(|syntax| matches!(syntax.get_kind(), KwFalse | KwTrue)) {
+            self.clean_buffer();
+            self.bump_with_marker(Condition)
+        } else {
+            let cond_marker = self.start();
+            self.parse_expression_until_binding_power(starting_precedence());
+            self.complete_marker_with(cond_marker, Condition)
+        };
+        Some(marker)
+    }
+
     fn parse_statement(&self) -> Option<Finished> {
         let mut syntax = self.peek()?;
         while let Err(err) = syntax {
@@ -85,6 +97,7 @@ impl<'input> Parser<'input> {
             Ok(syntax) if syntax.is_of_kind(KwFn) => self.parse_function_def(),
             Ok(syntax) if syntax.is_of_kind(KwFor) => self.parse_for_loop(),
             Ok(syntax) if syntax.is_of_kind(KwWhile) => self.parse_while_loop(),
+            Ok(syntax) if syntax.is_of_kind(KwIf) => self.parse_conditionals(),
             // An expression produces a result (result of evalution), but if there is a ; at the end,
             // it becomes a statemet, thus check that here and wrap it with Semi
             _ => self.parse_expression_until_binding_power(starting_precedence()),
@@ -137,6 +150,9 @@ impl<'input> Parser<'input> {
                         self.ignore();
                         break;
                     }
+                    if !is_an_operator(&kind) {
+                        break;
+                    }
 
                     if kind.is_posfix_unary_operator() {
                         if let Some(marker) =
@@ -154,9 +170,10 @@ impl<'input> Parser<'input> {
                             continue;
                         }
                     }
+                    break;
                 }
             }
-            break;
+            // break;
         }
         Some(lhs_marker)
     }
@@ -179,11 +196,7 @@ impl<'input> Parser<'input> {
             Minus | Excl => self.parse_prefix_unary_operation(kind),
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
-            operator
-                if operator.is_binary_operator()
-                    || operator.is_posfix_unary_operator()
-                    || operator.is_prefix_unary_operator() =>
-            {
+            operator if is_an_operator(&operator) => {
                 if !self.context.borrow().is_expected(operator) {
                     self.recover_unmet_expectation();
                 } else if !self.context.borrow().is_allowed(operator) {
@@ -251,7 +264,11 @@ impl<'input> Parser<'input> {
                 self.recover();
                 None
             }
-            _ => todo!(),
+            KwIf => self.parse_conditionals(),
+            nope => {
+                println!("{:?} is not implemented yet", nope);
+                todo!()
+            }
         }
     }
 
@@ -297,12 +314,14 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(LBrace);
 
         // TODO: put in a function impose_block_restrictions or inject_block_context
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.allow(RBrace);
-        ctx.disallow_recovery_of(RBrace);
+        {
+            let rollback_when_dropped = self.roll_back_context_after_drop();
+            let ctx = self.context.borrow();
+            ctx.forbid(RBrace);
+            ctx.disallow_recovery_of(RBrace);
+            while !self.is_next(RBrace) && self.parse_statement().is_some() {}
+        }
 
-        while self.parse_statement().is_some() {}
         self.expect_and_bump(RBrace);
         Some(self.complete_marker_with(marker, Block))
     }
@@ -1066,7 +1085,7 @@ Root@0..4
                 Root@0..46
                   WhileLoop@0..46
                     KwWhile@0..5 "while"
-                    WhileLoopCond@5..24
+                    Condition@5..24
                       Whitespace@5..6 " "
                       PrefixUnaryOp@6..24
                         Excl@6..7 "!"
@@ -1104,12 +1123,11 @@ Root@0..4
                 Root@0..21
                   WhileLoop@0..21
                     KwWhile@0..5 "while"
-                    WhileLoopCond@5..11
-                      Whitespace@5..6 " "
-                      Literal@6..10
-                        KwTrue@6..10 "true"
+                    Whitespace@5..6 " "
+                    Condition@6..10
+                      KwTrue@6..10 "true"
+                    Block@10..21
                       Whitespace@10..11 " "
-                    Block@11..21
                       LBrace@11..12 "{"
                       Whitespace@12..13 " "
                       Semi@13..19
@@ -1120,12 +1138,42 @@ Root@0..4
                       RBrace@20..21 "}""#]],
         ),
 
+        while_loop_with_complex_cond_and_break: ("while human.age < 18{ break; }",
+            expect![[r#"
+                Root@0..30
+                  WhileLoop@0..30
+                    KwWhile@0..5 "while"
+                    Condition@5..20
+                      Whitespace@5..6 " "
+                      InfixBinOp@6..20
+                        InfixBinOp@6..16
+                          VarRef@6..11
+                            Ident@6..11 "human"
+                          Dot@11..12 "."
+                          VarRef@12..15
+                            Ident@12..15 "age"
+                          Whitespace@15..16 " "
+                        Lt@16..17 "<"
+                        Whitespace@17..18 " "
+                        Literal@18..20
+                          Int@18..20 "18"
+                    Block@20..30
+                      LBrace@20..21 "{"
+                      Whitespace@21..22 " "
+                      Semi@22..28
+                        BreakExpr@22..27
+                          KwBreak@22..27 "break"
+                        Semi@27..28 ";"
+                      Whitespace@28..29 " "
+                      RBrace@29..30 "}""#]],
+        ),
+
         while_loop_to_be_recovered: ("while { break; }",
             expect![[r#"
                 Root@0..16
                   WhileLoop@0..16
                     KwWhile@0..5 "while"
-                    WhileLoopCond@5..6
+                    Condition@5..6
                       Whitespace@5..6 " "
                     Block@6..16
                       LBrace@6..7 "{"
@@ -1136,6 +1184,163 @@ Root@0..4
                         Semi@13..14 ";"
                       Whitespace@14..15 " "
                       RBrace@15..16 "}""#]],
+        ),
+
+        conditionals_only_if_non_semi: ("if is_ok { break; }",
+            expect![[r#"
+                Root@0..19
+                  ControlFlow@0..19
+                    KwIf@0..2 "if"
+                    Condition@2..9
+                      Whitespace@2..3 " "
+                      VarRef@3..8
+                        Ident@3..8 "is_ok"
+                      Whitespace@8..9 " "
+                    Block@9..19
+                      LBrace@9..10 "{"
+                      Whitespace@10..11 " "
+                      Semi@11..17
+                        BreakExpr@11..16
+                          KwBreak@11..16 "break"
+                        Semi@16..17 ";"
+                      Whitespace@17..18 " "
+                      RBrace@18..19 "}""#]],
+        ),
+
+        conditionals_only_if_non_semi_complex_cond: ("if human.age >= 18 { break; }",
+            expect![[r#"
+                Root@0..29
+                  ControlFlow@0..29
+                    KwIf@0..2 "if"
+                    Condition@2..19
+                      Whitespace@2..3 " "
+                      InfixBinOp@3..19
+                        InfixBinOp@3..13
+                          VarRef@3..8
+                            Ident@3..8 "human"
+                          Dot@8..9 "."
+                          VarRef@9..12
+                            Ident@9..12 "age"
+                          Whitespace@12..13 " "
+                        Ge@13..15 ">="
+                        Whitespace@15..16 " "
+                        Literal@16..18
+                          Int@16..18 "18"
+                        Whitespace@18..19 " "
+                    Block@19..29
+                      LBrace@19..20 "{"
+                      Whitespace@20..21 " "
+                      Semi@21..27
+                        BreakExpr@21..26
+                          KwBreak@21..26 "break"
+                        Semi@26..27 ";"
+                      Whitespace@27..28 " "
+                      RBrace@28..29 "}""#]],
+        ),
+
+        conditionals_if_else_semi: ("let can_pass = if human.age >= 18 { true } else { false };",
+            expect![[r#"
+                Root@0..58
+                  VarDef@0..58
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..57
+                      VarRef@4..12
+                        Ident@4..12 "can_pass"
+                      Whitespace@12..13 " "
+                      Eq@13..14 "="
+                      Whitespace@14..15 " "
+                      ControlFlow@15..57
+                        KwIf@15..17 "if"
+                        Condition@17..34
+                          Whitespace@17..18 " "
+                          InfixBinOp@18..34
+                            InfixBinOp@18..28
+                              VarRef@18..23
+                                Ident@18..23 "human"
+                              Dot@23..24 "."
+                              VarRef@24..27
+                                Ident@24..27 "age"
+                              Whitespace@27..28 " "
+                            Ge@28..30 ">="
+                            Whitespace@30..31 " "
+                            Literal@31..33
+                              Int@31..33 "18"
+                            Whitespace@33..34 " "
+                        Block@34..42
+                          LBrace@34..35 "{"
+                          Whitespace@35..36 " "
+                          Literal@36..40
+                            KwTrue@36..40 "true"
+                          Whitespace@40..41 " "
+                          RBrace@41..42 "}"
+                        Whitespace@42..43 " "
+                        KwElse@43..47 "else"
+                        Block@47..57
+                          Whitespace@47..48 " "
+                          LBrace@48..49 "{"
+                          Whitespace@49..50 " "
+                          Literal@50..55
+                            KwFalse@50..55 "false"
+                          Whitespace@55..56 " "
+                          RBrace@56..57 "}"
+                    Semi@57..58 ";""#]],
+        ),
+        conditionals_if_elif_else_semi: ("if color == RED { stop(); } elif color==YELLOW {prepare_to_stop(); } else { pass()}",
+            expect![[r#"
+                Root@0..81
+                  ControlFlow@0..81
+                    KwIf@0..2 "if"
+                    Condition@2..16
+                      Whitespace@2..3 " "
+                      InfixBinOp@3..16
+                        VarRef@3..8
+                          Ident@3..8 "color"
+                        Whitespace@8..9 " "
+                        EqEq@9..11 "=="
+                        Whitespace@11..12 " "
+                        VarRef@12..15
+                          Ident@12..15 "RED"
+                        Whitespace@15..16 " "
+                    Block@16..26
+                      LBrace@16..17 "{"
+                      Whitespace@17..18 " "
+                      FnCall@18..24
+                        Ident@18..22 "stop"
+                        LParen@22..23 "("
+                        RParen@23..24 ")"
+                      Whitespace@24..25 " "
+                      RBrace@25..26 "}"
+                    Whitespace@26..27 " "
+                    KwElif@27..31 "elif"
+                    Condition@31..46
+                      Whitespace@31..32 " "
+                      InfixBinOp@32..46
+                        VarRef@32..37
+                          Ident@32..37 "color"
+                        EqEq@37..39 "=="
+                        VarRef@39..45
+                          Ident@39..45 "YELLOW"
+                        Whitespace@45..46 " "
+                    Block@46..66
+                      LBrace@46..47 "{"
+                      FnCall@47..64
+                        Ident@47..62 "prepare_to_stop"
+                        LParen@62..63 "("
+                        RParen@63..64 ")"
+                      Whitespace@64..65 " "
+                      RBrace@65..66 "}"
+                    Whitespace@66..67 " "
+                    KwElse@67..71 "else"
+                    Block@71..81
+                      Whitespace@71..72 " "
+                      LBrace@72..73 "{"
+                      Whitespace@73..74 " "
+                      FnCall@74..80
+                        Ident@74..78 "pass"
+                        LParen@78..79 "("
+                        RParen@79..80 ")"
+                      RBrace@80..81 "}""#]],
         ),
     }
 

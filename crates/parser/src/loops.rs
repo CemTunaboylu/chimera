@@ -4,7 +4,7 @@ use crate::{
     parser::Parser,
 };
 
-use syntax::{Syntax, syntax_kind::SyntaxKind::*};
+use syntax::{Syntax, anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
 
 use thin_vec::thin_vec;
 
@@ -16,25 +16,26 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(KwWhile);
 
         {
-            let condition_marker = self.start();
-            let rollback_when_dropped = self.roll_back_context_after_drop();
-            let ctx = self.context.borrow();
-            ctx.allow([KwTrue, KwFalse, LParen].as_ref());
-            ctx.forbid(LBrace);
-            ctx.disallow_recovery_of([LBrace].as_ref());
-            if self
-                .parse_expression_until_binding_power(starting_precedence())
-                .is_none()
-            {
+            let rollback_when_dropped = self.impose_condition_parsing_restrictions_for_while();
+            if self.parse_condition().is_none() {
                 self.recover_with_msg("while loop expects a condition", "");
             }
-            self.complete_marker_with(condition_marker, WhileLoopCond);
         }
         // TODO: does this block return anything?
         self.parse_block();
 
         Some(self.complete_marker_with(marker, WhileLoop))
     }
+
+    fn impose_condition_parsing_restrictions_for_while(&self) -> RollingBackAnchor {
+        let rollback_when_dropped = self.roll_back_context_after_drop();
+        let ctx = self.context.borrow();
+        ctx.allow([KwTrue, KwFalse, LParen].as_ref());
+        ctx.forbid(LBrace);
+        ctx.disallow_recovery_of([LBrace].as_ref());
+        rollback_when_dropped
+    }
+
     #[allow(unused_variables)]
     pub fn parse_for_loop(&self) -> Option<Finished> {
         let marker = self.start();

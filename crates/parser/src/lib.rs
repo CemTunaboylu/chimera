@@ -1,3 +1,4 @@
+pub mod conditionals;
 pub mod containers;
 pub mod cst;
 pub mod errors;
@@ -17,7 +18,7 @@ mod sink;
 
 #[cfg(test)]
 mod tests {
-    use miette::{Context, IntoDiagnostic, Report, Result as MietteResult};
+    use miette::{Context, IntoDiagnostic, Result as MietteResult};
     use std::{
         fs::{read_dir, read_to_string},
         path::PathBuf,
