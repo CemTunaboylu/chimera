@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
 use lexer::token_type::TokenType;
-use num_traits::{FromPrimitive, ToPrimitive};
 use syntax::{Syntax, syntax_kind::SyntaxKind};
 
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -77,7 +76,7 @@ pub enum Precedence {
     // unary operators : *(deref), &(ref), -, !(not)
     Prefix,
     // coupling operators that couple its operands:
-    // .(member) , :(typing), ::(namespace), !
+    // .(member) , :(typing), ::(namespace), ?
     Coupling,
 }
 
