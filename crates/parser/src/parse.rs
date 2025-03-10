@@ -1,5 +1,6 @@
 use lexer::token_type::TokenType;
 use syntax::{Syntax, syntax_kind::SyntaxKind};
+use thin_vec::ThinVec;
 
 use crate::{
     cst::ConcreteSyntaxTree,
@@ -13,6 +14,14 @@ pub type Started = Marker<Incomplete>;
 
 use SyntaxKind::*;
 
+pub type CustomExpectationOnSyntax = fn(Syntax) -> bool;
+
+pub enum SeparatedElement {
+    Kind(SyntaxKind),
+    Fn(CustomExpectationOnSyntax),
+    ParseExprWith(Bound),
+}
+
 impl<'input> Parser<'input> {
     pub fn parse(self) -> ConcreteSyntaxTree {
         let root = self.start();
@@ -25,15 +34,59 @@ impl<'input> Parser<'input> {
         let sink = Sink::new(self.event_holder.into_inner().into(), lexer.source());
         ConcreteSyntaxTree::from(sink)
     }
+
+    /*
+       Given expectation to bump and functions to apply,
+           elements_in_order: [ Kind(Ident), Kind(Colon), Fn(ident_or_type) ]
+        TODO: can take a bitset
+    */
+    pub fn parse_separated_by(
+        &self,
+        elements_in_order: ThinVec<SeparatedElement>,
+        wrapping_kind_to_complete: SyntaxKind,
+        separator: SyntaxKind,
+        until: fn(Syntax) -> bool,
+    ) -> Option<()> {
+        use SeparatedElement::*;
+        while until(self.peek()?.ok()?) {
+            self.clean_buffer();
+            let marker = self.start();
+
+            for element in elements_in_order.iter() {
+                match element {
+                    Kind(exp_kind) => {
+                        self.expect_and_bump(exp_kind.clone());
+                    }
+                    Fn(custom_exp_func) => {
+                        self.expect_f_and_bump(*custom_exp_func);
+                    }
+                    ParseExprWith(bound) => {
+                        self.parse_expression_until_binding_power(bound.clone());
+                    }
+                }
+            }
+
+            self.ignore_if(separator);
+            self.complete_marker_with(marker, wrapping_kind_to_complete);
+            self.clean_buffer();
+        }
+        Some(())
+    }
+
     fn parse_statement(&self) -> Option<Finished> {
         let mut syntax = self.peek()?;
         while let Err(err) = syntax {
             self.recover_from_err(err);
             syntax = self.peek()?;
         }
+        // TODO: deal with semi: loops can return if not ; delimited
         let marker = match self.peek()? {
             Ok(syntax) if syntax.is_of_kind(KwLet) => self.parse_variable_def(),
             Ok(syntax) if syntax.is_of_kind(KwFn) => self.parse_function_def(),
+            Ok(syntax) if syntax.is_of_kind(KwFor) => self.parse_for_loop(),
+            Ok(syntax) if syntax.is_of_kind(KwWhile) => self.parse_while_loop(),
+            // An expression produces a result (result of evalution), but if there is a ; at the end,
+            // it becomes a statemet, thus check that here and wrap it with Semi
             _ => self.parse_expression_until_binding_power(starting_precedence()),
         };
         if self.is_next(Semi) {
@@ -43,7 +96,8 @@ impl<'input> Parser<'input> {
                 self.ignore();
                 // Some(semi.complete(&mut self.event_holder, Semi))
             } else {
-                self.recover();
+                self.ignore();
+                // self.recover();
             }
         }
         marker
@@ -53,7 +107,7 @@ impl<'input> Parser<'input> {
         self.clean_buffer();
         let marker = self.start();
         self.expect_and_bump(KwLet);
-        self.context.borrow().expect(Ident);
+        self.context.borrow().expect([Ident, Semi].as_ref());
         if self
             .parse_expression_until_binding_power(starting_precedence())
             .is_none()
@@ -61,18 +115,12 @@ impl<'input> Parser<'input> {
             let got = self.peek();
             self.recover_with_msg("expected a valid assignment", got);
         }
-        // if self.context.get_expectations().has_any() {
-        //     self.recover_unmet_expectation();
-        //     self.context.del_expectation(Ident);
-        // }
+        self.expect_and_bump(Semi);
         Some(self.complete_marker_with(marker, VarDef))
     }
 
     pub fn parse_expression_until_binding_power(&self, min_precedence: Bound) -> Option<Finished> {
         let mut lhs_marker = self.parse_left_hand_side()?;
-        // let checkpoint = self.context.clone();
-        // TODO: implement a type constraint as well
-        // self.context.forbid(&[]);
         while let Some(peeked) = self.peek() {
             match peeked {
                 // note: recovery is handled within specialized parse methods
@@ -80,15 +128,14 @@ impl<'input> Parser<'input> {
                 Err(parse_err) => {
                     self.recover_from_err(parse_err);
                     return None;
-                    // panic!("{:?}", format!("{:?}", parse_err));
                 }
                 Ok(syntax) => {
                     let kind = syntax.get_kind();
                     self.clean_buffer();
                     // TODO: cannot let stuff slide here
-                    if kind.is_literal_value() || syntax.is_of_type(TokenType::Keyword) {
-                        self.recover();
-                        return None;
+                    if Semi == kind && !self.context.borrow().is_expected(kind) {
+                        self.ignore();
+                        break;
                     }
 
                     if kind.is_posfix_unary_operator() {
@@ -114,9 +161,8 @@ impl<'input> Parser<'input> {
         Some(lhs_marker)
     }
 
-    fn parse_left_hand_side(&self) -> Option<Marker<Complete>> {
+    pub fn parse_left_hand_side(&self) -> Option<Marker<Complete>> {
         use SyntaxKind::*;
-        // note: after with a bump, expectations will be cleared
         let syntax = match self.peek()? {
             Ok(syntax) => syntax,
             Err(err) => {
@@ -126,19 +172,13 @@ impl<'input> Parser<'input> {
         };
         self.clean_buffer();
         let kind = syntax.get_kind();
+
         let marker = match kind {
-            Ident => self.parse_var_ref_or_fn_call_or_arr(),
-            Int | Float | StrLit | CharLit => self.parse_literal(kind),
-            LParen => self.parse_paren_expr(syntax),
-            LBrace => self.parse_block(),
+            Ident => self.parse_starting_with_identifier(),
+            Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
             Minus | Excl => self.parse_prefix_unary_operation(kind),
-            delimiter if delimiter.is_closing_delimiter() => {
-                if !self.context.borrow().is_allowed(delimiter) {
-                    println!("delimiter not allowed: {:?}", delimiter);
-                    self.recover_restricted(delimiter);
-                }
-                None
-            }
+            keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
+            delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             operator
                 if operator.is_binary_operator()
                     || operator.is_posfix_unary_operator()
@@ -153,25 +193,21 @@ impl<'input> Parser<'input> {
             }
             _ => None,
         };
+
         self.clean_buffer();
         marker
     }
 
-    fn parse_var_ref_or_fn_call_or_arr(&self) -> Option<Finished> {
+    // Possible options: a variable reference, function/method call or an iterable indexing
+    fn parse_starting_with_identifier(&self) -> Option<Finished> {
         let marker = self.start();
         self.expect_and_bump(Ident);
 
         // function call
         let finished = if self.is_next(LParen) {
-            self.expect_and_bump(LParen);
-            self.parse_comma_separated_arguments_until(|syntax: Syntax| !syntax.is_of_kind(RParen));
-            self.expect_and_bump(RParen);
-            self.complete_marker_with(marker, FnCall)
+            self.parse_function_call(marker)
         } else if self.is_next(LBrack) {
-            self.expect_and_bump(LBrack);
-            self.parse_expression_until_binding_power(starting_precedence());
-            self.expect_and_bump(RBrack);
-            self.complete_marker_with(marker, ArrRef)
+            self.parse_container_indexing(marker)
         } else {
             self.complete_marker_with(marker, VarRef)
         };
@@ -184,18 +220,69 @@ impl<'input> Parser<'input> {
     }
 
     fn parse_literal(&self, kind: SyntaxKind) -> Option<Finished> {
-        self.expect_and_bump_with_marker(kind, SyntaxKind::Literal)
+        self.expect_and_bump_with_marker(kind, Literal)
     }
 
-    // TODO: wrap this with a parse_delimited method
+    #[allow(unused_variables)]
+    fn parse_break_expr(&self) -> Option<Finished> {
+        let marker = self.start();
+        self.expect_and_bump(KwBreak);
+
+        let rollback_after_drop = self.roll_back_context_after_drop();
+        self.context.borrow().expect(Semi);
+
+        self.parse_expression_until_binding_power(starting_precedence());
+
+        let finished_as_expr = self.complete_marker_with(marker, BreakExpr);
+        if self.is_next(Semi) {
+            let semi_marker = self.precede_marker_with(&finished_as_expr);
+            self.expect_and_bump(Semi);
+            Some(self.complete_marker_with(semi_marker, Semi))
+        } else {
+            Some(finished_as_expr)
+        }
+    }
+
+    pub fn parse_keyword_expression(&self, keyword: Syntax) -> Option<Finished> {
+        match keyword.get_kind() {
+            KwBreak => self.parse_break_expr(),
+            // A variable definition is a statement, thus will be recovered
+            KwLet => {
+                self.recover();
+                None
+            }
+            _ => todo!(),
+        }
+    }
+
     #[allow(unused_variables)] // for rollback anchor
-    fn parse_paren_expr(&self, syntax: Syntax) -> Option<Finished> {
-        // TODO: LParen should inject RParen expectations
+    pub fn parse_delimited(&self, syntax: Syntax) -> Option<Finished> {
+        let kind = syntax.get_kind();
+        if !self.context.borrow().is_allowed(kind) {
+            self.recover_restricted(kind);
+            return None;
+        }
+        use TokenType::*;
+        match syntax.get_token_type() {
+            OpeningDelimiter(expected_token_kind) => match kind {
+                LParen => self.parse_paren_expr(syntax),
+                LBrace => self.parse_block(),
+                _ => unreachable!(),
+            },
+            ClosingDelimiter(expected_token_kind) => {
+                return None;
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[allow(unused_variables)] // for rollback anchor
+    pub fn parse_paren_expr(&self, syntax: Syntax) -> Option<Finished> {
         use SyntaxKind::*;
         let marker = self.start();
         self.expect_and_bump(LParen);
         let rollback_when_dropped = self.roll_back_context_after_drop();
-        // restricts ], } (recovers them by erroring), expects )
+        // restricts ']', '}' (recovers them by erroring), expects and allows ')'
         self.impose_restrictions_of(syntax);
         _ = self.parse_expression_until_binding_power(starting_precedence());
         self.expect_and_bump(RParen);
@@ -209,6 +296,7 @@ impl<'input> Parser<'input> {
         let marker = self.start();
         self.expect_and_bump(LBrace);
 
+        // TODO: put in a function impose_block_restrictions or inject_block_context
         let rollback_when_dropped = self.roll_back_context_after_drop();
         let ctx = self.context.borrow();
         ctx.allow(RBrace);
@@ -220,7 +308,6 @@ impl<'input> Parser<'input> {
     }
 
     fn parse_prefix_unary_operation(&self, kind: SyntaxKind) -> Option<Finished> {
-        // TODO: I can expect a SyntaxKind::{PrefixUnaryOp or PostFixUnaryOp}
         let prefix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let marker = self.start();
         self.expect_and_bump(kind);
@@ -235,12 +322,11 @@ impl<'input> Parser<'input> {
         min_precedence: &Bound,
         marker: &Marker<Complete>,
     ) -> Option<Finished> {
-        // TODO: I can expect a SyntaxKind::{PrefixUnaryOp or PostFixUnaryOp}
         let postfix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let precedence = postfix_unary_op.precedence();
-        // this should never be the case since it has the highest precedence
+        // this should never be the case since it has the highest precedence among operators
         if min_precedence.gt(&precedence) {
-            return None;
+            unreachable!();
         }
         let marker = self.precede_marker_with(marker);
         self.expect_and_bump(kind);
@@ -519,19 +605,15 @@ Root@0..4
         ),
         parenthesised_pi_with_semicolon_inside: ("((314;));",
             expect![[r#"
-                Root@0..8
-                  ParenExpr@0..5
+                Root@0..7
+                  ParenExpr@0..7
                     LParen@0..1 "("
-                    ParenExpr@1..5
+                    ParenExpr@1..6
                       LParen@1..2 "("
                       Literal@2..5
                         Int@2..5 "314"
-                  Recovered@5..6
-                    RParen@5..6 ")"
-                  Recovered@6..7
-                    RParen@6..7 ")"
-                  Recovered@7..8
-                    Semi@7..8 ";""#]]
+                      RParen@5..6 ")"
+                    RParen@6..7 ")""#]]
         ),
         parenthesised_sub_precedes_mul: ("(3+1)*4",
             expect![[
@@ -541,10 +623,10 @@ Root@0..4
 
         block_with_returning: ("{let a = 0; a}",
             expect![[r#"
-                Root@0..13
-                  Block@0..13
+                Root@0..14
+                  Block@0..14
                     LBrace@0..1 "{"
-                    VarDef@1..10
+                    VarDef@1..11
                       KwLet@1..4 "let"
                       Whitespace@4..5 " "
                       InfixBinOp@5..10
@@ -555,18 +637,19 @@ Root@0..4
                         Whitespace@8..9 " "
                         Literal@9..10
                           Int@9..10 "0"
-                    Whitespace@10..11 " "
-                    VarRef@11..12
-                      Ident@11..12 "a"
-                    RBrace@12..13 "}""#]],
+                      Semi@10..11 ";"
+                    Whitespace@11..12 " "
+                    VarRef@12..13
+                      Ident@12..13 "a"
+                    RBrace@13..14 "}""#]],
         ),
 
         block_with_multiple_statements_and_expressions: ("{let a = 0;\n let b = 1; let c= 2; a+b+c}",
             expect![[r#"
-                Root@0..37
-                  Block@0..37
+                Root@0..40
+                  Block@0..40
                     LBrace@0..1 "{"
-                    VarDef@1..10
+                    VarDef@1..11
                       KwLet@1..4 "let"
                       Whitespace@4..5 " "
                       InfixBinOp@5..10
@@ -577,42 +660,45 @@ Root@0..4
                         Whitespace@8..9 " "
                         Literal@9..10
                           Int@9..10 "0"
-                    Whitespace@10..11 "\n"
-                    Whitespace@11..12 " "
-                    VarDef@12..21
-                      KwLet@12..15 "let"
-                      Whitespace@15..16 " "
-                      InfixBinOp@16..21
-                        VarRef@16..17
-                          Ident@16..17 "b"
-                        Whitespace@17..18 " "
-                        Eq@18..19 "="
-                        Whitespace@19..20 " "
-                        Literal@20..21
-                          Int@20..21 "1"
-                    Whitespace@21..22 " "
-                    VarDef@22..30
-                      KwLet@22..25 "let"
-                      Whitespace@25..26 " "
-                      InfixBinOp@26..30
-                        VarRef@26..27
-                          Ident@26..27 "c"
-                        Eq@27..28 "="
-                        Whitespace@28..29 " "
-                        Literal@29..30
-                          Int@29..30 "2"
-                    Whitespace@30..31 " "
-                    InfixBinOp@31..36
-                      InfixBinOp@31..34
-                        VarRef@31..32
-                          Ident@31..32 "a"
-                        Plus@32..33 "+"
-                        VarRef@33..34
-                          Ident@33..34 "b"
-                      Plus@34..35 "+"
-                      VarRef@35..36
-                        Ident@35..36 "c"
-                    RBrace@36..37 "}""#]],
+                      Semi@10..11 ";"
+                    Whitespace@11..12 "\n"
+                    Whitespace@12..13 " "
+                    VarDef@13..23
+                      KwLet@13..16 "let"
+                      Whitespace@16..17 " "
+                      InfixBinOp@17..22
+                        VarRef@17..18
+                          Ident@17..18 "b"
+                        Whitespace@18..19 " "
+                        Eq@19..20 "="
+                        Whitespace@20..21 " "
+                        Literal@21..22
+                          Int@21..22 "1"
+                      Semi@22..23 ";"
+                    Whitespace@23..24 " "
+                    VarDef@24..33
+                      KwLet@24..27 "let"
+                      Whitespace@27..28 " "
+                      InfixBinOp@28..32
+                        VarRef@28..29
+                          Ident@28..29 "c"
+                        Eq@29..30 "="
+                        Whitespace@30..31 " "
+                        Literal@31..32
+                          Int@31..32 "2"
+                      Semi@32..33 ";"
+                    Whitespace@33..34 " "
+                    InfixBinOp@34..39
+                      InfixBinOp@34..37
+                        VarRef@34..35
+                          Ident@34..35 "a"
+                        Plus@35..36 "+"
+                        VarRef@36..37
+                          Ident@36..37 "b"
+                      Plus@37..38 "+"
+                      VarRef@38..39
+                        Ident@38..39 "c"
+                    RBrace@39..40 "}""#]],
         ),
 
         malformed_var_defs: ("let a = let b = let c = 5",
@@ -653,7 +739,7 @@ Root@0..4
         function_def_with_no_parameters: ("fn empty() {}",
             expect![[r#"
                 Root@0..13
-                  VarDef@0..13
+                  FnDef@0..13
                     KwFn@0..2 "fn"
                     Whitespace@2..3 " "
                     Ident@3..8 "empty"
@@ -668,7 +754,7 @@ Root@0..4
         function_def_with_single_parameter: ("fn empty(single:i32) {}",
             expect![[r#"
                 Root@0..23
-                  VarDef@0..23
+                  FnDef@0..23
                     KwFn@0..2 "fn"
                     Whitespace@2..3 " "
                     Ident@3..8 "empty"
@@ -687,7 +773,7 @@ Root@0..4
         function_def_with_multiple_parameters: ("fn empty(first:i32, second:char, third: Structure) {}",
             expect![[r#"
                 Root@0..51
-                  VarDef@0..51
+                  FnDef@0..51
                     KwFn@0..2 "fn"
                     Whitespace@2..3 " "
                     Ident@3..8 "empty"
@@ -716,8 +802,8 @@ Root@0..4
 
         function_def_with_multiple_parameters_with_actual_body: ("fn empty(first:i32, second:char) {let sum_1 = first + second; let sum_2 = second+first; first == check}",
             expect![[r#"
-                Root@0..100
-                  VarDef@0..100
+                Root@0..102
+                  FnDef@0..102
                     KwFn@0..2 "fn"
                     Whitespace@2..3 " "
                     Ident@3..8 "empty"
@@ -733,9 +819,9 @@ Root@0..4
                       TyChar@26..30 "char"
                     RParen@30..31 ")"
                     Whitespace@31..32 " "
-                    Block@32..100
+                    Block@32..102
                       LBrace@32..33 "{"
-                      VarDef@33..59
+                      VarDef@33..60
                         KwLet@33..36 "let"
                         Whitespace@36..37 " "
                         InfixBinOp@37..59
@@ -752,32 +838,34 @@ Root@0..4
                             Whitespace@52..53 " "
                             VarRef@53..59
                               Ident@53..59 "second"
-                      Whitespace@59..60 " "
-                      VarDef@60..84
-                        KwLet@60..63 "let"
-                        Whitespace@63..64 " "
-                        InfixBinOp@64..84
-                          VarRef@64..69
-                            Ident@64..69 "sum_2"
-                          Whitespace@69..70 " "
-                          Eq@70..71 "="
-                          Whitespace@71..72 " "
-                          InfixBinOp@72..84
-                            VarRef@72..78
-                              Ident@72..78 "second"
-                            Plus@78..79 "+"
-                            VarRef@79..84
-                              Ident@79..84 "first"
-                      Whitespace@84..85 " "
-                      InfixBinOp@85..99
-                        VarRef@85..90
-                          Ident@85..90 "first"
-                        Whitespace@90..91 " "
-                        EqEq@91..93 "=="
-                        Whitespace@93..94 " "
-                        VarRef@94..99
-                          Ident@94..99 "check"
-                      RBrace@99..100 "}""#]],
+                        Semi@59..60 ";"
+                      Whitespace@60..61 " "
+                      VarDef@61..86
+                        KwLet@61..64 "let"
+                        Whitespace@64..65 " "
+                        InfixBinOp@65..85
+                          VarRef@65..70
+                            Ident@65..70 "sum_2"
+                          Whitespace@70..71 " "
+                          Eq@71..72 "="
+                          Whitespace@72..73 " "
+                          InfixBinOp@73..85
+                            VarRef@73..79
+                              Ident@73..79 "second"
+                            Plus@79..80 "+"
+                            VarRef@80..85
+                              Ident@80..85 "first"
+                        Semi@85..86 ";"
+                      Whitespace@86..87 " "
+                      InfixBinOp@87..101
+                        VarRef@87..92
+                          Ident@87..92 "first"
+                        Whitespace@92..93 " "
+                        EqEq@93..95 "=="
+                        Whitespace@95..96 " "
+                        VarRef@96..101
+                          Ident@96..101 "check"
+                      RBrace@101..102 "}""#]],
         ),
 
         function_call_with_single_parameter: ("empty(single)",
@@ -795,7 +883,7 @@ Root@0..4
         arr_indexing: ("arr[arr.len() - 1]",
             expect![[r#"
                 Root@0..18
-                  ArrRef@0..18
+                  ContainerRef@0..18
                     Ident@0..3 "arr"
                     LBrack@3..4 "["
                     InfixBinOp@4..17
@@ -813,6 +901,241 @@ Root@0..4
                       Literal@16..17
                         Int@16..17 "1"
                     RBrack@17..18 "]""#]],
+        ),
+
+        for_loop_iterated: ("for elm in arr { print(elm) }",
+            expect![[r#"
+                Root@0..29
+                  ForLoop@0..29
+                    KwFor@0..3 "for"
+                    Whitespace@3..4 " "
+                    ForIdent@4..7
+                      Ident@4..7 "elm"
+                    Whitespace@7..8 " "
+                    KwIn@8..10 "in"
+                    Whitespace@10..11 " "
+                    VarRef@11..14
+                      Ident@11..14 "arr"
+                    Whitespace@14..15 " "
+                    Block@15..29
+                      LBrace@15..16 "{"
+                      Whitespace@16..17 " "
+                      FnCall@17..27
+                        Ident@17..22 "print"
+                        LParen@22..23 "("
+                        FnArg@23..26
+                          VarRef@23..26
+                            Ident@23..26 "elm"
+                        RParen@26..27 ")"
+                      Whitespace@27..28 " "
+                      RBrace@28..29 "}""#]],
+        ),
+
+        for_loop_with_slicing: ("for elm in arr[0_arr.len()]{ print(elm) }",
+            expect![[r#"
+                Root@0..41
+                  ForLoop@0..41
+                    KwFor@0..3 "for"
+                    Whitespace@3..4 " "
+                    ForIdent@4..7
+                      Ident@4..7 "elm"
+                    Whitespace@7..8 " "
+                    KwIn@8..10 "in"
+                    Whitespace@10..11 " "
+                    ContainerRef@11..27
+                      Ident@11..14 "arr"
+                      LBrack@14..15 "["
+                      InfixBinOp@15..26
+                        Literal@15..16
+                          Int@15..16 "0"
+                        Under@16..17 "_"
+                        InfixBinOp@17..26
+                          VarRef@17..20
+                            Ident@17..20 "arr"
+                          Dot@20..21 "."
+                          FnCall@21..26
+                            Ident@21..24 "len"
+                            LParen@24..25 "("
+                            RParen@25..26 ")"
+                      RBrack@26..27 "]"
+                    Block@27..41
+                      LBrace@27..28 "{"
+                      Whitespace@28..29 " "
+                      FnCall@29..39
+                        Ident@29..34 "print"
+                        LParen@34..35 "("
+                        FnArg@35..38
+                          VarRef@35..38
+                            Ident@35..38 "elm"
+                        RParen@38..39 ")"
+                      Whitespace@39..40 " "
+                      RBrace@40..41 "}""#]],
+        ),
+
+        for_loop_with_csv_identifiers: ("for ix,elm in arr[0_arr.len()].enumerate() { print(ix, elm) }",
+            expect![[r#"
+                Root@0..59
+                  ForLoop@0..59
+                    KwFor@0..3 "for"
+                    Whitespace@3..4 " "
+                    ForIdent@4..6
+                      Ident@4..6 "ix"
+                    ForIdent@6..9
+                      Ident@6..9 "elm"
+                    Whitespace@9..10 " "
+                    KwIn@10..12 "in"
+                    Whitespace@12..13 " "
+                    InfixBinOp@13..42
+                      ContainerRef@13..29
+                        Ident@13..16 "arr"
+                        LBrack@16..17 "["
+                        InfixBinOp@17..28
+                          Literal@17..18
+                            Int@17..18 "0"
+                          Under@18..19 "_"
+                          InfixBinOp@19..28
+                            VarRef@19..22
+                              Ident@19..22 "arr"
+                            Dot@22..23 "."
+                            FnCall@23..28
+                              Ident@23..26 "len"
+                              LParen@26..27 "("
+                              RParen@27..28 ")"
+                        RBrack@28..29 "]"
+                      Dot@29..30 "."
+                      FnCall@30..41
+                        Ident@30..39 "enumerate"
+                        LParen@39..40 "("
+                        RParen@40..41 ")"
+                      Whitespace@41..42 " "
+                    Block@42..59
+                      LBrace@42..43 "{"
+                      Whitespace@43..44 " "
+                      FnCall@44..57
+                        Ident@44..49 "print"
+                        LParen@49..50 "("
+                        FnArg@50..52
+                          VarRef@50..52
+                            Ident@50..52 "ix"
+                        Whitespace@52..53 " "
+                        FnArg@53..56
+                          VarRef@53..56
+                            Ident@53..56 "elm"
+                        RParen@56..57 ")"
+                      Whitespace@57..58 " "
+                      RBrace@58..59 "}""#]],
+        ),
+
+        for_loop_with_range: ("for ix in 0_9{ print(arr[ix]) }",
+            expect![[r#"
+                Root@0..31
+                  ForLoop@0..31
+                    KwFor@0..3 "for"
+                    Whitespace@3..4 " "
+                    ForIdent@4..6
+                      Ident@4..6 "ix"
+                    Whitespace@6..7 " "
+                    KwIn@7..9 "in"
+                    Whitespace@9..10 " "
+                    InfixBinOp@10..13
+                      Literal@10..11
+                        Int@10..11 "0"
+                      Under@11..12 "_"
+                      Literal@12..13
+                        Int@12..13 "9"
+                    Block@13..31
+                      LBrace@13..14 "{"
+                      Whitespace@14..15 " "
+                      FnCall@15..29
+                        Ident@15..20 "print"
+                        LParen@20..21 "("
+                        FnArg@21..28
+                          ContainerRef@21..28
+                            Ident@21..24 "arr"
+                            LBrack@24..25 "["
+                            VarRef@25..27
+                              Ident@25..27 "ix"
+                            RBrack@27..28 "]"
+                        RParen@28..29 ")"
+                      Whitespace@29..30 " "
+                      RBrace@30..31 "}""#]],
+        ),
+
+        while_loop: ("while !stack.is_empty() { print(stack.pop()) }",
+            expect![[r#"
+                Root@0..46
+                  WhileLoop@0..46
+                    KwWhile@0..5 "while"
+                    WhileLoopCond@5..24
+                      Whitespace@5..6 " "
+                      PrefixUnaryOp@6..24
+                        Excl@6..7 "!"
+                        InfixBinOp@7..24
+                          VarRef@7..12
+                            Ident@7..12 "stack"
+                          Dot@12..13 "."
+                          FnCall@13..23
+                            Ident@13..21 "is_empty"
+                            LParen@21..22 "("
+                            RParen@22..23 ")"
+                          Whitespace@23..24 " "
+                    Block@24..46
+                      LBrace@24..25 "{"
+                      Whitespace@25..26 " "
+                      FnCall@26..44
+                        Ident@26..31 "print"
+                        LParen@31..32 "("
+                        FnArg@32..43
+                          InfixBinOp@32..43
+                            VarRef@32..37
+                              Ident@32..37 "stack"
+                            Dot@37..38 "."
+                            FnCall@38..43
+                              Ident@38..41 "pop"
+                              LParen@41..42 "("
+                              RParen@42..43 ")"
+                        RParen@43..44 ")"
+                      Whitespace@44..45 " "
+                      RBrace@45..46 "}""#]],
+        ),
+
+        while_loop_with_break: ("while true { break; }",
+            expect![[r#"
+                Root@0..21
+                  WhileLoop@0..21
+                    KwWhile@0..5 "while"
+                    WhileLoopCond@5..11
+                      Whitespace@5..6 " "
+                      Literal@6..10
+                        KwTrue@6..10 "true"
+                      Whitespace@10..11 " "
+                    Block@11..21
+                      LBrace@11..12 "{"
+                      Whitespace@12..13 " "
+                      Semi@13..19
+                        BreakExpr@13..18
+                          KwBreak@13..18 "break"
+                        Semi@18..19 ";"
+                      Whitespace@19..20 " "
+                      RBrace@20..21 "}""#]],
+        ),
+
+        while_loop_to_be_recovered: ("while { break; }",
+            expect![[r#"
+                Root@0..16
+                  WhileLoop@0..16
+                    KwWhile@0..5 "while"
+                    WhileLoopCond@5..6
+                      Whitespace@5..6 " "
+                    Block@6..16
+                      LBrace@6..7 "{"
+                      Whitespace@7..8 " "
+                      Semi@8..14
+                        BreakExpr@8..13
+                          KwBreak@8..13 "break"
+                        Semi@13..14 ";"
+                      Whitespace@14..15 " "
+                      RBrace@15..16 "}""#]],
         ),
     }
 
