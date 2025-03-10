@@ -12,7 +12,7 @@ pub struct Token {
 }
 
 pub type LexResult = Result<Token, LexError>;
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Lexer<'input> {
     inner_lexer: logos::Lexer<'input, TokenKind>,
     peeked: Option<Option<<Self as Iterator>::Item>>,
@@ -169,7 +169,7 @@ mod tests {
             kw_for: ("for", TokenKind::KwFor),
             // kw_go: ("go", TokenKind::KwGo),
             kw_if: ("if", TokenKind::KwIf),
-            // kw_impl: ("impl", TokenKind::KwImpl),
+            kw_impl: ("impl", TokenKind::KwImpl),
             kw_import: ("import", TokenKind::KwImport),
             kw_in: ("in", TokenKind::KwIn),
             kw_let: ("let", TokenKind::KwLet),

@@ -112,6 +112,7 @@ impl From<TokenKind> for TokenType {
             | KwFor
             | KwIf
             | KwImport
+            | KwImpl
             | KwIn
             | KwLet
             | KwMatch

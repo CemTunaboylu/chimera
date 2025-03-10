@@ -112,8 +112,8 @@ pub enum TokenKind {
     KwFor,
     #[token("if")]
     KwIf,
-    // #[token("impl")]
-    // KwImpl,
+    #[token("impl")]
+    KwImpl,
     #[token("import")]
     KwImport,
     #[token("in")]
