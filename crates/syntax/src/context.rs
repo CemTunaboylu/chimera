@@ -109,6 +109,10 @@ impl ParserContext {
     pub fn forbid(&self, exp: impl Into<SyntaxKindBitSet>) {
         self.sub_cell(CellOf::Allowed, exp.into());
     }
+
+    pub fn forbid_all(&self) {
+        self.and_cell(CellOf::Allowed, SyntaxKindBitSet::empty());
+    }
     pub fn forbid_only(&self, exp: impl Into<SyntaxKindBitSet>) {
         self.allow_all();
         self.sub_cell(CellOf::Allowed, exp.into());
@@ -229,6 +233,24 @@ mod tests {
     use crate::syntax_kind::SyntaxKind;
 
     use super::*;
+
+    #[test]
+    fn test_forbid_all() {
+        let ctx = ParserContext::new();
+        let allowed = SyntaxKind::Xor;
+        ctx.allow(allowed);
+        assert!(ctx.is_allowed(allowed), "{:?} should be allowed", allowed);
+        ctx.forbid_all();
+        for k in SyntaxKind::And.to_u16().unwrap()..=SyntaxKind::Xor.to_u16().unwrap() {
+            let kind = SyntaxKind::from_u16(k).unwrap();
+            let kind_bitset: SyntaxKindBitSet = kind.into();
+            assert!(
+                !ctx.is_allowed(kind_bitset),
+                "{:?} should NOT be allowed",
+                kind
+            );
+        }
+    }
 
     #[test]
     fn test_allow_all() {
