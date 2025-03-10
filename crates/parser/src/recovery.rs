@@ -1,6 +1,6 @@
 use miette::Report;
 use syntax::syntax_kind::SyntaxKind;
-use thin_vec::ThinVec;
+use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
     errors::{ParseError, Stringer},
@@ -47,19 +47,32 @@ impl<'input> Parser<'input> {
         if self.can_recover() {
             self.bump_with_marker(SyntaxKind::Recovered);
         }
-        // TODO: add restrictions into the error as well
     }
 
+    // TODO: check restriction as well
     pub fn recover(&self) {
-        let got = self.peek();
-        let kinds: ThinVec<SyntaxKind> = self.context.borrow().get_expectations().into();
+        let exps = if let Some(Ok(got)) = self.peek() {
+            let ctx = self.context.borrow();
+            let kind = got.get_kind();
+            // first check restrictions
+            let kinds: ThinVec<SyntaxKind> = if !ctx.is_allowed(kind) {
+                ctx.get_allowed().into()
+            } else {
+                ctx.get_expectations().into()
+            };
+            kinds
+        } else {
+            thin_vec![]
+        };
+
+        let err_span = self.lexer.borrow().span().clone();
+
         self.event_holder.borrow_mut().push(Event::Error {
-            err: ParseError::new(self.lexer.borrow().span().clone(), kinds, got),
+            err: ParseError::new(err_span, exps, self.peek()),
         });
         if self.can_recover() {
             self.bump_with_marker(SyntaxKind::Recovered);
         }
-        // TODO: add restrictions into the error as well
     }
 
     pub fn recover_restricted(&self, restricted: SyntaxKind) {
@@ -70,6 +83,5 @@ impl<'input> Parser<'input> {
         if self.can_recover() {
             self.bump_with_marker(SyntaxKind::Recovered);
         }
-        // TODO: add restrictions into the error as well
     }
 }
