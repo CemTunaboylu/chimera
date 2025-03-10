@@ -6,26 +6,26 @@ use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, Not, Sub, SubAssign};
 use crate::syntax_kind::SyntaxKind;
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub struct SyntaxKindBitSet(i128);
+pub struct SyntaxKindBitSet(u128);
 
 impl SyntaxKindBitSet {
     const LARGEST_INDEX: u32 = i128::BITS - 1;
     pub fn empty() -> Self {
-        Self(0 as i128)
+        Self(0 as u128)
     }
     pub fn clear(&mut self) {
         self.0 = 0;
     }
     pub fn contains(&self, kind: &SyntaxKind) -> bool {
-        self.0 & (1 << kind.to_u16().unwrap()) > 0
+        self.0 & (1 << kind.to_u16().unwrap()) != 0
     }
 
     pub fn intersect(&self, other: impl Into<SyntaxKindBitSet>) -> bool {
-        self.0 & other.into().0 > 0
+        self.0 & other.into().0 != 0
     }
 
     pub fn has_any(&self) -> bool {
-        self.0 | 0 > 0
+        self.0 != 0
     }
 }
 
@@ -113,7 +113,7 @@ impl Not for SyntaxKindBitSet {
     type Output = Self;
 
     fn not(self) -> Self::Output {
-        Self(self.0.reverse_bits())
+        Self(!self.0)
     }
 }
 
@@ -131,9 +131,12 @@ impl Into<ThinVec<SyntaxKind>> for SyntaxKindBitSet {
         let mut kinds = thin_vec![];
         while !bits.is_zero() {
             let from_right = (Self::LARGEST_INDEX - bits.leading_zeros()) as i128;
-            let kind = SyntaxKind::from_u16(from_right as u16).unwrap();
-            kinds.push(kind);
-            bits &= !(1 << from_right);
+            if let Some(kind) = SyntaxKind::from_u16(from_right as u16) {
+                kinds.push(kind);
+                bits &= !(1 << from_right);
+                continue;
+            }
+            break;
         }
         kinds
     }
