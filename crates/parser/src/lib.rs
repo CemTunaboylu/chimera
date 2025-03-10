@@ -8,6 +8,7 @@ pub mod func;
 pub mod loops;
 pub mod parse;
 mod recovery;
+pub mod structure;
 // pub mod expression;
 pub mod marker;
 mod operator;

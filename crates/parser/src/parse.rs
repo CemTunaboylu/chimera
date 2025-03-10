@@ -93,11 +93,12 @@ impl<'input> Parser<'input> {
         }
         // TODO: deal with semi: loops can return if not ; delimited
         let marker = match self.peek()? {
-            Ok(syntax) if syntax.is_of_kind(KwLet) => self.parse_variable_def(),
             Ok(syntax) if syntax.is_of_kind(KwFn) => self.parse_function_def(),
             Ok(syntax) if syntax.is_of_kind(KwFor) => self.parse_for_loop(),
-            Ok(syntax) if syntax.is_of_kind(KwWhile) => self.parse_while_loop(),
             Ok(syntax) if syntax.is_of_kind(KwIf) => self.parse_conditionals(),
+            Ok(syntax) if syntax.is_of_kind(KwLet) => self.parse_variable_def(),
+            Ok(syntax) if syntax.is_of_kind(KwStruct) => self.parse_struct_definition(),
+            Ok(syntax) if syntax.is_of_kind(KwWhile) => self.parse_while_loop(),
             // An expression produces a result (result of evalution), but if there is a ; at the end,
             // it becomes a statemet, thus check that here and wrap it with Semi
             _ => self.parse_expression_until_binding_power(starting_precedence()),
@@ -288,6 +289,7 @@ impl<'input> Parser<'input> {
                 self.recover();
                 None
             }
+            KwStruct => self.parse_struct_definition(),
             KwReturn => self.parse_return(),
             nope => {
                 println!("{:?} is not implemented yet", nope);
@@ -1422,6 +1424,38 @@ mod tests {
                         LParen@78..79 "("
                         RParen@79..80 ")"
                       RBrace@80..81 "}""#]],
+        ),
+
+        basic_struct: ("struct Point { x: i32, y: i32, item: Item }",
+            expect![[r#"
+                Root@0..41
+                  StructDef@0..41
+                    KwStruct@0..6 "struct"
+                    Whitespace@6..7 " "
+                    Ident@7..12 "Point"
+                    Whitespace@12..13 " "
+                    LBrace@13..14 "{"
+                    StructAttrs@14..40
+                      Whitespace@14..15 " "
+                      StructAttr@15..21
+                        Ident@15..16 "x"
+                        Colon@16..17 ":"
+                        Whitespace@17..18 " "
+                        TyI32@18..21 "i32"
+                      Whitespace@21..22 " "
+                      StructAttr@22..28
+                        Ident@22..23 "y"
+                        Colon@23..24 ":"
+                        Whitespace@24..25 " "
+                        TyI32@25..28 "i32"
+                      Whitespace@28..29 " "
+                      StructAttr@29..39
+                        Ident@29..33 "item"
+                        Colon@33..34 ":"
+                        Whitespace@34..35 " "
+                        Ident@35..39 "Item"
+                      Whitespace@39..40 " "
+                    RBrace@40..41 "}""#]],
         ),
     }
 
