@@ -71,6 +71,7 @@ impl From<TokenKind> for TokenType {
             LeftShiftEq => Self::OperatorEq(TokenKind::LeftShift),
             MinusEq => Self::OperatorEq(TokenKind::Minus),
             PercentEq => Self::OperatorEq(TokenKind::Percent),
+            // TODO: this also is a boolean binary op 
             NotEq=> Self::OperatorEq(TokenKind::Exclamation),
             OrEq=> Self::OperatorEq(TokenKind::Or),
             PlusEq=> Self::OperatorEq(TokenKind::Plus),
