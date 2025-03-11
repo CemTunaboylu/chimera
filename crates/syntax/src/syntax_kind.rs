@@ -1,6 +1,6 @@
 use lexer::token_kind::TokenKind;
 use num_derive::{FromPrimitive, ToPrimitive};
-use thin_vec::ThinVec;
+use thin_vec::{ThinVec, thin_vec};
 
 #[derive(Copy, Clone, Debug, FromPrimitive, Eq, Hash, Ord, PartialEq, PartialOrd, ToPrimitive)]
 pub enum SyntaxKind {
@@ -16,22 +16,33 @@ pub enum SyntaxKind {
     // token-tree roots for expressions/sub-expressions
     CharLit,
     FnCall,
+    Jump,
+    ImplBlock,
     Literal,
+    Mut,
     ParenExpr,
     ParamDecl,
     RetType,
+    SelfRef,
     Semi,
     StrLit,
+    StructAttr,
+    StructAttrs,
     StructRef,
     StructAsType,
     VarRef,
     // token-tree roots for statements
-    ArrRef,
     Block,
-    FnDef,
+    Condition,
+    ContainerRef,
+    ControlFlow,
     FnArg,
+    FnDef,
+    ForIdent,
+    ForLoop,
     StructDef,
     VarDef,
+    WhileLoop,
     // mirrored
     And,
     AndAnd,
@@ -60,6 +71,7 @@ pub enum SyntaxKind {
     KwFor,
     KwIf,
     KwImport,
+    KwImpl,
     KwIn,
     KwLet,
     KwMatch,
@@ -109,7 +121,6 @@ pub enum SyntaxKind {
     TyI32,
     TyStr,
     TyStrSlc,
-    TyU32,
     Under,
     Whitespace,
     Xor,
@@ -126,6 +137,16 @@ impl SyntaxKind {
         use SyntaxKind::*;
         matches!(self, LBrace | LParen | LBrack | RBrace | RParen | RBrack)
     }
+
+    pub fn opening_delimiters() -> ThinVec<SyntaxKind> {
+        use SyntaxKind::*;
+        thin_vec![LBrace, LParen, LBrack]
+    }
+
+    pub fn closing_delimiters() -> ThinVec<SyntaxKind> {
+        use SyntaxKind::*;
+        thin_vec![RBrace, RParen, RBrack]
+    }
     pub fn is_opening_delimiter(&self) -> bool {
         use SyntaxKind::*;
         matches!(self, LBrace | LParen | LBrack)
@@ -139,6 +160,16 @@ impl SyntaxKind {
         matches!(self, Int | Float | StrLit | CharLit | KwTrue | KwFalse)
     }
 
+    pub fn types() -> ThinVec<SyntaxKind> {
+        use SyntaxKind::*;
+        thin_vec![TyBool, TyByte, TyChar, TyF32, TyI32, TyStr, TyStrSlc]
+    }
+
+    pub fn is_keyword(&self) -> bool {
+        use SyntaxKind::*;
+        &KwBreak <= self && self <= &Kwself
+    }
+
     pub fn is_binary_operator(&self) -> bool {
         use SyntaxKind::*;
         (self >= &And && self <= &ColonColon)
@@ -148,7 +179,7 @@ impl SyntaxKind {
             || (self >= &Slash && self <= &StarEq)
             || matches!(
                 self,
-                Gt | LShift | LShiftEq | RShift | RShiftEq | Under | Xor
+                Gt | Ge | LShift | LShiftEq | RShift | RShiftEq | Under | Xor
             )
     }
 
@@ -165,6 +196,22 @@ impl SyntaxKind {
     pub fn is_posfix_unary_operator(&self) -> bool {
         use SyntaxKind::*;
         matches!(self, QMark)
+    }
+
+    pub fn operators() -> ThinVec<Self> {
+        use SyntaxKind::*;
+        thin_vec![
+            And, AndAnd, AndEq, Colon, ColonColon, Dot, Eq, EqEq, Excl, Gt, Ge, LShift, LShiftEq,
+            Lt, Le, Minus, MinusEq, NotEq, Or, OrEq, OrOr, Percent, PercentEq, Plus, PlusEq, QMark,
+            RArrow, RShift, RShiftEq, Slash, SlashEq, Star, StarEq, Under, Xor,
+        ]
+    }
+    pub fn assignments() -> ThinVec<Self> {
+        use SyntaxKind::*;
+        thin_vec![
+            AndEq, Eq, LShiftEq, MinusEq, NotEq, OrEq, PercentEq, PlusEq, RShiftEq, SlashEq,
+            StarEq,
+        ]
     }
 
     pub fn is_trivia(self) -> bool {
@@ -205,6 +252,7 @@ impl From<TokenKind> for SyntaxKind {
             KwFor => Self::KwFor,
             KwIf => Self::KwIf,
             KwImport => Self::KwImport,
+            KwImpl => Self::KwImpl,
             KwIn => Self::KwIn,
             KwLet => Self::KwLet,
             KwMatch => Self::KwMatch,

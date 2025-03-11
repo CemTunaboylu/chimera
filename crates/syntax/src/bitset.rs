@@ -133,10 +133,8 @@ impl Into<ThinVec<SyntaxKind>> for SyntaxKindBitSet {
             let from_right = (Self::LARGEST_INDEX - bits.leading_zeros()) as i128;
             if let Some(kind) = SyntaxKind::from_u16(from_right as u16) {
                 kinds.push(kind);
-                bits &= !(1 << from_right);
-                continue;
             }
-            break;
+            bits &= !(1 << from_right);
         }
         kinds
     }
@@ -169,6 +167,7 @@ mod test {
             SyntaxKind::AndAnd,
             SyntaxKind::Semi,
             SyntaxKind::ColonColon,
+            SyntaxKind::Xor,
         ];
         kinds.sort();
         let mut expectations = SyntaxKindBitSet::empty();
@@ -200,6 +199,7 @@ mod test {
             SyntaxKind::AndAnd,
             SyntaxKind::Semi,
             SyntaxKind::ColonColon,
+            SyntaxKind::Xor,
         ];
         kinds.sort();
         let mut expectations = SyntaxKindBitSet::empty();

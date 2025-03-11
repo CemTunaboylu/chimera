@@ -10,6 +10,31 @@ use bitset::SyntaxKindBitSet;
 use lexer::{lexer::Token, token_kind::TokenKind, token_type::TokenType};
 use syntax_kind::SyntaxKind;
 
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref ASSIGNMENTS: SyntaxKindBitSet = SyntaxKind::assignments().as_ref().into();
+    pub static ref OPERATORS: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+    pub static ref TYPES: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
+}
+
+pub fn is_an_assignment(kind: &SyntaxKind) -> bool {
+    ASSIGNMENTS.contains(kind)
+}
+pub fn is_an_operator(kind: &SyntaxKind) -> bool {
+    OPERATORS.contains(kind)
+}
+
+pub fn non_assigning_operators() -> SyntaxKindBitSet {
+    let a: SyntaxKindBitSet = SyntaxKind::assignments().as_ref().into();
+    let o: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+    o - a
+}
+
+pub fn is_a_type(kind: &SyntaxKind) -> bool {
+    TYPES.contains(kind)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ParsedValue {
     Char(char),
@@ -78,6 +103,7 @@ impl Syntax {
     }
 
     pub fn imposed_restrictions(&self) -> [RestrictionType; 3] {
+        use SyntaxKind::*;
         let mut context_update = [RestrictionType::None; 3];
         match self.token_type {
             TokenType::OpeningDelimiter(closing) => {
@@ -87,16 +113,25 @@ impl Syntax {
                 context_update[0] = RestrictionType::Add(expectations);
 
                 let mut recovery_set = SyntaxKindBitSet::empty();
-                recovery_set -= closing_syntax_kind.into();
-                recovery_set += SyntaxKind::Semi.into();
-                context_update[1] = RestrictionType::Override(recovery_set);
+                recovery_set += closing_syntax_kind.into();
+                // recovery_set += SyntaxKind::Semi.into();
+                // context_update[1] = RestrictionType::Override(recovery_set);
+                context_update[1] = RestrictionType::Add(recovery_set);
 
-                let mut restrictions = SyntaxKindBitSet::empty();
-                restrictions += closing_syntax_kind.into();
-                context_update[2] = RestrictionType::Override(restrictions);
+                let mut allowed = SyntaxKindBitSet::empty();
+                allowed += closing_syntax_kind.into();
+                // context_update[2] = RestrictionType::Override(allowed);
+                context_update[2] = RestrictionType::Add(allowed);
             }
-            // TODO: add type based restrictions such as literals and keywords
-            TokenType::Operator => {}
+            TokenType::Operator if is_an_assignment(&self.kind) => {
+                let mut expectations = SyntaxKindBitSet::empty();
+                expectations += Semi.into();
+                context_update[0] = RestrictionType::Add(expectations);
+
+                // let mut recovery_set = SyntaxKindBitSet::empty();
+                // recovery_set += Semi.into();
+                // context_update[1] = RestrictionType::Add(recovery_set);
+            }
             _ => {}
         }
         context_update
@@ -118,7 +153,7 @@ impl From<Token> for Syntax {
         let kind: SyntaxKind = match token.ttype {
             TokenType::Error(_) => SyntaxKind::Errored,
             // precedence is shared
-            TokenType::OperatorEq(_) => SyntaxKind::Eq,
+            // TokenType::OperatorEq(_) => SyntaxKind::Eq,
             _ => token.kind.into(),
         };
         Self {
