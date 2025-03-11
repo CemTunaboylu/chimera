@@ -122,6 +122,10 @@ impl<'input> Parser<'input> {
                     if !is_an_operator(&kind) {
                         break;
                     }
+                    if !self.context.borrow().is_allowed(kind) {
+                        self.recover_restricted(kind);
+                        return None;
+                    }
 
                     if kind.is_posfix_unary_operator() {
                         if let Some(marker) =
@@ -398,7 +402,16 @@ pub(crate) mod tests {
             expect![[
             "Root@0..4\n  InfixBinOp@0..4\n    Literal@0..1\n      Int@0..1 \"3\"\n    Plus@1..2 \"+\"\n    Literal@2..4\n      Int@2..4 \"14\""
             ]]),
-
+        redundant_semi: ("x+2;;",
+            expect![[r#"
+                Root@0..3
+                  InfixBinOp@0..3
+                    VarRef@0..1
+                      Ident@0..1 "x"
+                    Plus@1..2 "+"
+                    Literal@2..3
+                      Int@2..3 "2""#]]
+        ),
         binary_dot_member: ("structure.member",
             expect![[r#"
                 Root@0..16

@@ -91,6 +91,114 @@ mod tests {
                 "Root@0..7\n  InfixBinOp@0..7\n    ParenExpr@0..5\n      LParen@0..1 \"(\"\n      InfixBinOp@1..4\n        Literal@1..2\n          Int@1..2 \"3\"\n        Plus@2..3 \"+\"\n        Literal@3..4\n          Int@3..4 \"1\"\n      RParen@4..5 \")\"\n    Star@5..6 \"*\"\n    Literal@6..7\n      Int@6..7 \"4\""
             ]]
         ),
+        parenthesised_var_def: ("let z = (3+1);",
+            expect![[r#"
+                Root@0..14
+                  VarDef@0..14
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..13
+                      VarRef@4..6
+                        Ident@4..5 "z"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                      Whitespace@7..8 " "
+                      ParenExpr@8..13
+                        LParen@8..9 "("
+                        InfixBinOp@9..12
+                          Literal@9..10
+                            Int@9..10 "3"
+                          Plus@10..11 "+"
+                          Literal@11..12
+                            Int@11..12 "1"
+                        RParen@12..13 ")"
+                    Semi@13..14 ";""#]]
+        ),
+
+        misplaced_parenthesised_var_def: ("let z = (3;1);",
+            expect![[r#"
+                Root@0..13
+                  VarDef@0..12
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..11
+                      VarRef@4..6
+                        Ident@4..5 "z"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                      Whitespace@7..8 " "
+                      ParenExpr@8..11
+                        LParen@8..9 "("
+                        Literal@9..10
+                          Int@9..10 "3"
+                        Recovered@10..11
+                          Semi@10..11 ";"
+                    Recovered@11..12
+                      Int@11..12 "1"
+                  Recovered@12..13
+                    RParen@12..13 ")""#]]
+        ),
+
+        misplaced_parenthesised_var_def_with_fn_call: ("let z = (something(););",
+            expect![[r#"
+                Root@0..22
+                  VarDef@0..22
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..21
+                      VarRef@4..6
+                        Ident@4..5 "z"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                      Whitespace@7..8 " "
+                      ParenExpr@8..21
+                        LParen@8..9 "("
+                        FnCall@9..20
+                          Ident@9..18 "something"
+                          LParen@18..19 "("
+                          RParen@19..20 ")"
+                        Recovered@20..21
+                          Semi@20..21 ";"
+                    Recovered@21..22
+                      RParen@21..22 ")""#]]
+        ),
+
+        assignment_during_var_def: ("let z = (self.x += 1) + 2;",
+            expect![[r#"
+                Root@0..25
+                  VarDef@0..21
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..20
+                      VarRef@4..6
+                        Ident@4..5 "z"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                      Whitespace@7..8 " "
+                      ParenExpr@8..20
+                        LParen@8..9 "("
+                        InfixBinOp@9..18
+                          SelfRef@9..13
+                            Kwself@9..13 "self"
+                          Dot@13..14 "."
+                          VarRef@14..16
+                            Ident@14..15 "x"
+                            Whitespace@15..16 " "
+                          Recovered@16..18
+                            PlusEq@16..18 "+="
+                        Whitespace@18..19 " "
+                        Recovered@19..20
+                          Int@19..20 "1"
+                    Recovered@20..21
+                      RParen@20..21 ")"
+                  Whitespace@21..22 " "
+                  Recovered@22..23
+                    Plus@22..23 "+"
+                  Whitespace@23..24 " "
+                  Literal@24..25
+                    Int@24..25 "2""#]]
+        ),
+
 
         parenthesised_pi: ("((314))",
             expect![[

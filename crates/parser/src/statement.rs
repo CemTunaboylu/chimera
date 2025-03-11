@@ -1,6 +1,11 @@
 use crate::{operator::starting_precedence, parse::Finished, parser::Parser};
 
-use syntax::syntax_kind::SyntaxKind::*;
+use syntax::{
+    ASSIGNMENTS, OPERATORS,
+    bitset::SyntaxKindBitSet,
+    non_assigning_operators,
+    syntax_kind::SyntaxKind::{self, *},
+};
 
 impl<'input> Parser<'input> {
     pub fn parse_statement(&self) -> Option<Finished> {
@@ -41,7 +46,15 @@ impl<'input> Parser<'input> {
         let marker = self.start();
         self.expect_and_bump(KwLet);
         let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.context.borrow().expect([Ident, Semi, VarDef].as_ref());
+        let ctx = self.context.borrow();
+        ctx.expect([Ident, Semi, VarDef].as_ref());
+        ctx.forbid_all();
+        let non_assignments: SyntaxKindBitSet = non_assigning_operators();
+        ctx.allow(non_assignments);
+        ctx.allow(SyntaxKind::opening_delimiters());
+        ctx.allow(Eq);
+        ctx.allow([Ident, Semi, VarDef, VarRef].as_ref());
+
         if self
             .parse_expression_until_binding_power(starting_precedence())
             .is_none()
@@ -109,15 +122,18 @@ mod tests {
         check(
             "let foo = bar",
             expect![[r#"
-                Root@0..10
-                  VariableDef@0..10
-                    LetKw@0..3 "let"
-                    InfixBinaryOp@3..10
-                      VariableRef@3..6
-                        Identifier@3..6 "foo"
-                      Eq@6..7 "="
-                      VariableRef@7..10
-                        Identifier@7..10 "bar""#]],
+                Root@0..13
+                  VarDef@0..13
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..13
+                      VarRef@4..8
+                        Ident@4..7 "foo"
+                        Whitespace@7..8 " "
+                      Eq@8..9 "="
+                      Whitespace@9..10 " "
+                      VarRef@10..13
+                        Ident@10..13 "bar""#]],
         );
     }
 
@@ -126,21 +142,28 @@ mod tests {
         check(
             "let a =\nlet b = a;",
             expect![[r#"
-                Root@0..11
-                  VariableDef@0..5
-                    LetKw@0..3 "let"
-                    InfixBinaryOp@3..5
-                      VariableRef@3..4
-                        Identifier@3..4 "a"
-                      Eq@4..5 "="
-                  VariableDef@5..11
-                    LetKw@5..8 "let"
-                    InfixBinaryOp@8..11
-                      VariableRef@8..9
-                        Identifier@8..9 "b"
-                      Eq@9..10 "="
-                      VariableRef@10..11
-                        Identifier@10..11 "a""#]],
+                Root@0..18
+                  VarDef@0..8
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..8
+                      VarRef@4..6
+                        Ident@4..5 "a"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                      Whitespace@7..8 "\n"
+                  VarDef@8..18
+                    KwLet@8..11 "let"
+                    Whitespace@11..12 " "
+                    InfixBinOp@12..17
+                      VarRef@12..14
+                        Ident@12..13 "b"
+                        Whitespace@13..14 " "
+                      Eq@14..15 "="
+                      Whitespace@15..16 " "
+                      VarRef@16..17
+                        Ident@16..17 "a"
+                    Semi@17..18 ";""#]],
         );
     }
     #[test]
@@ -148,21 +171,28 @@ mod tests {
         check(
             "let a =;let b = a;",
             expect![[r#"
-                Root@0..11
-                  VariableDef@0..5
-                    LetKw@0..3 "let"
-                    InfixBinaryOp@3..5
-                      VariableRef@3..4
-                        Identifier@3..4 "a"
-                      Eq@4..5 "="
-                  VariableDef@5..11
-                    LetKw@5..8 "let"
-                    InfixBinaryOp@8..11
-                      VariableRef@8..9
-                        Identifier@8..9 "b"
-                      Eq@9..10 "="
-                      VariableRef@10..11
-                        Identifier@10..11 "a""#]],
+                Root@0..18
+                  VarDef@0..8
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..7
+                      VarRef@4..6
+                        Ident@4..5 "a"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                    Semi@7..8 ";"
+                  VarDef@8..18
+                    KwLet@8..11 "let"
+                    Whitespace@11..12 " "
+                    InfixBinOp@12..17
+                      VarRef@12..14
+                        Ident@12..13 "b"
+                        Whitespace@13..14 " "
+                      Eq@14..15 "="
+                      Whitespace@15..16 " "
+                      VarRef@16..17
+                        Ident@16..17 "a"
+                    Semi@17..18 ";""#]],
         );
     }
 
@@ -171,17 +201,22 @@ mod tests {
         check(
             "let a = 1;\na",
             expect![[r#"
-                Root@0..7
-                  VariableDef@0..7
-                    LetKw@0..3 "let"
-                    InfixBinaryOp@3..7
-                      VariableRef@3..4
-                        Identifier@3..4 "a"
-                      Eq@4..5 "="
-                      Literal@5..6
-                        Number@5..6 "1"
-                      VariableRef@6..7
-                        Identifier@6..7 "a""#]],
+                Root@0..12
+                  VarDef@0..10
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..9
+                      VarRef@4..6
+                        Ident@4..5 "a"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                      Whitespace@7..8 " "
+                      Literal@8..9
+                        Int@8..9 "1"
+                    Semi@9..10 ";"
+                  Whitespace@10..11 "\n"
+                  VarRef@11..12
+                    Ident@11..12 "a""#]],
         );
     }
     #[test]
@@ -189,17 +224,22 @@ mod tests {
         check(
             "let a = 0; a",
             expect![[r#"
-                Root@0..7
-                  VariableDef@0..6
-                    LetKw@0..3 "let"
-                    InfixBinaryOp@3..6
-                      VariableRef@3..4
-                        Identifier@3..4 "a"
-                      Eq@4..5 "="
-                      Literal@5..6
-                        Number@5..6 "0"
-                  VariableRef@6..7
-                    Identifier@6..7 "a""#]],
+                Root@0..12
+                  VarDef@0..10
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..9
+                      VarRef@4..6
+                        Ident@4..5 "a"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                      Whitespace@7..8 " "
+                      Literal@8..9
+                        Int@8..9 "0"
+                    Semi@9..10 ";"
+                  Whitespace@10..11 " "
+                  VarRef@11..12
+                    Ident@11..12 "a""#]],
         );
     }
 
@@ -208,27 +248,34 @@ mod tests {
         check(
             "{let a =\n{let b =} 10 }",
             expect![[r#"
-                Root@0..16
-                  Block@0..16
+                Root@0..23
+                  Block@0..23
                     LBrace@0..1 "{"
-                    VariableDef@1..15
-                      LetKw@1..4 "let"
-                      InfixBinaryOp@4..15
-                        VariableRef@4..5
-                          Identifier@4..5 "a"
-                        Eq@5..6 "="
-                        Block@6..13
-                          LBrace@6..7 "{"
-                          VariableDef@7..12
-                            LetKw@7..10 "let"
-                            InfixBinaryOp@10..12
-                              VariableRef@10..11
-                                Identifier@10..11 "b"
-                              Eq@11..12 "="
-                          RBrace@12..13 "}"
-                        Recovered@13..15
-                          Number@13..15 "10"
-                    RBrace@15..16 "}""#]],
+                    VarDef@1..21
+                      KwLet@1..4 "let"
+                      Whitespace@4..5 " "
+                      InfixBinOp@5..19
+                        VarRef@5..7
+                          Ident@5..6 "a"
+                          Whitespace@6..7 " "
+                        Eq@7..8 "="
+                        Whitespace@8..9 "\n"
+                        Block@9..18
+                          LBrace@9..10 "{"
+                          VarDef@10..17
+                            KwLet@10..13 "let"
+                            Whitespace@13..14 " "
+                            InfixBinOp@14..17
+                              VarRef@14..16
+                                Ident@14..15 "b"
+                                Whitespace@15..16 " "
+                              Eq@16..17 "="
+                          RBrace@17..18 "}"
+                        Whitespace@18..19 " "
+                      Recovered@19..21
+                        Int@19..21 "10"
+                    Whitespace@21..22 " "
+                    RBrace@22..23 "}""#]],
         );
     }
 
@@ -237,27 +284,35 @@ mod tests {
         check(
             "{let a =\n{let b =}; 10 }",
             expect![[r#"
-                Root@0..16
-                  Block@0..16
+                Root@0..24
+                  Block@0..24
                     LBrace@0..1 "{"
-                    VariableDef@1..15
-                      LetKw@1..4 "let"
-                      InfixBinaryOp@4..15
-                        VariableRef@4..5
-                          Identifier@4..5 "a"
-                        Eq@5..6 "="
-                        Block@6..13
-                          LBrace@6..7 "{"
-                          VariableDef@7..12
-                            LetKw@7..10 "let"
-                            InfixBinaryOp@10..12
-                              VariableRef@10..11
-                                Identifier@10..11 "b"
-                              Eq@11..12 "="
-                          RBrace@12..13 "}"
-                        Literal@13..15
-                          Number@13..15 "10"
-                    RBrace@15..16 "}""#]],
+                    VarDef@1..19
+                      KwLet@1..4 "let"
+                      Whitespace@4..5 " "
+                      InfixBinOp@5..18
+                        VarRef@5..7
+                          Ident@5..6 "a"
+                          Whitespace@6..7 " "
+                        Eq@7..8 "="
+                        Whitespace@8..9 "\n"
+                        Block@9..18
+                          LBrace@9..10 "{"
+                          VarDef@10..17
+                            KwLet@10..13 "let"
+                            Whitespace@13..14 " "
+                            InfixBinOp@14..17
+                              VarRef@14..16
+                                Ident@14..15 "b"
+                                Whitespace@15..16 " "
+                              Eq@16..17 "="
+                          RBrace@17..18 "}"
+                      Semi@18..19 ";"
+                    Whitespace@19..20 " "
+                    Literal@20..22
+                      Int@20..22 "10"
+                    Whitespace@22..23 " "
+                    RBrace@23..24 "}""#]],
         );
     }
 }
