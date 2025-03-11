@@ -17,7 +17,7 @@ impl<'input> Parser<'input> {
 
     pub fn recover_from_err(&self, err: Report) {
         let kinds: ThinVec<SyntaxKind> = self.context.borrow().get_expectations().into();
-        self.event_holder.borrow_mut().push(Event::Error {
+        self.push_event(Event::Error {
             err: ParseError::new(
                 self.lexer.borrow().span().clone(),
                 kinds,
@@ -30,7 +30,7 @@ impl<'input> Parser<'input> {
     }
 
     pub fn recover_with_msg(&self, msg: &str, got: impl Stringer) {
-        self.event_holder.borrow_mut().push(Event::Error {
+        self.push_event(Event::Error {
             err: ParseError::new(self.lexer.borrow().span().clone(), msg, got),
         });
         if self.can_recover() {
@@ -41,7 +41,7 @@ impl<'input> Parser<'input> {
     pub fn recover_unmet_expectation(&self) {
         let got = self.peek();
         let kinds: ThinVec<SyntaxKind> = self.context.borrow().get_expectations().into();
-        self.event_holder.borrow_mut().push(Event::Error {
+        self.push_event(Event::Error {
             err: ParseError::new(self.lexer.borrow_mut().span().clone(), kinds, got),
         });
         if self.can_recover() {
@@ -67,7 +67,7 @@ impl<'input> Parser<'input> {
 
         let err_span = self.lexer.borrow().span().clone();
 
-        self.event_holder.borrow_mut().push(Event::Error {
+        self.push_event(Event::Error {
             err: ParseError::new(err_span, exps, self.peek()),
         });
         if self.can_recover() {
@@ -76,8 +76,9 @@ impl<'input> Parser<'input> {
     }
 
     pub fn recover_restricted(&self, restricted: SyntaxKind) {
+        println!("allowed set: {:?}", self.context.borrow().get_allowed());
         let allowed: ThinVec<SyntaxKind> = self.context.borrow().get_allowed().into();
-        self.event_holder.borrow_mut().push(Event::Error {
+        self.push_event(Event::Error {
             err: ParseError::new(self.lexer.borrow().span().clone(), allowed, restricted),
         });
         if self.can_recover() {
