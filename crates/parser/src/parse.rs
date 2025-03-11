@@ -1,4 +1,3 @@
-use lexer::token_type::TokenType;
 use syntax::{Syntax, is_a_type, is_an_assignment, is_an_operator, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
@@ -52,9 +51,7 @@ impl<'input> Parser<'input> {
         while until_false(self.peek()?.ok()?) {
             let marker = self.start();
 
-            // println!("parse with before: {:?}", self.peek());
             self.parse_with(&elements_in_order);
-            // println!("parse with after: {:?}", self.peek());
 
             self.ignore_if(separator);
             self.complete_marker_with(marker, wrapping_kind_to_complete);
@@ -108,56 +105,6 @@ impl<'input> Parser<'input> {
             self.complete_marker_with(cond_marker, Condition)
         };
         Some(marker)
-    }
-
-    fn parse_statement(&self) -> Option<Finished> {
-        let mut syntax = self.peek()?;
-        while let Err(err) = syntax {
-            self.recover_from_err(err);
-            syntax = self.peek()?;
-        }
-        // TODO: deal with semi: loops can return if not ; delimited
-        let marker = match self.peek()? {
-            Ok(syntax) if syntax.is_of_kind(KwFn) => self.parse_function_def(),
-            Ok(syntax) if syntax.is_of_kind(KwFor) => self.parse_for_loop(),
-            Ok(syntax) if syntax.is_of_kind(KwIf) => self.parse_conditionals(),
-            Ok(syntax) if syntax.is_of_kind(KwImpl) => self.parse_impl_block(),
-            Ok(syntax) if syntax.is_of_kind(KwLet) => self.parse_variable_def(),
-            Ok(syntax) if syntax.is_of_kind(KwStruct) => self.parse_struct_definition(),
-            Ok(syntax) if syntax.is_of_kind(KwWhile) => self.parse_while_loop(),
-            // An expression produces a result (result of evalution), but if there is a ; at the end,
-            // it becomes a statemet, thus check that here and wrap it with Semi
-            _ => self.parse_expression_until_binding_power(starting_precedence()),
-        };
-        if self.is_next(Semi) {
-            if marker.is_some() {
-                // let semi = marker?.precede(self);
-                // self.bump();
-                self.ignore();
-                // Some(semi.complete(&mut self.event_holder, Semi))
-            } else {
-                self.ignore();
-                // self.recover();
-            }
-        }
-        marker
-    }
-
-    #[allow(unused_variables)]
-    fn parse_variable_def(&self) -> Option<Finished> {
-        let marker = self.start();
-        self.expect_and_bump(KwLet);
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.context.borrow().expect([Ident, Semi, VarDef].as_ref());
-        if self
-            .parse_expression_until_binding_power(starting_precedence())
-            .is_none()
-        {
-            let got = self.peek();
-            self.recover_with_msg("expected a valid assignment", got);
-        }
-        self.expect_and_bump(Semi);
-        Some(self.complete_marker_with(marker, VarDef))
     }
 
     pub fn parse_expression_until_binding_power(&self, min_precedence: Bound) -> Option<Finished> {
@@ -305,6 +252,7 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(Semi);
         Some(self.complete_marker_with(semi_marker, Semi))
     }
+
     fn parse_continue(&self) -> Option<Finished> {
         let marker = self.start();
         self.expect_and_bump(KwContinue);
@@ -334,59 +282,6 @@ impl<'input> Parser<'input> {
                 todo!()
             }
         }
-    }
-
-    #[allow(unused_variables)] // for rollback anchor
-    pub fn parse_delimited(&self, syntax: Syntax) -> Option<Finished> {
-        let kind = syntax.get_kind();
-        if !self.context.borrow().is_allowed(kind) {
-            self.recover_restricted(kind);
-            return None;
-        }
-        use TokenType::*;
-        match syntax.get_token_type() {
-            OpeningDelimiter(expected_token_kind) => match kind {
-                LParen => self.parse_paren_expr(syntax),
-                LBrace => self.parse_block(),
-                _ => unreachable!(),
-            },
-            ClosingDelimiter(expected_token_kind) => {
-                return None;
-            }
-            _ => unreachable!(),
-        }
-    }
-
-    #[allow(unused_variables)] // for rollback anchor
-    pub fn parse_paren_expr(&self, syntax: Syntax) -> Option<Finished> {
-        use SyntaxKind::*;
-        let marker = self.start();
-        self.expect_and_bump(LParen);
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        // restricts ']', '}' (recovers them by erroring), expects and allows ')'
-        self.impose_restrictions_of(syntax);
-        _ = self.parse_expression_until_binding_power(starting_precedence());
-        self.expect_and_bump(RParen);
-        let finished = self.complete_marker_with(marker, SyntaxKind::ParenExpr);
-        Some(finished)
-    }
-
-    #[allow(unused_variables)] // for rollback anchor
-    pub fn parse_block(&self) -> Option<Finished> {
-        let marker = self.start();
-        self.expect_and_bump(LBrace);
-
-        // TODO: put in a function impose_block_restrictions or inject_block_context
-        {
-            let rollback_when_dropped = self.roll_back_context_after_drop();
-            let ctx = self.context.borrow();
-            ctx.forbid(RBrace);
-            ctx.disallow_recovery_of(RBrace);
-            while !self.is_next(RBrace) && self.parse_statement().is_some() {}
-        }
-
-        self.expect_and_bump(RBrace);
-        Some(self.complete_marker_with(marker, Block))
     }
 
     pub fn parse_prefix_unary_operation(&self, kind: SyntaxKind) -> Option<Finished> {
@@ -646,237 +541,6 @@ pub(crate) mod tests {
                 "Root@0..5\n  InfixBinOp@0..5\n    PrefixUnaryOp@0..2\n      Minus@0..1 \"-\"\n      Literal@1..2\n        Int@1..2 \"3\"\n    Plus@2..3 \"+\"\n    Literal@3..5\n      Int@3..5 \"14\""
             ]]
         ),
-        only_parenthesis: ("()",
-            expect![[
-                "Root@0..2\n  ParenExpr@0..2\n    LParen@0..1 \"(\"\n    RParen@1..2 \")\""
-            ]]
-        ),
 
-        missing_closing_parenthesis_does_not_panic: ("(",
-            expect![[
-                "Root@0..1\n  ParenExpr@0..1\n    LParen@0..1 \"(\""
-            ]]
-        ),
-
-        parenthesised_pi: ("((314))",
-            expect![[
-                "Root@0..7\n  ParenExpr@0..7\n    LParen@0..1 \"(\"\n    ParenExpr@1..6\n      LParen@1..2 \"(\"\n      Literal@2..5\n        Int@2..5 \"314\"\n      RParen@5..6 \")\"\n    RParen@6..7 \")\""
-            ]]
-        ),
-        parenthesised_pi_with_semicolon: ("((314));",
-            expect![[r#"
-                Root@0..7
-                  ParenExpr@0..7
-                    LParen@0..1 "("
-                    ParenExpr@1..6
-                      LParen@1..2 "("
-                      Literal@2..5
-                        Int@2..5 "314"
-                      RParen@5..6 ")"
-                    RParen@6..7 ")""#]]
-        ),
-        parenthesised_pi_with_semicolon_inside: ("((314;));",
-            expect![[r#"
-                Root@0..8
-                  ParenExpr@0..7
-                    LParen@0..1 "("
-                    ParenExpr@1..6
-                      LParen@1..2 "("
-                      Literal@2..5
-                        Int@2..5 "314"
-                      Recovered@5..6
-                        Semi@5..6 ";"
-                    RParen@6..7 ")"
-                  Recovered@7..8
-                    RParen@7..8 ")""#]]
-        ),
-        parenthesised_sub_precedes_mul: ("(3+1)*4",
-            expect![[
-                "Root@0..7\n  InfixBinOp@0..7\n    ParenExpr@0..5\n      LParen@0..1 \"(\"\n      InfixBinOp@1..4\n        Literal@1..2\n          Int@1..2 \"3\"\n        Plus@2..3 \"+\"\n        Literal@3..4\n          Int@3..4 \"1\"\n      RParen@4..5 \")\"\n    Star@5..6 \"*\"\n    Literal@6..7\n      Int@6..7 \"4\""
-            ]]
-        ),
-
-        block_with_returning: ("{let a = 0; a}",
-            expect![[r#"
-                Root@0..14
-                  Block@0..14
-                    LBrace@0..1 "{"
-                    VarDef@1..11
-                      KwLet@1..4 "let"
-                      Whitespace@4..5 " "
-                      InfixBinOp@5..10
-                        VarRef@5..7
-                          Ident@5..6 "a"
-                          Whitespace@6..7 " "
-                        Eq@7..8 "="
-                        Whitespace@8..9 " "
-                        Literal@9..10
-                          Int@9..10 "0"
-                      Semi@10..11 ";"
-                    Whitespace@11..12 " "
-                    VarRef@12..13
-                      Ident@12..13 "a"
-                    RBrace@13..14 "}""#]],
-        ),
-
-        block_with_multiple_statements_and_expressions: ("{let a = 0;\n let b = 1; let c= 2; a+b+c}",
-            expect![[r#"
-                Root@0..40
-                  Block@0..40
-                    LBrace@0..1 "{"
-                    VarDef@1..11
-                      KwLet@1..4 "let"
-                      Whitespace@4..5 " "
-                      InfixBinOp@5..10
-                        VarRef@5..7
-                          Ident@5..6 "a"
-                          Whitespace@6..7 " "
-                        Eq@7..8 "="
-                        Whitespace@8..9 " "
-                        Literal@9..10
-                          Int@9..10 "0"
-                      Semi@10..11 ";"
-                    Whitespace@11..12 "\n"
-                    Whitespace@12..13 " "
-                    VarDef@13..23
-                      KwLet@13..16 "let"
-                      Whitespace@16..17 " "
-                      InfixBinOp@17..22
-                        VarRef@17..19
-                          Ident@17..18 "b"
-                          Whitespace@18..19 " "
-                        Eq@19..20 "="
-                        Whitespace@20..21 " "
-                        Literal@21..22
-                          Int@21..22 "1"
-                      Semi@22..23 ";"
-                    Whitespace@23..24 " "
-                    VarDef@24..33
-                      KwLet@24..27 "let"
-                      Whitespace@27..28 " "
-                      InfixBinOp@28..32
-                        VarRef@28..29
-                          Ident@28..29 "c"
-                        Eq@29..30 "="
-                        Whitespace@30..31 " "
-                        Literal@31..32
-                          Int@31..32 "2"
-                      Semi@32..33 ";"
-                    Whitespace@33..34 " "
-                    InfixBinOp@34..39
-                      InfixBinOp@34..37
-                        VarRef@34..35
-                          Ident@34..35 "a"
-                        Plus@35..36 "+"
-                        VarRef@36..37
-                          Ident@36..37 "b"
-                      Plus@37..38 "+"
-                      VarRef@38..39
-                        Ident@38..39 "c"
-                    RBrace@39..40 "}""#]],
-        ),
-
-        malformed_var_defs: ("let a = let b = let c = 5",
-            expect![[r#"
-                Root@0..25
-                  VarDef@0..8
-                    KwLet@0..3 "let"
-                    Whitespace@3..4 " "
-                    InfixBinOp@4..8
-                      VarRef@4..6
-                        Ident@4..5 "a"
-                        Whitespace@5..6 " "
-                      Eq@6..7 "="
-                      Whitespace@7..8 " "
-                  VarDef@8..16
-                    KwLet@8..11 "let"
-                    Whitespace@11..12 " "
-                    InfixBinOp@12..16
-                      VarRef@12..14
-                        Ident@12..13 "b"
-                        Whitespace@13..14 " "
-                      Eq@14..15 "="
-                      Whitespace@15..16 " "
-                  VarDef@16..25
-                    KwLet@16..19 "let"
-                    Whitespace@19..20 " "
-                    InfixBinOp@20..25
-                      VarRef@20..22
-                        Ident@20..21 "c"
-                        Whitespace@21..22 " "
-                      Eq@22..23 "="
-                      Whitespace@23..24 " "
-                      Literal@24..25
-                        Int@24..25 "5""#]]
-        ),
-
-        arr_indexing: ("arr[arr.len() - 1]",
-            expect![[r#"
-                Root@0..18
-                  ContainerRef@0..18
-                    Ident@0..3 "arr"
-                    LBrack@3..4 "["
-                    InfixBinOp@4..17
-                      InfixBinOp@4..14
-                        VarRef@4..7
-                          Ident@4..7 "arr"
-                        Dot@7..8 "."
-                        FnCall@8..13
-                          Ident@8..11 "len"
-                          LParen@11..12 "("
-                          RParen@12..13 ")"
-                        Whitespace@13..14 " "
-                      Minus@14..15 "-"
-                      Whitespace@15..16 " "
-                      Literal@16..17
-                        Int@16..17 "1"
-                    RBrack@17..18 "]""#]],
-        ),
-
-        block_debug: ("{ self.x += by.x; self.y += by.y;}",
-            expect![[r#"
-                Root@0..34
-                  Block@0..34
-                    LBrace@0..1 "{"
-                    Whitespace@1..2 " "
-                    Semi@2..17
-                      InfixBinOp@2..16
-                        InfixBinOp@2..9
-                          SelfRef@2..6
-                            Kwself@2..6 "self"
-                          Dot@6..7 "."
-                          VarRef@7..9
-                            Ident@7..8 "x"
-                            Whitespace@8..9 " "
-                        PlusEq@9..11 "+="
-                        Whitespace@11..12 " "
-                        InfixBinOp@12..16
-                          VarRef@12..14
-                            Ident@12..14 "by"
-                          Dot@14..15 "."
-                          VarRef@15..16
-                            Ident@15..16 "x"
-                      Semi@16..17 ";"
-                    Whitespace@17..18 " "
-                    Semi@18..33
-                      InfixBinOp@18..32
-                        InfixBinOp@18..25
-                          SelfRef@18..22
-                            Kwself@18..22 "self"
-                          Dot@22..23 "."
-                          VarRef@23..25
-                            Ident@23..24 "y"
-                            Whitespace@24..25 " "
-                        PlusEq@25..27 "+="
-                        Whitespace@27..28 " "
-                        InfixBinOp@28..32
-                          VarRef@28..30
-                            Ident@28..30 "by"
-                          Dot@30..31 "."
-                          VarRef@31..32
-                            Ident@31..32 "y"
-                      Semi@32..33 ";"
-                    RBrace@33..34 "}""#]],
-        ),
     }
 }

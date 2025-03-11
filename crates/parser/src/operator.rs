@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use lexer::token_type::TokenType;
-use syntax::{Syntax, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
+use syntax::{Syntax, syntax_kind::SyntaxKind};
 
 use num_derive::{FromPrimitive, ToPrimitive};
 

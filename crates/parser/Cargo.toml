@@ -10,7 +10,6 @@ syntax = { path = "../syntax" }
 
 drop_bomb = "0.1.5"
 la-arena = "0.3.1"
-lazy_static = "1.5.0"
 miette = { version = "7.5.0", features = ["fancy"] }
 num-derive = "0.4.2"
 num-traits = "0.2.19"
