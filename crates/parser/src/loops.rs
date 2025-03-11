@@ -63,7 +63,7 @@ impl<'input> Parser<'input> {
             use SeparatedElement::*;
 
             let idents = thin_vec![Kind(Ident)];
-            self.parse_separated_by(idents, ForIdent, Comma, |syntax: Syntax| {
+            self.parse_separated_by(&idents, ForIdent, Comma, |syntax: Syntax| {
                 !syntax.is_of_kind(KwIn)
             });
         }

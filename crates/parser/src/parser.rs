@@ -19,8 +19,6 @@ pub struct Parser<'input> {
     pub(super) lexer: RefCell<Lexer<'input>>,
     pub event_holder: RefCell<EventHolder>,
     pub context: RefCell<ParserContext>,
-    // when looking ahead, we omit whitespaces and errors for a second, we store them here to deal with later on
-    pub buffer: RefCell<Option<Syntax>>,
 }
 
 use SyntaxKind::*;
@@ -36,7 +34,6 @@ impl<'input> Parser<'input> {
             lexer: RefCell::new(Lexer::new(program)),
             event_holder: RefCell::new(EventHolder::new()),
             context: RefCell::new(context),
-            buffer: RefCell::new(None),
         }
     }
 
@@ -69,14 +66,6 @@ impl<'input> Parser<'input> {
         self.event_holder.borrow_mut().push(event);
     }
 
-    pub fn clean_buffer(&self) {
-        self.buffer.take().iter().for_each(|syntax| {
-            self.push_event(Event::AddSyntax {
-                syntax: syntax.clone(),
-            });
-        });
-    }
-
     pub fn roll_back_context_after_drop(&self) -> RollingBackAnchor {
         let ctx = self.context.as_ptr();
         let anchor = ParserContext::rolling_back_anchor(ctx);
@@ -105,16 +94,13 @@ impl<'input> Parser<'input> {
 
     pub fn peek(&self) -> Option<MietteResult<Syntax>> {
         let mut peeked = self.raw_peek()?;
-        if let Ok(ref syntax) = peeked {
+        while let Ok(ref syntax) = peeked {
             if syntax.is_trivia() {
-                // if already seen before, take it
-                if self.buffer.borrow().is_some() {
-                    self.clean_buffer();
-                }
-                *self.buffer.borrow_mut() = Some(syntax.clone());
-                self.lexer.borrow_mut().next();
-                peeked = self.raw_peek()?
+                self.bump();
+                peeked = self.raw_peek()?;
+                continue;
             }
+            break;
         }
         Some(peeked)
     }
@@ -132,23 +118,21 @@ impl<'input> Parser<'input> {
     }
 
     pub fn is_next(&self, expected_kind: SyntaxKind) -> bool {
-        let result = if let Some(Ok(token)) = self.peek() {
+        if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;
             syntax.is_of_kind(expected_kind)
         } else {
             false
-        };
-        result
+        }
     }
 
     pub fn is_next_f(&self, expect: fn(Syntax) -> bool) -> bool {
-        let result = if let Some(Ok(token)) = self.peek() {
+        if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;
             expect(syntax)
         } else {
             false
-        };
-        result
+        }
     }
     // expect injects the syntax kind to expectations if not met
     pub fn expect(&self, kind: SyntaxKind) -> Option<()> {
@@ -191,24 +175,13 @@ impl<'input> Parser<'input> {
 
     pub fn bump_with_marker(&self, kind: SyntaxKind) -> Marker<Complete> {
         let marker = self.start();
-        self.bump_no_buffer_action();
+        self.bump();
         let finished = self.complete_marker_with(marker, kind);
-        self.clean_buffer();
         finished
     }
 
-    pub fn bump_no_buffer_action(&self) -> Option<()> {
-        if let Ok(token) = self.lexer.borrow_mut().next()? {
-            let syntax: Syntax = token.into();
-            let kind = syntax.get_kind();
-            self.context.borrow().del_expectation(kind);
-            self.push_event(Event::AddSyntax { syntax: syntax });
-        }
-        Some(())
-    }
     // bump removes the syntax kind from expectations if succesful
     pub fn bump(&self) -> Option<()> {
-        self.clean_buffer();
         if let Ok(token) = self.lexer.borrow_mut().next()? {
             let syntax: Syntax = token.into();
             let kind = syntax.get_kind();

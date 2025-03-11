@@ -9,15 +9,6 @@ pub fn starting_precedence() -> Bound {
     Bound::Included(Precedence::Base)
 }
 
-use lazy_static::lazy_static;
-
-lazy_static! {
-    pub static ref OPERATORS: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
-}
-pub fn is_an_operator(kind: &SyntaxKind) -> bool {
-    OPERATORS.contains(kind)
-}
-
 pub trait Op: Into<SyntaxKind> + Debug + Clone {
     fn precedence(&self) -> Precedence;
     fn associativity(&self) -> Associativity;

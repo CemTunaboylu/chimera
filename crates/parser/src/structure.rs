@@ -57,10 +57,58 @@ impl<'input> Parser<'input> {
         use SeparatedElement::*;
 
         let idents = thin_vec![Kind(Ident), Kind(Colon), Fn(ident_or_type)];
-        self.parse_separated_by(idents, StructAttr, Comma, |syntax: Syntax| {
+        self.parse_separated_by(&idents, StructAttr, Comma, |syntax: Syntax| {
             !syntax.is_of_kind(RBrace)
         });
 
         Some(self.complete_marker_with(marker, StructAttrs))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::parse::tests::check;
+    use expect_test::expect;
+    use parameterized_test::create;
+
+    create! {
+        create_parser_test,
+        (prog, expect), {
+            check(prog, expect);
+        }
+    }
+    create_parser_test! {
+
+        basic_struct: ("struct Point { x: i32, y: i32, item: Item }",
+            expect![[r#"
+                Root@0..41
+                  StructDef@0..41
+                    KwStruct@0..6 "struct"
+                    Whitespace@6..7 " "
+                    Ident@7..12 "Point"
+                    Whitespace@12..13 " "
+                    LBrace@13..14 "{"
+                    StructAttrs@14..40
+                      Whitespace@14..15 " "
+                      StructAttr@15..21
+                        Ident@15..16 "x"
+                        Colon@16..17 ":"
+                        Whitespace@17..18 " "
+                        TyI32@18..21 "i32"
+                      Whitespace@21..22 " "
+                      StructAttr@22..28
+                        Ident@22..23 "y"
+                        Colon@23..24 ":"
+                        Whitespace@24..25 " "
+                        TyI32@25..28 "i32"
+                      Whitespace@28..29 " "
+                      StructAttr@29..40
+                        Ident@29..33 "item"
+                        Colon@33..34 ":"
+                        Whitespace@34..35 " "
+                        Ident@35..39 "Item"
+                        Whitespace@39..40 " "
+                    RBrace@40..41 "}""#]],
+        ),
     }
 }
