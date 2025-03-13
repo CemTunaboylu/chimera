@@ -5,7 +5,7 @@ use crate::{
     parser::Parser,
 };
 use lexer::token_type::TokenType;
-use syntax::{Syntax, syntax_kind::SyntaxKind};
+use syntax::{Syntax, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
 
 use SyntaxKind::*;
 use thin_vec::{ThinVec, thin_vec};
@@ -31,7 +31,9 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(LParen);
         if !self.is_next(RParen) {
             let rollback_after_drop = self.roll_back_context_after_drop();
-            self.context.borrow().disallow_recovery_of(RParen);
+            let ctx = self.context.borrow();
+            ctx.disallow_recovery_of(RParen);
+            ctx.expect(FnDef);
             self.parse_comma_separated_typed_declarations_until(|syntax: Syntax| {
                 !syntax.is_of_kind(RParen)
             });
@@ -77,15 +79,22 @@ impl<'input> Parser<'input> {
         use SeparatedElement::*;
 
         let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
-        let arg_elements = thin_vec![Kind(Ident), Kind(Colon), ref_mut_with(Fn(ident_or_type))];
+        let types_set: SyntaxKindBitSet = SyntaxKind::types().into();
+        let arg_elements = thin_vec![
+            Kind(Ident),
+            Kind(Colon),
+            ref_mut_with(Branched(
+                thin_vec![KindWithMarker(Ident, StructAsType)],
+                thin_vec![InSet(types_set)],
+            ))
+        ];
         let can_be_a_method = thin_vec![Branched(
             thin_vec![ref_mut_with(KindWithMarker(Kwself, SelfRef))],
-            arg_elements
+            arg_elements.clone()
         )];
 
         self.parse_arg(&can_be_a_method);
 
-        let arg_elements = thin_vec![Kind(Ident), Kind(Colon), ref_mut_with(Fn(ident_or_type))];
         while let Some(Ok(peeked)) = self.peek() {
             if !until_false(peeked.clone()) {
                 break;
@@ -136,7 +145,9 @@ impl<'input> Parser<'input> {
     #[allow(unused_variables)]
     pub fn parse_comma_separated_arguments_until(&self, until: fn(Syntax) -> bool) -> Option<()> {
         let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.context.borrow().allow(RParen);
+        let ctx = self.context.borrow();
+        ctx.allow(RParen);
+        ctx.expect(FnCall);
 
         use SeparatedElement::*;
         let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
@@ -179,19 +190,22 @@ mod tests {
               ParamDecl@0..8
                 Ident@0..2 "me"
                 Colon@2..3 ":"
-                Ident@3..8 "human"
+                StructAsType@3..8
+                  Ident@3..8 "human"
               Whitespace@8..9 " "
               ParamDecl@9..23
                 Ident@9..13 "lang"
                 Colon@13..14 ":"
                 Whitespace@14..15 " "
-                Ident@15..23 "Language"
+                StructAsType@15..23
+                  Ident@15..23 "Language"
               Whitespace@23..24 " "
               ParamDecl@24..32
                 Ident@24..27 "pet"
                 Colon@27..28 ":"
                 Whitespace@28..29 " "
-                Ident@29..32 "Cat""#]];
+                StructAsType@29..32
+                  Ident@29..32 "Cat""#]];
 
         let debug_tree = cst.debug_tree();
         expect.assert_eq(&debug_tree);
@@ -254,7 +268,8 @@ mod tests {
                   Ident@31..36 "third"
                   Colon@36..37 ":"
                   Whitespace@37..38 " "
-                  Ident@38..47 "Structure"
+                  StructAsType@38..47
+                    Ident@38..47 "Structure"
                 RParen@47..48 ")"
                 Whitespace@48..49 " "
                 Block@49..51
@@ -398,7 +413,8 @@ mod tests {
                       Ident@23..25 "by"
                       Colon@25..26 ":"
                       Whitespace@26..27 " "
-                      Ident@27..32 "Point"
+                      StructAsType@27..32
+                        Ident@27..32 "Point"
                     RParen@32..33 ")"
                     Whitespace@33..34 " "
                     Block@34..68
@@ -470,7 +486,8 @@ mod tests {
                         Mut@28..37
                           KwMut@28..31 "mut"
                           Whitespace@31..32 " "
-                          Ident@32..37 "Point"
+                          StructAsType@32..37
+                            Ident@32..37 "Point"
                     RParen@37..38 ")"
                     Whitespace@38..39 " "
                     Block@39..42

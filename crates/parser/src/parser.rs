@@ -126,6 +126,15 @@ impl<'input> Parser<'input> {
         }
     }
 
+    pub fn is_next_in(&self, set: SyntaxKindBitSet) -> bool {
+        if let Some(Ok(token)) = self.peek() {
+            let syntax: Syntax = token;
+            set.contains(&syntax.get_kind())
+        } else {
+            false
+        }
+    }
+
     pub fn is_next_f(&self, expect: fn(Syntax) -> bool) -> bool {
         if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;

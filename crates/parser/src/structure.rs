@@ -57,11 +57,11 @@ impl<'input> Parser<'input> {
         use SeparatedElement::*;
 
         let idents = thin_vec![Kind(Ident), Kind(Colon), Fn(ident_or_type)];
-        self.parse_separated_by(&idents, StructAttr, Comma, |syntax: Syntax| {
+        self.parse_separated_by(&idents, StructField, Comma, |syntax: Syntax| {
             !syntax.is_of_kind(RBrace)
         });
 
-        Some(self.complete_marker_with(marker, StructAttrs))
+        Some(self.complete_marker_with(marker, StructFields))
     }
 }
 
@@ -88,21 +88,21 @@ mod tests {
                     Ident@7..12 "Point"
                     Whitespace@12..13 " "
                     LBrace@13..14 "{"
-                    StructAttrs@14..40
+                    StructFields@14..40
                       Whitespace@14..15 " "
-                      StructAttr@15..21
+                      StructField@15..21
                         Ident@15..16 "x"
                         Colon@16..17 ":"
                         Whitespace@17..18 " "
                         TyI32@18..21 "i32"
                       Whitespace@21..22 " "
-                      StructAttr@22..28
+                      StructField@22..28
                         Ident@22..23 "y"
                         Colon@23..24 ":"
                         Whitespace@24..25 " "
                         TyI32@25..28 "i32"
                       Whitespace@28..29 " "
-                      StructAttr@29..40
+                      StructField@29..40
                         Ident@29..33 "item"
                         Colon@33..34 ":"
                         Whitespace@34..35 " "

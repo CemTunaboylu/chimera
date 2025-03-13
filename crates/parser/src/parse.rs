@@ -1,4 +1,7 @@
-use syntax::{Syntax, is_a_type, is_an_assignment, is_an_operator, syntax_kind::SyntaxKind};
+use syntax::{
+    Syntax, bitset::SyntaxKindBitSet, is_a_type, is_an_assignment, is_an_operator,
+    syntax_kind::SyntaxKind,
+};
 use thin_vec::ThinVec;
 
 use crate::{
@@ -15,9 +18,10 @@ use SyntaxKind::*;
 
 pub type CustomExpectationOnSyntax = fn(Syntax) -> bool;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SeparatedElement {
     Kind(SyntaxKind),
+    InSet(SyntaxKindBitSet),
     KindWithMarker(SyntaxKind, SyntaxKind),
     OptionalKind(SyntaxKind),
     RefMut(ThinVec<SeparatedElement>),
@@ -71,7 +75,8 @@ impl<'input> Parser<'input> {
             OptionalKind(_) => true,
             RefMut(elements) => self.does_first_element_pass(elements.first().unwrap()),
             ParseExprWith(_) => true,
-            Branched(_, _) => unimplemented!(),
+            Branched(f, _) => self.does_first_element_pass(f.first().unwrap()),
+            &InSet(syntax_kind_bit_set) => self.is_next_in(syntax_kind_bit_set),
         }
     }
     pub fn parse_with(&self, elements_in_order: &ThinVec<SeparatedElement>) {
@@ -80,6 +85,11 @@ impl<'input> Parser<'input> {
             match element {
                 &Kind(exp_kind) => {
                     self.expect_and_bump(exp_kind);
+                }
+                &InSet(set) => {
+                    if self.is_next_in(set) {
+                        self.bump();
+                    }
                 }
                 &KindWithMarker(exp_kind, bump_with) => {
                     self.expect_and_bump_with_marker(exp_kind, bump_with);
@@ -291,7 +301,14 @@ impl<'input> Parser<'input> {
                 None
             }
             KwStruct => self.parse_struct_definition(),
-            KwSelf | Kwself => Some(self.bump_with_marker(SelfRef)),
+            KwSelf | Kwself => {
+                let is_fn_def_or_call: SyntaxKindBitSet = [FnCall, FnDef].as_ref().into();
+                if self.context.borrow().is_expected(is_fn_def_or_call) {
+                    Some(self.bump_with_marker(StructAsType))
+                } else {
+                    Some(self.bump_with_marker(SelfRef))
+                }
+            }
             KwMut => {
                 // TODO: mut should not be here, it should wrap what's coming into its own node
                 todo!()

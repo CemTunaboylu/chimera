@@ -90,7 +90,8 @@ mod tests {
                            Ident@36..38 "by"
                            Colon@38..39 ":"
                            Whitespace@39..40 " "
-                           Ident@40..45 "Point"
+                           StructAsType@40..45
+                             Ident@40..45 "Point"
                          RParen@45..46 ")"
                          Whitespace@46..47 " "
                          Block@47..82

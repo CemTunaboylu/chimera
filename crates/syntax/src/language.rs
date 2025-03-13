@@ -7,6 +7,7 @@ pub enum ChimeraLanguage {}
 pub type SyntaxNode = rowan::SyntaxNode<ChimeraLanguage>;
 pub type SyntaxToken = rowan::SyntaxToken<ChimeraLanguage>;
 pub type SyntaxElement = rowan::SyntaxElement<ChimeraLanguage>;
+pub type NodeOrToken = rowan::NodeOrToken<SyntaxNode, SyntaxToken>;
 
 impl rowan::Language for ChimeraLanguage {
     type Kind = SyntaxKind;
