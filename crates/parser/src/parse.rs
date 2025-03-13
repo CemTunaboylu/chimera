@@ -1,4 +1,7 @@
-use syntax::{Syntax, is_a_type, is_an_assignment, is_an_operator, syntax_kind::SyntaxKind};
+use syntax::{
+    Syntax, is_a_type, is_an_assignment, is_an_operator,
+    syntax_kind::{self, SyntaxKind},
+};
 use thin_vec::ThinVec;
 
 use crate::{
@@ -18,6 +21,9 @@ pub type CustomExpectationOnSyntax = fn(Syntax) -> bool;
 #[derive(Debug)]
 pub enum SeparatedElement {
     Kind(SyntaxKind),
+    KindWithMarker(SyntaxKind, SyntaxKind),
+    Optional(SyntaxKind),
+    RefMut(ThinVec<SeparatedElement>),
     Fn(CustomExpectationOnSyntax),
     Branched(ThinVec<SeparatedElement>, ThinVec<SeparatedElement>),
     ParseExprWith(Bound),
@@ -62,21 +68,35 @@ impl<'input> Parser<'input> {
     fn does_first_element_pass(&self, s: &SeparatedElement) -> bool {
         use SeparatedElement::*;
         match s {
-            Kind(syntax_kind) => self.is_next(syntax_kind.clone()),
-            Fn(f) => self.is_next_f(f.clone()),
+            &Kind(syntax_kind) => self.is_next(syntax_kind),
+            &KindWithMarker(syntax_kind, _) => self.is_next(syntax_kind),
+            &Fn(f) => self.is_next_f(f),
+            Optional(_) => true,
+            RefMut(elements) => self.does_first_element_pass(elements.first().unwrap()),
             ParseExprWith(_) => unimplemented!(),
             Branched(_, _) => unimplemented!(),
         }
     }
-    fn parse_with(&self, elements_in_order: &ThinVec<SeparatedElement>) {
+    pub fn parse_with(&self, elements_in_order: &ThinVec<SeparatedElement>) {
         use SeparatedElement::*;
         for element in elements_in_order.iter() {
             match element {
-                Kind(exp_kind) => {
-                    self.expect_and_bump(exp_kind.clone());
+                &Kind(exp_kind) => {
+                    self.expect_and_bump(exp_kind);
                 }
-                Fn(custom_exp_func) => {
-                    self.expect_f_and_bump(*custom_exp_func);
+                &KindWithMarker(exp_kind, bump_with) => {
+                    self.expect_and_bump_with_marker(exp_kind, bump_with);
+                }
+                &Fn(custom_exp_func) => {
+                    self.expect_f_and_bump(custom_exp_func);
+                }
+                &Optional(syntax_kind) => {
+                    if self.is_next(syntax_kind) {
+                        self.bump();
+                    }
+                }
+                RefMut(elements) => {
+                    self.parse_arg_after_colon(elements);
                 }
                 ParseExprWith(bound) => {
                     self.parse_expression_until_binding_power(bound.clone());
@@ -89,7 +109,6 @@ impl<'input> Parser<'input> {
                     } else {
                         continue;
                     };
-                    println!(" will be using : {:?}", &to_iterate);
                     self.parse_with(to_iterate);
                 }
             }
