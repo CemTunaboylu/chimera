@@ -81,32 +81,16 @@ impl TryFrom<&SyntaxNode> for Type {
 
 #[cfg(test)]
 mod tests {
-    use parser::parser::Parser;
 
     use super::*;
-    use crate::ast::Root;
+    use crate::ast::tests::{ast_root_from, cast_into_type};
     use parameterized_test::create;
-
-    fn ast_root_from(program: &str) -> Root {
-        let root = Parser::new(program).parse();
-        Root::try_from(root).expect("should have been ok")
-    }
-
-    fn cast_into_type(parent_node: &SyntaxNode) {
-        let _desired_type: Type = parent_node.try_into().expect(
-            format!(
-                "try_into should have been successful for {:?}",
-                parent_node.text()
-            )
-            .as_str(),
-        );
-    }
 
     create! {
         create_type_test,
         (program), {
         let ast_root = ast_root_from(program);
-        cast_into_type(ast_root.get_root());
+        cast_into_type::<Type>(ast_root.get_root());
         }
     }
 
@@ -130,7 +114,7 @@ mod tests {
             .children()
             .find(|node| node.kind() == ParamDecl)
             .unwrap();
-        cast_into_type(&param_node);
+        cast_into_type::<Type>(&param_node);
     }
     #[test]
     fn invalid_type() {

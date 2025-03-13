@@ -87,6 +87,21 @@ mod tests {
         let root = Parser::new(program).parse();
         Root::try_from(root).expect("should have been ok")
     }
+
+    pub(crate) fn cast_into_type<'caller, T>(parent_node: &'caller SyntaxNode)
+    where
+        T: TryFrom<&'caller SyntaxNode>,
+        <T as TryFrom<&'caller SyntaxNode>>::Error: Debug,
+    {
+        let _desired_type: T = parent_node.try_into().expect(
+            format!(
+                "try_into should have been successful for {:?}",
+                parent_node.text()
+            )
+            .as_str(),
+        );
+    }
+
     #[test]
     /*
     Root@0..5
