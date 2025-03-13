@@ -1,7 +1,4 @@
-use syntax::{
-    Syntax, is_a_type, is_an_assignment, is_an_operator,
-    syntax_kind::{self, SyntaxKind},
-};
+use syntax::{Syntax, is_a_type, is_an_assignment, is_an_operator, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
 use crate::{
@@ -22,7 +19,7 @@ pub type CustomExpectationOnSyntax = fn(Syntax) -> bool;
 pub enum SeparatedElement {
     Kind(SyntaxKind),
     KindWithMarker(SyntaxKind, SyntaxKind),
-    Optional(SyntaxKind),
+    OptionalKind(SyntaxKind),
     RefMut(ThinVec<SeparatedElement>),
     Fn(CustomExpectationOnSyntax),
     Branched(ThinVec<SeparatedElement>, ThinVec<SeparatedElement>),
@@ -71,9 +68,9 @@ impl<'input> Parser<'input> {
             &Kind(syntax_kind) => self.is_next(syntax_kind),
             &KindWithMarker(syntax_kind, _) => self.is_next(syntax_kind),
             &Fn(f) => self.is_next_f(f),
-            Optional(_) => true,
+            OptionalKind(_) => true,
             RefMut(elements) => self.does_first_element_pass(elements.first().unwrap()),
-            ParseExprWith(_) => unimplemented!(),
+            ParseExprWith(_) => true,
             Branched(_, _) => unimplemented!(),
         }
     }
@@ -90,13 +87,13 @@ impl<'input> Parser<'input> {
                 &Fn(custom_exp_func) => {
                     self.expect_f_and_bump(custom_exp_func);
                 }
-                &Optional(syntax_kind) => {
+                &OptionalKind(syntax_kind) => {
                     if self.is_next(syntax_kind) {
                         self.bump();
                     }
                 }
                 RefMut(elements) => {
-                    self.parse_arg_after_colon(elements);
+                    self.parse_possible_ref_mut_arg_and_elms(elements);
                 }
                 ParseExprWith(bound) => {
                     self.parse_expression_until_binding_power(bound.clone());

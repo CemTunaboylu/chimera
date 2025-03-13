@@ -77,15 +77,15 @@ mod tests {
                          Whitespace@15..16 " "
                          Ident@16..25 "translate"
                          LParen@25..26 "("
-                         ParamDecl@26..36
-                           PrefixUnaryOp@26..36
+                         ParamDecl@26..35
+                           PrefixUnaryOp@26..35
                              And@26..27 "&"
-                             Mut@27..36
+                             Mut@27..35
                                KwMut@27..30 "mut"
                                Whitespace@30..31 " "
                                SelfRef@31..35
                                  Kwself@31..35 "self"
-                               Whitespace@35..36 " "
+                         Whitespace@35..36 " "
                          ParamDecl@36..45
                            Ident@36..38 "by"
                            Colon@38..39 ":"

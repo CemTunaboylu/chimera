@@ -96,11 +96,13 @@ impl<'input> Parser<'input> {
 
     fn parse_arg(&self, elements: &ThinVec<SeparatedElement>) {
         let marker = self.start();
-        self.parse_arg_after_colon(elements);
+        self.parse_possible_ref_mut_arg_and_elms(elements);
+        // since we stopped at Comma above, we need to consume Comma if there is one now to enable the following parse
+        self.ignore_if(Comma);
         self.complete_marker_with(marker, ParamDecl);
     }
 
-    pub fn parse_arg_after_colon(&self, elements: &ThinVec<SeparatedElement>) {
+    pub fn parse_possible_ref_mut_arg_and_elms(&self, elements: &ThinVec<SeparatedElement>) {
         if self.is_next(And) {
             self.parse_ref_arg(elements);
         } else if self.is_next(KwMut) {
@@ -129,8 +131,6 @@ impl<'input> Parser<'input> {
 
     fn parse_arg_with(&self, elements: &ThinVec<SeparatedElement>) {
         self.parse_with(elements);
-        // we stopped at Comma, thus need to consume if now to enable the following parse
-        self.ignore_if(Comma);
     }
 
     #[allow(unused_variables)]
@@ -139,13 +139,10 @@ impl<'input> Parser<'input> {
         self.context.borrow().allow(RParen);
 
         use SeparatedElement::*;
+        let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
+        let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];
 
-        self.parse_separated_by(
-            &thin_vec![ParseExprWith(starting_precedence())],
-            FnArg,
-            Comma,
-            until,
-        )
+        self.parse_separated_by(&can_be, FnArg, Comma, until)
     }
 }
 
@@ -179,17 +176,17 @@ mod tests {
 
         let expect = expect![[r#"
             Root@0..32
-              ParamDecl@0..9
+              ParamDecl@0..8
                 Ident@0..2 "me"
                 Colon@2..3 ":"
                 Ident@3..8 "human"
-                Whitespace@8..9 " "
-              ParamDecl@9..24
+              Whitespace@8..9 " "
+              ParamDecl@9..23
                 Ident@9..13 "lang"
                 Colon@13..14 ":"
                 Whitespace@14..15 " "
                 Ident@15..23 "Language"
-                Whitespace@23..24 " "
+              Whitespace@23..24 " "
               ParamDecl@24..32
                 Ident@24..27 "pet"
                 Colon@27..28 ":"
@@ -243,16 +240,16 @@ mod tests {
                 Whitespace@2..3 " "
                 Ident@3..8 "empty"
                 LParen@8..9 "("
-                ParamDecl@9..19
+                ParamDecl@9..18
                   Ident@9..14 "first"
                   Colon@14..15 ":"
                   TyI32@15..18 "i32"
-                  Whitespace@18..19 " "
-                ParamDecl@19..31
+                Whitespace@18..19 " "
+                ParamDecl@19..30
                   Ident@19..25 "second"
                   Colon@25..26 ":"
                   TyChar@26..30 "char"
-                  Whitespace@30..31 " "
+                Whitespace@30..31 " "
                 ParamDecl@31..47
                   Ident@31..36 "third"
                   Colon@36..37 ":"
@@ -273,11 +270,11 @@ mod tests {
                       Whitespace@2..3 " "
                       Ident@3..8 "empty"
                       LParen@8..9 "("
-                      ParamDecl@9..19
+                      ParamDecl@9..18
                         Ident@9..14 "first"
                         Colon@14..15 ":"
                         TyI32@15..18 "i32"
-                        Whitespace@18..19 " "
+                      Whitespace@18..19 " "
                       ParamDecl@19..30
                         Ident@19..25 "second"
                         Colon@25..26 ":"
@@ -346,11 +343,11 @@ mod tests {
                       Whitespace@2..3 " "
                       Ident@3..6 "sum"
                       LParen@6..7 "("
-                      ParamDecl@7..13
+                      ParamDecl@7..12
                         Ident@7..8 "a"
                         Colon@8..9 ":"
                         TyI32@9..12 "i32"
-                        Whitespace@12..13 " "
+                      Whitespace@12..13 " "
                       ParamDecl@13..18
                         Ident@13..14 "b"
                         Colon@14..15 ":"
@@ -380,17 +377,6 @@ mod tests {
                         RBrace@41..42 "}""#]],
     ),
 
-    function_call_with_single_parameter: ("empty(single)",
-        expect![[r#"
-            Root@0..13
-              FnCall@0..13
-                Ident@0..5 "empty"
-                LParen@5..6 "("
-                FnArg@6..12
-                  VarRef@6..12
-                    Ident@6..12 "single"
-                RParen@12..13 ")""#]],
-    ),
         fn_with_ref_mut_self: ("fn translate(&mut self, by: Point) { self.x += by.x; self.y += by.y;}",
             expect![[r#"
                 Root@0..68
@@ -399,15 +385,15 @@ mod tests {
                     Whitespace@2..3 " "
                     Ident@3..12 "translate"
                     LParen@12..13 "("
-                    ParamDecl@13..23
-                      PrefixUnaryOp@13..23
+                    ParamDecl@13..22
+                      PrefixUnaryOp@13..22
                         And@13..14 "&"
-                        Mut@14..23
+                        Mut@14..22
                           KwMut@14..17 "mut"
                           Whitespace@17..18 " "
                           SelfRef@18..22
                             Kwself@18..22 "self"
-                          Whitespace@22..23 " "
+                    Whitespace@22..23 " "
                     ParamDecl@23..32
                       Ident@23..25 "by"
                       Colon@25..26 ":"
@@ -466,15 +452,15 @@ mod tests {
                     Whitespace@2..3 " "
                     Ident@3..12 "translate"
                     LParen@12..13 "("
-                    ParamDecl@13..23
-                      PrefixUnaryOp@13..23
+                    ParamDecl@13..22
+                      PrefixUnaryOp@13..22
                         And@13..14 "&"
-                        Mut@14..23
+                        Mut@14..22
                           KwMut@14..17 "mut"
                           Whitespace@17..18 " "
                           SelfRef@18..22
                             Kwself@18..22 "self"
-                          Whitespace@22..23 " "
+                    Whitespace@22..23 " "
                     ParamDecl@23..37
                       Ident@23..25 "by"
                       Colon@25..26 ":"
@@ -492,5 +478,100 @@ mod tests {
                       Whitespace@40..41 " "
                       RBrace@41..42 "}""#]],
         ),
+
+    function_call_with_single_parameter: ("empty(single)",
+        expect![[r#"
+            Root@0..13
+              FnCall@0..13
+                Ident@0..5 "empty"
+                LParen@5..6 "("
+                FnArg@6..12
+                  VarRef@6..12
+                    Ident@6..12 "single"
+                RParen@12..13 ")""#]],
+    ),
+
+    function_call_with_ref_mut_parameter: ("steal(&mut me.mine)",
+        expect![[r#"
+            Root@0..19
+              FnCall@0..19
+                Ident@0..5 "steal"
+                LParen@5..6 "("
+                FnArg@6..18
+                  PrefixUnaryOp@6..18
+                    And@6..7 "&"
+                    Mut@7..18
+                      KwMut@7..10 "mut"
+                      Whitespace@10..11 " "
+                      InfixBinOp@11..18
+                        VarRef@11..13
+                          Ident@11..13 "me"
+                        Dot@13..14 "."
+                        VarRef@14..18
+                          Ident@14..18 "mine"
+                RParen@18..19 ")""#]],
+    ),
+
+    function_call_with_ref_parameters: ("meet(&me, &him, &her)",
+        expect![[r#"
+            Root@0..19
+              FnCall@0..19
+                Ident@0..4 "meet"
+                LParen@4..5 "("
+                FnArg@5..8
+                  PrefixUnaryOp@5..8
+                    And@5..6 "&"
+                    VarRef@6..8
+                      Ident@6..8 "me"
+                Whitespace@8..9 " "
+                FnArg@9..13
+                  PrefixUnaryOp@9..13
+                    And@9..10 "&"
+                    VarRef@10..13
+                      Ident@10..13 "him"
+                Whitespace@13..14 " "
+                FnArg@14..18
+                  PrefixUnaryOp@14..18
+                    And@14..15 "&"
+                    VarRef@15..18
+                      Ident@15..18 "her"
+                RParen@18..19 ")""#]],
+    ),
+
+    function_call_with_ref_mut_parameters: ("bond(&mut me, &mut him, &mut her)",
+        expect![[r#"
+            Root@0..31
+              FnCall@0..31
+                Ident@0..4 "bond"
+                LParen@4..5 "("
+                FnArg@5..12
+                  PrefixUnaryOp@5..12
+                    And@5..6 "&"
+                    Mut@6..12
+                      KwMut@6..9 "mut"
+                      Whitespace@9..10 " "
+                      VarRef@10..12
+                        Ident@10..12 "me"
+                Whitespace@12..13 " "
+                FnArg@13..21
+                  PrefixUnaryOp@13..21
+                    And@13..14 "&"
+                    Mut@14..21
+                      KwMut@14..17 "mut"
+                      Whitespace@17..18 " "
+                      VarRef@18..21
+                        Ident@18..21 "him"
+                Whitespace@21..22 " "
+                FnArg@22..30
+                  PrefixUnaryOp@22..30
+                    And@22..23 "&"
+                    Mut@23..30
+                      KwMut@23..26 "mut"
+                      Whitespace@26..27 " "
+                      VarRef@27..30
+                        Ident@27..30 "her"
+                RParen@30..31 ")""#]],
+    ),
+
       }
 }
