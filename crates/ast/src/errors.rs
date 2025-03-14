@@ -1,9 +1,10 @@
 use miette::Diagnostic;
+use thin_vec::ThinVec;
 use thiserror::Error;
 
 use std::ops::Range;
 use syntax::{
-    language::{SyntaxNode, SyntaxToken},
+    language::{NodeOrToken, SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
 
@@ -50,6 +51,21 @@ impl Stringer for &SyntaxNode {
     }
 }
 
+impl Stringer for &SyntaxToken {
+    fn into(self) -> String {
+        format!("{:?}", self)
+    }
+}
+
+impl Stringer for &NodeOrToken {
+    fn into(self) -> String {
+        match self {
+            NodeOrToken::Node(node) => <&SyntaxNode as Stringer>::into(node),
+            NodeOrToken::Token(token) => <&SyntaxToken as Stringer>::into(token),
+        }
+    }
+}
+
 impl Stringer for SyntaxKind {
     fn into(self) -> String {
         format!("{:?}", self)
@@ -67,12 +83,26 @@ impl Stringer for &[SyntaxKind] {
     }
 }
 
-impl Stringer for Vec<SyntaxKind> {
+impl Stringer for &[NodeOrToken] {
+    fn into(self) -> String {
+        let expected = self
+            .iter()
+            .map(|s| match s {
+                NodeOrToken::Node(node) => <&SyntaxNode as Stringer>::into(node),
+                NodeOrToken::Token(token) => <&SyntaxToken as Stringer>::into(token),
+            })
+            .collect::<ThinVec<String>>()
+            .join(" or ");
+        expected
+    }
+}
+
+impl Stringer for ThinVec<SyntaxKind> {
     fn into(self) -> String {
         let expected = self
             .iter()
             .map(|s| <SyntaxKind as Stringer>::into(*s))
-            .collect::<Vec<String>>()
+            .collect::<ThinVec<String>>()
             .join(" or ");
         expected
     }

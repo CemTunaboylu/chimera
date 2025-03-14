@@ -18,6 +18,9 @@ pub struct Root {
 }
 
 impl Root {
+    pub fn get_root(&self) -> &SyntaxNode {
+        &self.root
+    }
     pub fn statements(&self) -> impl Iterator<Item = Stmt> {
         self.root
             .children()
@@ -78,13 +81,21 @@ impl TryFrom<&ConcreteSyntaxTree> for Root {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
-    use crate::{ast::Root, expression::Expr, literal::Value};
-    use parser::parser::Parser;
 
-    fn parse(program: &str) -> Root {
+    use crate::{
+        ast::{self, Root},
+        expression::Expr,
+        literal::Value,
+    };
+    use parser::parser::Parser;
+    use std::fmt::Debug;
+    use thin_vec::ThinVec;
+
+    pub(crate) fn ast_root_from(program: &str) -> Root {
         let root = Parser::new(program).parse();
+        println!("debug_tree {:?}", root.debug_tree());
         Root::try_from(root).expect("should have been ok")
     }
 
@@ -114,9 +125,9 @@ mod tests {
      */
     fn try_from_var_def_malformed_with_no_name() {
         let malformed = "let = 9";
-        let root = parse(&malformed);
+        let root = ast_root_from(&malformed);
         let stmts = root.statements();
-        let collected = stmts.collect::<Vec<_>>();
+        let collected = stmts.collect::<ThinVec<_>>();
         assert_eq!(0, collected.len());
     }
 
@@ -143,8 +154,8 @@ mod tests {
 
     fn try_from_overflowing_number() {
         let overflowing = "let a = 9 + 18446744073709551616";
-        let root = parse(&overflowing);
-        let collected = root.statements().collect::<Vec<_>>();
+        let root = ast_root_from(&overflowing);
+        let collected = root.statements().collect::<ThinVec<_>>();
         assert_eq!(0, collected.len());
     }
 }
