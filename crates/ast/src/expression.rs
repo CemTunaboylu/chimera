@@ -33,7 +33,10 @@ impl TryFrom<SyntaxNode> for Expr {
                 Self::Literal(literal)
             }
             ParenExpr => Self::Paren(Paren(node)),
-            VarRef => Self::VarRef(ASTVarRef(node)),
+            VarRef => {
+                let var_ref = ASTVarRef::try_from(&node)?;
+                Self::VarRef(var_ref)
+            }
             PrefixUnaryOp => {
                 let prefix = Unary::prefix(node)?;
                 Self::Unary(prefix)

@@ -11,7 +11,7 @@ use crate::{
 pub struct VarDef(VarRef, Option<Expr>);
 
 impl VarDef {
-    pub fn name(&self) -> SmolStr {
+    pub fn name(&self) -> &SmolStr {
         self.0.name()
     }
 
@@ -26,8 +26,7 @@ impl TryFrom<SyntaxNode> for VarDef {
     fn try_from(node: SyntaxNode) -> Result<Self, Self::Error> {
         let exprs = get_children_as_expr(&node)?;
 
-        let infix = exprs.get(0);
-        let infix = if let Some(Expr::Infix(inner_infix)) = infix {
+        let infix = if let Some(Expr::Infix(inner_infix)) = exprs.get(0) {
             inner_infix
         } else {
             return Err(err_with_recovered(node, "a valid assignment"));
@@ -38,21 +37,49 @@ impl TryFrom<SyntaxNode> for VarDef {
         } else {
             return Err(error_for_node(&node, SyntaxKind::VarRef));
         };
-        let assignment = if let Some(expr) = infix.rhs() {
-            expr.clone()
-        } else {
-            return Ok(Self(var_ref, None));
-        };
-
-        Ok(Self(var_ref, Some(assignment)))
+        let assignment = infix.rhs().map(|e| e.clone());
+        Ok(Self(var_ref, assignment))
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct VarRef(pub(crate) SyntaxNode);
+pub struct VarRef(pub(crate) SmolStr);
+
+impl TryFrom<&SyntaxNode> for VarRef {
+    type Error = ASTError;
+
+    fn try_from(var_ref_node: &SyntaxNode) -> Result<Self, Self::Error> {
+        if var_ref_node.kind() != SyntaxKind::VarRef {
+            return Err(error_for_node(var_ref_node, SyntaxKind::VarRef));
+        }
+        let name = get_token(var_ref_node).unwrap().text().to_smolstr();
+        Ok(Self(name))
+    }
+}
 
 impl VarRef {
-    pub fn name(&self) -> SmolStr {
-        get_token(&self.0).unwrap().text().to_smolstr()
+    pub fn name(&self) -> &SmolStr {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::ast::tests::ast_root_from;
+    use parameterized_test::create;
+
+    create! {
+        create_var_ref_test,
+        (program), {
+        let ast_root = ast_root_from(program);
+        let var_ref = VarRef::try_from(ast_root.get_root().first_child().as_ref().unwrap()).expect("should have been ok");
+        assert_eq!(program, var_ref.name().as_str());
+        }
+    }
+
+    create_var_ref_test! {
+        valid_var_ref: "var",
     }
 }
