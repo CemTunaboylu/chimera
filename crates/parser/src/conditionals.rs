@@ -364,9 +364,8 @@ mod tests {
                     Block@9..19
                       LBrace@9..10 "{"
                       Whitespace@10..11 " "
-                      Semi@11..17
-                        Jump@11..16
-                          KwBreak@11..16 "break"
+                      Jump@11..17
+                        KwBreak@11..16 "break"
                         Semi@16..17 ";"
                       Whitespace@17..18 " "
                       RBrace@18..19 "}""#]],
@@ -396,9 +395,8 @@ mod tests {
                     Block@19..29
                       LBrace@19..20 "{"
                       Whitespace@20..21 " "
-                      Semi@21..27
-                        Jump@21..26
-                          KwBreak@21..26 "break"
+                      Jump@21..27
+                        KwBreak@21..26 "break"
                         Semi@26..27 ";"
                       Whitespace@27..28 " "
                       RBrace@28..29 "}""#]],
@@ -506,6 +504,36 @@ mod tests {
                         LParen@78..79 "("
                         RParen@79..80 ")"
                       RBrace@80..81 "}""#]],
+        ),
+        conditionals_if_returning_break: ("if color == RED { break stop(); }",
+            expect![[r#"
+                Root@0..33
+                  ControlFlow@0..33
+                    KwIf@0..2 "if"
+                    Whitespace@2..3 " "
+                    Condition@3..16
+                      InfixBinOp@3..16
+                        VarRef@3..9
+                          Ident@3..8 "color"
+                          Whitespace@8..9 " "
+                        EqEq@9..11 "=="
+                        Whitespace@11..12 " "
+                        VarRef@12..16
+                          Ident@12..15 "RED"
+                          Whitespace@15..16 " "
+                    Block@16..33
+                      LBrace@16..17 "{"
+                      Whitespace@17..18 " "
+                      Jump@18..31
+                        KwBreak@18..23 "break"
+                        Whitespace@23..24 " "
+                        FnCall@24..30
+                          Ident@24..28 "stop"
+                          LParen@28..29 "("
+                          RParen@29..30 ")"
+                        Semi@30..31 ";"
+                      Whitespace@31..32 " "
+                      RBrace@32..33 "}""#]],
         ),
 
     }

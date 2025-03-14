@@ -257,14 +257,9 @@ impl<'input> Parser<'input> {
 
         self.parse_expression_until_binding_power(starting_precedence());
 
-        let finished_as_expr = self.complete_marker_with(marker, Jump);
-        if self.is_next(Semi) {
-            let semi_marker = self.precede_marker_with(&finished_as_expr);
-            self.expect_and_bump(Semi);
-            Some(self.complete_marker_with(semi_marker, Semi))
-        } else {
-            Some(finished_as_expr)
-        }
+        self.expect_and_bump(Semi);
+
+        Some(self.complete_marker_with(marker, Jump))
     }
 
     #[allow(unused_variables)]
