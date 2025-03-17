@@ -12,7 +12,7 @@ pub enum SyntaxKind {
     // token-tree roots for n-ary operators
     InfixBinOp,
     PrefixUnaryOp,
-    PostFixUnaryOp,
+    PostfixUnaryOp,
     // token-tree roots for expressions/sub-expressions
     CharLit,
     FnCall,
@@ -34,12 +34,14 @@ pub enum SyntaxKind {
     // token-tree roots for statements
     Block,
     Condition,
+    Conditional,
     ContainerRef,
     ControlFlow,
     FnArg,
     FnDef,
     ForIdent,
     ForLoop,
+    Indexing,
     StructDef,
     VarDef,
     WhileLoop,
@@ -163,6 +165,21 @@ impl SyntaxKind {
     pub fn types() -> ThinVec<SyntaxKind> {
         use SyntaxKind::*;
         thin_vec![TyBool, TyByte, TyChar, TyF32, TyI32, TyStr, TyStrSlc]
+    }
+
+    pub fn can_be_parameter() -> ThinVec<SyntaxKind> {
+        use SyntaxKind::*;
+        thin_vec![
+            SelfRef,
+            StructAsType,
+            TyBool,
+            TyByte,
+            TyChar,
+            TyF32,
+            TyI32,
+            TyStr,
+            TyStrSlc
+        ]
     }
 
     pub fn is_keyword(&self) -> bool {

@@ -3,6 +3,7 @@ use crate::{operator::starting_precedence, parse::Finished, parser::Parser};
 use lexer::token_type::TokenType;
 use syntax::{
     Syntax,
+    anchor::RollingBackAnchor,
     syntax_kind::SyntaxKind::{self, *},
 };
 
@@ -11,7 +12,9 @@ impl<'input> Parser<'input> {
     #[allow(unused_variables)] // for rollback anchor
     pub fn parse_delimited(&self, syntax: Syntax) -> Option<Finished> {
         let kind = syntax.get_kind();
+        // TODO: fix this, too much detail
         if !self.context.borrow().is_allowed(kind) {
+            // TODO: recovery methods can return options
             self.recover_restricted(kind);
             return None;
         }
@@ -20,6 +23,10 @@ impl<'input> Parser<'input> {
             OpeningDelimiter(expected_token_kind) => match kind {
                 LParen => self.parse_paren_expr(syntax),
                 LBrace => self.parse_block(),
+                LBrack => {
+                    self.parse_container_indexing();
+                    return None;
+                }
                 _ => unreachable!(),
             },
             ClosingDelimiter(expected_token_kind) => {
@@ -34,9 +41,8 @@ impl<'input> Parser<'input> {
         use SyntaxKind::*;
         let marker = self.start();
         self.expect_and_bump(LParen);
-        let rollback_when_dropped = self.roll_back_context_after_drop();
         // restricts ']', '}' (recovers them by erroring), expects and allows ')'
-        self.impose_restrictions_of(syntax);
+        let rollback_when_dropped = self.impose_restrictions_on_context(syntax);
         _ = self.parse_expression_until_binding_power(starting_precedence());
         self.expect_and_bump(RParen);
         let finished = self.complete_marker_with(marker, SyntaxKind::ParenExpr);
@@ -46,19 +52,21 @@ impl<'input> Parser<'input> {
     #[allow(unused_variables)] // for rollback anchor
     pub fn parse_block(&self) -> Option<Finished> {
         let marker = self.start();
-        self.expect_and_bump(LBrace);
-
-        // TODO: put in a function impose_block_restrictions or inject_block_context
         {
-            let rollback_when_dropped = self.roll_back_context_after_drop();
-            let ctx = self.context.borrow();
-            ctx.forbid(RBrace);
-            ctx.disallow_recovery_of(RBrace);
+            let rollback_when_dropped = self.impose_block_restrictions();
+            self.expect_and_bump(LBrace);
             while !self.is_next(RBrace) && self.parse_statement().is_some() {}
         }
 
         self.expect_and_bump(RBrace);
         Some(self.complete_marker_with(marker, Block))
+    }
+    fn impose_block_restrictions(&self) -> RollingBackAnchor {
+        let rollback_when_dropped = self.roll_back_context_after_drop();
+        let ctx = self.context.borrow();
+        ctx.forbid(RBrace);
+        ctx.disallow_recovery_of(RBrace);
+        rollback_when_dropped
     }
 }
 
@@ -141,31 +149,33 @@ mod tests {
 
         misplaced_parenthesised_var_def_with_fn_call: ("let z = (something(););",
             expect![[r#"
-                Root@0..22
-                  VarDef@0..22
-                    KwLet@0..3 "let"
-                    Whitespace@3..4 " "
-                    InfixBinOp@4..21
-                      VarRef@4..6
-                        Ident@4..5 "z"
-                        Whitespace@5..6 " "
-                      Eq@6..7 "="
-                      Whitespace@7..8 " "
-                      ParenExpr@8..21
-                        LParen@8..9 "("
-                        FnCall@9..20
-                          Ident@9..18 "something"
-                          LParen@18..19 "("
-                          RParen@19..20 ")"
-                        Recovered@20..21
-                          Semi@20..21 ";"
-                    Recovered@21..22
-                      RParen@21..22 ")""#]]
+                Root@0..23
+                  Semi@0..23
+                    VarDef@0..22
+                      KwLet@0..3 "let"
+                      Whitespace@3..4 " "
+                      InfixBinOp@4..21
+                        VarRef@4..6
+                          Ident@4..5 "z"
+                          Whitespace@5..6 " "
+                        Eq@6..7 "="
+                        Whitespace@7..8 " "
+                        ParenExpr@8..21
+                          LParen@8..9 "("
+                          FnCall@9..20
+                            Ident@9..18 "something"
+                            LParen@18..19 "("
+                            RParen@19..20 ")"
+                          Recovered@20..21
+                            Semi@20..21 ";"
+                      Recovered@21..22
+                        RParen@21..22 ")"
+                    Semi@22..23 ";""#]]
         ),
 
         assignment_during_var_def: ("let z = (self.x += 1) + 2;",
             expect![[r#"
-                Root@0..25
+                Root@0..26
                   VarDef@0..21
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
@@ -195,8 +205,10 @@ mod tests {
                   Recovered@22..23
                     Plus@22..23 "+"
                   Whitespace@23..24 " "
-                  Literal@24..25
-                    Int@24..25 "2""#]]
+                  Semi@24..26
+                    Literal@24..25
+                      Int@24..25 "2"
+                    Semi@25..26 ";""#]]
         ),
 
 
@@ -207,15 +219,17 @@ mod tests {
         ),
         parenthesised_pi_with_semicolon: ("((314));",
             expect![[r#"
-                Root@0..7
-                  ParenExpr@0..7
-                    LParen@0..1 "("
-                    ParenExpr@1..6
-                      LParen@1..2 "("
-                      Literal@2..5
-                        Int@2..5 "314"
-                      RParen@5..6 ")"
-                    RParen@6..7 ")""#]]
+                Root@0..8
+                  Semi@0..8
+                    ParenExpr@0..7
+                      LParen@0..1 "("
+                      ParenExpr@1..6
+                        LParen@1..2 "("
+                        Literal@2..5
+                          Int@2..5 "314"
+                        RParen@5..6 ")"
+                      RParen@6..7 ")"
+                    Semi@7..8 ";""#]]
         ),
         parenthesised_pi_with_semicolon_inside: ("((314;));",
             expect![[r#"
@@ -355,28 +369,6 @@ mod tests {
                             Ident@31..32 "y"
                       Semi@32..33 ";"
                     RBrace@33..34 "}""#]],
-        ),
-        arr_indexing: ("arr[arr.len() - 1]",
-            expect![[r#"
-                Root@0..18
-                  ContainerRef@0..18
-                    Ident@0..3 "arr"
-                    LBrack@3..4 "["
-                    InfixBinOp@4..17
-                      InfixBinOp@4..14
-                        VarRef@4..7
-                          Ident@4..7 "arr"
-                        Dot@7..8 "."
-                        FnCall@8..13
-                          Ident@8..11 "len"
-                          LParen@11..12 "("
-                          RParen@12..13 ")"
-                        Whitespace@13..14 " "
-                      Minus@14..15 "-"
-                      Whitespace@15..16 " "
-                      Literal@16..17
-                        Int@16..17 "1"
-                    RBrack@17..18 "]""#]],
         ),
     }
 }

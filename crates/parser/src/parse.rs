@@ -43,11 +43,6 @@ impl<'input> Parser<'input> {
         ConcreteSyntaxTree::from(sink)
     }
 
-    /*
-       Given expectation to bump and functions to apply,
-           elements_in_order: [ Kind(Ident), Kind(Colon), Fn(ident_or_type) ]
-        TODO: can take a bitset
-    */
     pub fn parse_separated_by(
         &self,
         elements_in_order: &ThinVec<SeparatedElement>,
@@ -228,18 +223,15 @@ impl<'input> Parser<'input> {
         let marker = self.start();
         self.expect_and_bump(Ident);
 
-        // function call
         let finished = if self.is_next(LParen) {
             self.parse_function_call(marker)
         } else if self.is_next(LBrack) {
-            self.parse_container_indexing(marker)
+            self.parse_container_indexing();
+            self.complete_marker_with(marker, ContainerRef)
         } else {
             self.complete_marker_with(marker, VarRef)
         };
 
-        // above is_next puts further whitespaces in the buffer to look ahead,
-        // thus after we decide that it is a VarRef, we should consume them to not contaminate
-        // preceding parses.
         Some(finished)
     }
 
@@ -253,7 +245,7 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(KwBreak);
 
         let rollback_after_drop = self.roll_back_context_after_drop();
-        self.context.borrow().expect(Semi);
+        self.expect_in_ctx(Semi);
 
         self.parse_expression_until_binding_power(starting_precedence());
 
@@ -268,7 +260,7 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(KwReturn);
 
         let rollback_after_drop = self.roll_back_context_after_drop();
-        self.context.borrow().expect(Semi);
+        self.expect_in_ctx(Semi);
 
         self.parse_expression_until_binding_power(starting_precedence());
 
@@ -297,8 +289,7 @@ impl<'input> Parser<'input> {
             }
             KwStruct => self.parse_struct_definition(),
             KwSelf | Kwself => {
-                let is_fn_def_or_call: SyntaxKindBitSet = [FnCall, FnDef].as_ref().into();
-                if self.context.borrow().is_expected(is_fn_def_or_call) {
+                if self.is_expected([FnCall, FnDef].as_ref()) {
                     Some(self.bump_with_marker(StructAsType))
                 } else {
                     Some(self.bump_with_marker(SelfRef))
@@ -358,8 +349,7 @@ impl<'input> Parser<'input> {
         let marker = self.precede_marker_with(marker);
         self.expect_and_bump(kind);
         let bounded_precedence = Bound::from_op(binary_op.clone());
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.impose_restrictions_of(syntax);
+        let rollback_when_dropped = self.impose_restrictions_on_context(syntax);
         self.parse_expression_until_binding_power(bounded_precedence);
         Some(self.complete_marker_with(marker, binary_op.into()))
     }
@@ -418,7 +408,12 @@ pub(crate) mod tests {
         single_digit: ("9", expect![["Root@0..1\n  Literal@0..1\n    Int@0..1 \"9\""]]),
         multiple_digit: ("314", expect![["Root@0..3\n  Literal@0..3\n    Int@0..3 \"314\""]]),
         identifier: ("ident", expect![["Root@0..5\n  VarRef@0..5\n    Ident@0..5 \"ident\""]]),
-        identifier_with_semicolon: ("ident;", expect![["Root@0..5\n  VarRef@0..5\n    Ident@0..5 \"ident\""]]),
+        identifier_with_semicolon: ("ident;", expect![[r#"
+            Root@0..6
+              Semi@0..6
+                VarRef@0..5
+                  Ident@0..5 "ident"
+                Semi@5..6 ";""#]]),
         ignored_whitespaces: ("   ", expect![[r#"
             Root@0..3
               Whitespace@0..3 "   ""#]]),
@@ -427,18 +422,27 @@ pub(crate) mod tests {
             "Root@0..4\n  InfixBinOp@0..4\n    Literal@0..1\n      Int@0..1 \"3\"\n    Plus@1..2 \"+\"\n    Literal@2..4\n      Int@2..4 \"14\""
             ]]),
         binary_add_two_numbers_with_semicolon: ("3+14;",
-            expect![[
-            "Root@0..4\n  InfixBinOp@0..4\n    Literal@0..1\n      Int@0..1 \"3\"\n    Plus@1..2 \"+\"\n    Literal@2..4\n      Int@2..4 \"14\""
-            ]]),
+            expect![[r#"
+                Root@0..5
+                  Semi@0..5
+                    InfixBinOp@0..4
+                      Literal@0..1
+                        Int@0..1 "3"
+                      Plus@1..2 "+"
+                      Literal@2..4
+                        Int@2..4 "14"
+                    Semi@4..5 ";""#]]),
         redundant_semi: ("x+2;;",
             expect![[r#"
-                Root@0..3
-                  InfixBinOp@0..3
-                    VarRef@0..1
-                      Ident@0..1 "x"
-                    Plus@1..2 "+"
-                    Literal@2..3
-                      Int@2..3 "2""#]]
+                Root@0..4
+                  Semi@0..4
+                    InfixBinOp@0..3
+                      VarRef@0..1
+                        Ident@0..1 "x"
+                      Plus@1..2 "+"
+                      Literal@2..3
+                        Int@2..3 "2"
+                    Semi@3..4 ";""#]]
         ),
         binary_dot_member: ("structure.member",
             expect![[r#"
@@ -451,13 +455,15 @@ pub(crate) mod tests {
                       Ident@10..16 "member""#]]),
         binary_dot_member_with_semicolon: ("structure.member;",
             expect![[r#"
-                Root@0..16
-                  InfixBinOp@0..16
-                    VarRef@0..9
-                      Ident@0..9 "structure"
-                    Dot@9..10 "."
-                    VarRef@10..16
-                      Ident@10..16 "member""#]]),
+                Root@0..17
+                  Semi@0..17
+                    InfixBinOp@0..16
+                      VarRef@0..9
+                        Ident@0..9 "structure"
+                      Dot@9..10 "."
+                      VarRef@10..16
+                        Ident@10..16 "member"
+                    Semi@16..17 ";""#]]),
 
         binary_dot_member_precedence: ("human.weight + 1 / 100",
             expect![[r#"
@@ -483,24 +489,26 @@ pub(crate) mod tests {
 
         binary_dot_member_precedence_with_semi_colon: ("human.weight + 1 /100;",
             expect![[r#"
-                Root@0..21
-                  InfixBinOp@0..21
-                    InfixBinOp@0..13
-                      VarRef@0..5
-                        Ident@0..5 "human"
-                      Dot@5..6 "."
-                      VarRef@6..13
-                        Ident@6..12 "weight"
-                        Whitespace@12..13 " "
-                    Plus@13..14 "+"
-                    Whitespace@14..15 " "
-                    InfixBinOp@15..21
-                      Literal@15..16
-                        Int@15..16 "1"
-                      Whitespace@16..17 " "
-                      Slash@17..18 "/"
-                      Literal@18..21
-                        Int@18..21 "100""#]]),
+                Root@0..22
+                  Semi@0..22
+                    InfixBinOp@0..21
+                      InfixBinOp@0..13
+                        VarRef@0..5
+                          Ident@0..5 "human"
+                        Dot@5..6 "."
+                        VarRef@6..13
+                          Ident@6..12 "weight"
+                          Whitespace@12..13 " "
+                      Plus@13..14 "+"
+                      Whitespace@14..15 " "
+                      InfixBinOp@15..21
+                        Literal@15..16
+                          Int@15..16 "1"
+                        Whitespace@16..17 " "
+                        Slash@17..18 "/"
+                        Literal@18..21
+                          Int@18..21 "100"
+                    Semi@21..22 ";""#]]),
 
         binary_add_four_numbers: ("3+14+159+2653",
             expect![[
@@ -508,9 +516,24 @@ pub(crate) mod tests {
             ]]
         ),
         binary_add_four_numbers_with_semicolon: ("3+14*159-2653;",
-            expect![[
-            "Root@0..13\n  InfixBinOp@0..13\n    InfixBinOp@0..8\n      Literal@0..1\n        Int@0..1 \"3\"\n      Plus@1..2 \"+\"\n      InfixBinOp@2..8\n        Literal@2..4\n          Int@2..4 \"14\"\n        Star@4..5 \"*\"\n        Literal@5..8\n          Int@5..8 \"159\"\n    Minus@8..9 \"-\"\n    Literal@9..13\n      Int@9..13 \"2653\""
-            ]]
+            expect![[r#"
+                Root@0..14
+                  Semi@0..14
+                    InfixBinOp@0..13
+                      InfixBinOp@0..8
+                        Literal@0..1
+                          Int@0..1 "3"
+                        Plus@1..2 "+"
+                        InfixBinOp@2..8
+                          Literal@2..4
+                            Int@2..4 "14"
+                          Star@4..5 "*"
+                          Literal@5..8
+                            Int@5..8 "159"
+                      Minus@8..9 "-"
+                      Literal@9..13
+                        Int@9..13 "2653"
+                    Semi@13..14 ";""#]]
         ),
         binary_add_mul_sub_four_numbers: ("3+14*159-2653",
             expect![[
@@ -523,9 +546,14 @@ pub(crate) mod tests {
             ]]
         ),
         prefix_minus_digit_with_semicolon: ("-9;",
-            expect![[
-                "Root@0..2\n  PrefixUnaryOp@0..2\n    Minus@0..1 \"-\"\n    Literal@1..2\n      Int@1..2 \"9\""
-            ]]
+            expect![[r#"
+                Root@0..3
+                  Semi@0..3
+                    PrefixUnaryOp@0..2
+                      Minus@0..1 "-"
+                      Literal@1..2
+                        Int@1..2 "9"
+                    Semi@2..3 ";""#]]
         ),
 
         prefix_not_var_ref: ("!a",
@@ -539,31 +567,35 @@ pub(crate) mod tests {
 
         prefix_not_var_ref_with_semicolon: ("!a;",
             expect![[r#"
-                Root@0..2
-                  PrefixUnaryOp@0..2
-                    Excl@0..1 "!"
-                    VarRef@1..2
-                      Ident@1..2 "a""#]]
+                Root@0..3
+                  Semi@0..3
+                    PrefixUnaryOp@0..2
+                      Excl@0..1 "!"
+                      VarRef@1..2
+                        Ident@1..2 "a"
+                    Semi@2..3 ";""#]]
         ),
         postfix_excl_prefix_neg_precedence: ("-9?",
             expect![[r#"
                 Root@0..3
                   PrefixUnaryOp@0..3
                     Minus@0..1 "-"
-                    PostFixUnaryOp@1..3
+                    PostfixUnaryOp@1..3
                       Literal@1..2
                         Int@1..2 "9"
                       QMark@2..3 "?""#]]
         ),
         postfix_excl_prefix_neg_precedence_with_semicolon: ("-9?;",
             expect![[r#"
-                Root@0..3
-                  PrefixUnaryOp@0..3
-                    Minus@0..1 "-"
-                    PostFixUnaryOp@1..3
-                      Literal@1..2
-                        Int@1..2 "9"
-                      QMark@2..3 "?""#]]
+                Root@0..4
+                  Semi@0..4
+                    PrefixUnaryOp@0..3
+                      Minus@0..1 "-"
+                      PostfixUnaryOp@1..3
+                        Literal@1..2
+                          Int@1..2 "9"
+                        QMark@2..3 "?"
+                    Semi@3..4 ";""#]]
         ),
         postfix_excl_infix_mul_precedence: ("1*9?",
             expect![[r#"
@@ -572,7 +604,7 @@ pub(crate) mod tests {
                     Literal@0..1
                       Int@0..1 "1"
                     Star@1..2 "*"
-                    PostFixUnaryOp@2..4
+                    PostfixUnaryOp@2..4
                       Literal@2..3
                         Int@2..3 "9"
                       QMark@3..4 "?""#]]

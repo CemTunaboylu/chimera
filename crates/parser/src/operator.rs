@@ -249,7 +249,7 @@ impl Into<SyntaxKind> for AssocUnOp {
     fn into(self) -> SyntaxKind {
         use AssocUnOp::*;
         match self {
-            QMark => SyntaxKind::PostFixUnaryOp,
+            QMark => SyntaxKind::PostfixUnaryOp,
             Not | Neg | Deref | Ref => SyntaxKind::PrefixUnaryOp,
         }
     }

@@ -76,7 +76,6 @@ impl<'input> Parser<'input> {
     }
 
     pub fn recover_restricted(&self, restricted: SyntaxKind) {
-        println!("allowed set: {:?}", self.context.borrow().get_allowed());
         let allowed: ThinVec<SyntaxKind> = self.context.borrow().get_allowed().into();
         self.push_event(Event::Error {
             err: ParseError::new(self.lexer.borrow().span().clone(), allowed, restricted),

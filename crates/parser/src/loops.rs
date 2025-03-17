@@ -21,7 +21,6 @@ impl<'input> Parser<'input> {
                 self.recover_with_msg("while loop expects a condition", "");
             }
         }
-        // TODO: does this block return anything?
         self.parse_block();
 
         Some(self.complete_marker_with(marker, WhileLoop))
@@ -115,17 +114,18 @@ mod tests {
 
       for_loop_with_slicing: ("for elm in arr[0_arr.len()]{ print(elm) }",
           expect![[r#"
-                Root@0..41
-                  ForLoop@0..41
-                    KwFor@0..3 "for"
-                    Whitespace@3..4 " "
-                    ForIdent@4..8
-                      Ident@4..7 "elm"
-                      Whitespace@7..8 " "
-                    KwIn@8..10 "in"
-                    Whitespace@10..11 " "
-                    ContainerRef@11..27
-                      Ident@11..14 "arr"
+              Root@0..41
+                ForLoop@0..41
+                  KwFor@0..3 "for"
+                  Whitespace@3..4 " "
+                  ForIdent@4..8
+                    Ident@4..7 "elm"
+                    Whitespace@7..8 " "
+                  KwIn@8..10 "in"
+                  Whitespace@10..11 " "
+                  ContainerRef@11..27
+                    Ident@11..14 "arr"
+                    Indexing@14..27
                       LBrack@14..15 "["
                       InfixBinOp@15..26
                         Literal@15..16
@@ -140,35 +140,36 @@ mod tests {
                             LParen@24..25 "("
                             RParen@25..26 ")"
                       RBrack@26..27 "]"
-                    Block@27..41
-                      LBrace@27..28 "{"
-                      Whitespace@28..29 " "
-                      FnCall@29..39
-                        Ident@29..34 "print"
-                        LParen@34..35 "("
-                        FnArg@35..38
-                          VarRef@35..38
-                            Ident@35..38 "elm"
-                        RParen@38..39 ")"
-                      Whitespace@39..40 " "
-                      RBrace@40..41 "}""#]],
+                  Block@27..41
+                    LBrace@27..28 "{"
+                    Whitespace@28..29 " "
+                    FnCall@29..39
+                      Ident@29..34 "print"
+                      LParen@34..35 "("
+                      FnArg@35..38
+                        VarRef@35..38
+                          Ident@35..38 "elm"
+                      RParen@38..39 ")"
+                    Whitespace@39..40 " "
+                    RBrace@40..41 "}""#]],
       ),
       for_loop_with_csv_identifiers: ("for ix,elm in arr[0_arr.len()].enumerate() { print(ix, elm) }",
           expect![[r#"
-                Root@0..59
-                  ForLoop@0..59
-                    KwFor@0..3 "for"
-                    Whitespace@3..4 " "
-                    ForIdent@4..6
-                      Ident@4..6 "ix"
-                    ForIdent@6..10
-                      Ident@6..9 "elm"
-                      Whitespace@9..10 " "
-                    KwIn@10..12 "in"
-                    Whitespace@12..13 " "
-                    InfixBinOp@13..42
-                      ContainerRef@13..29
-                        Ident@13..16 "arr"
+              Root@0..59
+                ForLoop@0..59
+                  KwFor@0..3 "for"
+                  Whitespace@3..4 " "
+                  ForIdent@4..6
+                    Ident@4..6 "ix"
+                  ForIdent@6..10
+                    Ident@6..9 "elm"
+                    Whitespace@9..10 " "
+                  KwIn@10..12 "in"
+                  Whitespace@12..13 " "
+                  InfixBinOp@13..42
+                    ContainerRef@13..29
+                      Ident@13..16 "arr"
+                      Indexing@16..29
                         LBrack@16..17 "["
                         InfixBinOp@17..28
                           Literal@17..18
@@ -183,28 +184,28 @@ mod tests {
                               LParen@26..27 "("
                               RParen@27..28 ")"
                         RBrack@28..29 "]"
-                      Dot@29..30 "."
-                      FnCall@30..41
-                        Ident@30..39 "enumerate"
-                        LParen@39..40 "("
-                        RParen@40..41 ")"
-                      Whitespace@41..42 " "
-                    Block@42..59
-                      LBrace@42..43 "{"
-                      Whitespace@43..44 " "
-                      FnCall@44..57
-                        Ident@44..49 "print"
-                        LParen@49..50 "("
-                        FnArg@50..52
-                          VarRef@50..52
-                            Ident@50..52 "ix"
-                        Whitespace@52..53 " "
-                        FnArg@53..56
-                          VarRef@53..56
-                            Ident@53..56 "elm"
-                        RParen@56..57 ")"
-                      Whitespace@57..58 " "
-                      RBrace@58..59 "}""#]],
+                    Dot@29..30 "."
+                    FnCall@30..41
+                      Ident@30..39 "enumerate"
+                      LParen@39..40 "("
+                      RParen@40..41 ")"
+                    Whitespace@41..42 " "
+                  Block@42..59
+                    LBrace@42..43 "{"
+                    Whitespace@43..44 " "
+                    FnCall@44..57
+                      Ident@44..49 "print"
+                      LParen@49..50 "("
+                      FnArg@50..52
+                        VarRef@50..52
+                          Ident@50..52 "ix"
+                      Whitespace@52..53 " "
+                      FnArg@53..56
+                        VarRef@53..56
+                          Ident@53..56 "elm"
+                      RParen@56..57 ")"
+                    Whitespace@57..58 " "
+                    RBrace@58..59 "}""#]],
       ),
         for_loop_with_range: ("for ix in 0_9{ print(arr[ix]) }",
             expect![[r#"
@@ -232,15 +233,16 @@ mod tests {
                         FnArg@21..28
                           ContainerRef@21..28
                             Ident@21..24 "arr"
-                            LBrack@24..25 "["
-                            VarRef@25..27
-                              Ident@25..27 "ix"
-                            RBrack@27..28 "]"
+                            Indexing@24..28
+                              LBrack@24..25 "["
+                              VarRef@25..27
+                                Ident@25..27 "ix"
+                              RBrack@27..28 "]"
                         RParen@28..29 ")"
                       Whitespace@29..30 " "
                       RBrace@30..31 "}""#]],
         ),
-                while_loop: ("while !stack.is_empty() { print(stack.pop()) }",
+        while_loop: ("while !stack.is_empty() { print(stack.pop()) }",
             expect![[r#"
                 Root@0..46
                   WhileLoop@0..46

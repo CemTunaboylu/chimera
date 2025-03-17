@@ -1,7 +1,6 @@
 use crate::{operator::starting_precedence, parse::Finished, parser::Parser};
 
 use syntax::{
-    ASSIGNMENTS, OPERATORS,
     bitset::SyntaxKindBitSet,
     non_assigning_operators,
     syntax_kind::SyntaxKind::{self, *},
@@ -14,7 +13,6 @@ impl<'input> Parser<'input> {
             self.recover_from_err(err);
             syntax = self.peek()?;
         }
-        // TODO: deal with semi: loops can return if not ; delimited
         let marker = match self.peek()? {
             Ok(syntax) if syntax.is_of_kind(KwFn) => self.parse_function_def(),
             Ok(syntax) if syntax.is_of_kind(KwFor) => self.parse_for_loop(),
@@ -28,14 +26,12 @@ impl<'input> Parser<'input> {
             _ => self.parse_expression_until_binding_power(starting_precedence()),
         };
         if self.is_next(Semi) {
-            if marker.is_some() {
-                // let semi = marker?.precede(self);
-                // self.bump();
-                self.ignore();
-                // Some(semi.complete(&mut self.event_holder, Semi))
+            if let Some(m) = marker {
+                let semi = self.precede_marker_with(&m);
+                self.bump();
+                return Some(self.complete_marker_with(semi, Semi));
             } else {
                 self.ignore();
-                // self.recover();
             }
         }
         marker

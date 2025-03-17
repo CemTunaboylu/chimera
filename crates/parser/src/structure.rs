@@ -4,7 +4,9 @@ use crate::{
 };
 
 use lexer::token_type::TokenType;
-use syntax::{Syntax, syntax_kind::SyntaxKind::*};
+use syntax::{
+    Syntax, anchor::RollingBackAnchor, syntax_kind::SyntaxKind, syntax_kind::SyntaxKind::*,
+};
 
 use thin_vec::thin_vec;
 
@@ -22,19 +24,13 @@ impl<'input> Parser<'input> {
         let marker = self.start();
         self.expect_and_bump(KwStruct);
         {
-            let rollback_when_dropped = self.roll_back_context_after_drop();
-            let ctx = self.context.borrow();
-            ctx.disallow_recovery_of(LBrace);
-            ctx.allow_only(Ident);
+            let rollback_when_dropped = self.dont_recover_and_only_allow(LBrace, Ident);
             // note: currently we don't support generics, because the main point of this project for me is
             // to play with LLVM, MLIR and IR optimizations, generics does not seem to be necessary for now.
             self.expect_and_bump(Ident);
         }
         {
-            let rollback_when_dropped = self.roll_back_context_after_drop();
-            let ctx = self.context.borrow();
-            ctx.disallow_recovery_of(RBrace);
-            ctx.allow_only(LBrace);
+            let rollback_when_dropped = self.dont_recover_and_only_allow(RBrace, LBrace);
             self.expect_and_bump(LBrace);
         }
 
@@ -42,8 +38,7 @@ impl<'input> Parser<'input> {
 
         {
             let rollback_when_dropped = self.roll_back_context_after_drop();
-            let ctx = self.context.borrow();
-            ctx.allow_only(RBrace);
+            self.allow_only_in_ctx(RBrace);
             self.expect_and_bump(RBrace);
         }
 
@@ -62,6 +57,17 @@ impl<'input> Parser<'input> {
         });
 
         Some(self.complete_marker_with(marker, StructFields))
+    }
+
+    fn dont_recover_and_only_allow(
+        &self,
+        dont_recover: SyntaxKind,
+        allow_only: SyntaxKind,
+    ) -> RollingBackAnchor {
+        let rollback_when_dropped = self.roll_back_context_after_drop();
+        self.dont_recover_in_ctx(dont_recover);
+        self.allow_only_in_ctx(allow_only);
+        rollback_when_dropped
     }
 }
 

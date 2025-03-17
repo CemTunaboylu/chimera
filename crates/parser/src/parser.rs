@@ -72,7 +72,9 @@ impl<'input> Parser<'input> {
         anchor
     }
 
-    pub fn impose_restrictions_of(&self, syntax: Syntax) {
+    pub fn impose_restrictions_on_context(&self, syntax: Syntax) -> RollingBackAnchor {
+        let rollback_when_dropped = self.roll_back_context_after_drop();
+
         let context_updates = syntax.imposed_restrictions();
         let matching_bitsets = {
             let ctx = self.context.borrow();
@@ -90,6 +92,23 @@ impl<'input> Parser<'input> {
             .collect();
 
         self.context.borrow().take(applied.as_ref().into());
+        rollback_when_dropped
+    }
+
+    pub fn expect_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
+        self.context.borrow().expect(e);
+    }
+
+    pub fn dont_recover_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
+        self.context.borrow().disallow_recovery_of(e);
+    }
+
+    pub fn allow_only_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
+        self.context.borrow().allow_only(e);
+    }
+
+    pub fn is_expected(&self, e: impl Into<SyntaxKindBitSet>) -> bool {
+        self.context.borrow().is_expected(e)
     }
 
     pub fn peek(&self) -> Option<MietteResult<Syntax>> {
@@ -144,7 +163,7 @@ impl<'input> Parser<'input> {
         }
     }
     // expect injects the syntax kind to expectations if not met
-    pub fn expect(&self, kind: SyntaxKind) -> Option<()> {
+    pub fn expect_next(&self, kind: SyntaxKind) -> Option<()> {
         self.is_next(kind).then(|| ()).or_else(|| {
             self.context.borrow().expect(kind);
             None
@@ -185,8 +204,7 @@ impl<'input> Parser<'input> {
     pub fn bump_with_marker(&self, kind: SyntaxKind) -> Marker<Complete> {
         let marker = self.start();
         self.bump();
-        let finished = self.complete_marker_with(marker, kind);
-        finished
+        self.complete_marker_with(marker, kind)
     }
 
     // bump removes the syntax kind from expectations if succesful

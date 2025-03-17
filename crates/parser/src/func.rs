@@ -5,7 +5,9 @@ use crate::{
     parser::Parser,
 };
 use lexer::token_type::TokenType;
-use syntax::{Syntax, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
+use syntax::{
+    Syntax, anchor::RollingBackAnchor, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind,
+};
 
 use SyntaxKind::*;
 use thin_vec::{ThinVec, thin_vec};
@@ -25,22 +27,21 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(KwFn);
         {
             let rollback_after_drop = self.roll_back_context_after_drop();
-            self.context.borrow().disallow_recovery_of(LParen);
+            self.dont_recover_in_ctx(LParen);
             self.expect_and_bump(Ident);
         }
         self.expect_and_bump(LParen);
         if !self.is_next(RParen) {
             let rollback_after_drop = self.roll_back_context_after_drop();
-            let ctx = self.context.borrow();
-            ctx.disallow_recovery_of(RParen);
-            ctx.expect(FnDef);
+            self.dont_recover_in_ctx(RParen);
+            self.expect_in_ctx(FnDef);
             self.parse_comma_separated_typed_declarations_until(|syntax: Syntax| {
                 !syntax.is_of_kind(RParen)
             });
         }
 
         let rollback_after_drop = self.roll_back_context_after_drop();
-        self.context.borrow().disallow_recovery_of(LBrace);
+        self.dont_recover_in_ctx(LBrace);
         self.expect_and_bump(RParen);
 
         if self.is_next(RArrow) {
@@ -60,7 +61,6 @@ impl<'input> Parser<'input> {
 
     // the identifier is already bumped at this point because we ended up here
     // from parsing an identifier and saw a LParen as well.
-    // TODO: this should also need to be able to parse func(&mut obj)
     pub fn parse_function_call(&self, marker: Marker<Incomplete>) -> Finished {
         self.expect_and_bump(LParen);
         self.parse_comma_separated_arguments_until(|syntax: Syntax| !syntax.is_of_kind(RParen));
@@ -68,14 +68,18 @@ impl<'input> Parser<'input> {
         self.complete_marker_with(marker, FnCall)
     }
 
-    #[allow(unused_variables)]
-    pub fn parse_comma_separated_typed_declarations_until(&self, until_false: fn(Syntax) -> bool) {
+    fn impose_comma_sep_typed_decl_restrictions(&self) -> RollingBackAnchor {
         let rollback_when_dropped = self.roll_back_context_after_drop();
         let ctx = self.context.borrow();
         ctx.forbid_all();
         ctx.allow([And, Colon, Comma, Ident, KwMut, RParen].as_ref());
         ctx.allow(SyntaxKind::types().as_ref());
+        rollback_when_dropped
+    }
 
+    #[allow(unused_variables)]
+    pub fn parse_comma_separated_typed_declarations_until(&self, until_false: fn(Syntax) -> bool) {
+        let rollback_when_dropped = self.impose_comma_sep_typed_decl_restrictions();
         use SeparatedElement::*;
 
         let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
@@ -142,13 +146,17 @@ impl<'input> Parser<'input> {
         self.parse_with(elements);
     }
 
-    #[allow(unused_variables)]
-    pub fn parse_comma_separated_arguments_until(&self, until: fn(Syntax) -> bool) -> Option<()> {
+    fn impose_comma_sep_args_restrictions(&self) -> RollingBackAnchor {
         let rollback_when_dropped = self.roll_back_context_after_drop();
         let ctx = self.context.borrow();
         ctx.allow(RParen);
         ctx.expect(FnCall);
+        rollback_when_dropped
+    }
 
+    #[allow(unused_variables)]
+    pub fn parse_comma_separated_arguments_until(&self, until: fn(Syntax) -> bool) -> Option<()> {
+        let rollback_when_dropped = self.impose_comma_sep_args_restrictions();
         use SeparatedElement::*;
         let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
         let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];
@@ -590,5 +598,39 @@ mod tests {
                 RParen@30..31 ")""#]],
     ),
 
-      }
+    function_call_with_complex_parameters: ("am_i_happy(me.expectations().as_tensor() - reality.tensor )",
+        expect![[r#"
+            Root@0..59
+              FnCall@0..59
+                Ident@0..10 "am_i_happy"
+                LParen@10..11 "("
+                FnArg@11..58
+                  InfixBinOp@11..58
+                    InfixBinOp@11..41
+                      InfixBinOp@11..28
+                        VarRef@11..13
+                          Ident@11..13 "me"
+                        Dot@13..14 "."
+                        FnCall@14..28
+                          Ident@14..26 "expectations"
+                          LParen@26..27 "("
+                          RParen@27..28 ")"
+                      Dot@28..29 "."
+                      FnCall@29..40
+                        Ident@29..38 "as_tensor"
+                        LParen@38..39 "("
+                        RParen@39..40 ")"
+                      Whitespace@40..41 " "
+                    Minus@41..42 "-"
+                    Whitespace@42..43 " "
+                    InfixBinOp@43..58
+                      VarRef@43..50
+                        Ident@43..50 "reality"
+                      Dot@50..51 "."
+                      VarRef@51..58
+                        Ident@51..57 "tensor"
+                        Whitespace@57..58 " "
+                RParen@58..59 ")""#]],
+    ),
+    }
 }
