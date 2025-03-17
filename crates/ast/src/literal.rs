@@ -18,25 +18,25 @@ pub enum Value {
     Float(ParsedValueIndex),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 
-pub struct Literal(Value);
+pub struct Literal(pub(crate) Value);
 
 impl Literal {
     pub fn value(&self) -> Value {
         self.0.clone()
     }
 }
-impl TryFrom<SyntaxToken> for Literal {
+impl TryFrom<&SyntaxToken> for Literal {
     type Error = ASTError;
 
-    fn try_from(node: SyntaxToken) -> Result<Self, Self::Error> {
+    fn try_from(token: &SyntaxToken) -> Result<Self, Self::Error> {
         use SyntaxKind::*;
-        let result = if matches!(node.kind(), KwTrue | KwFalse) {
-            Value::Bool(matches!(node.kind(), KwTrue))
+        let result = if matches!(token.kind(), KwTrue | KwFalse) {
+            Value::Bool(matches!(token.kind(), KwTrue))
         } else {
-            let index = node.text_range().into();
-            match node.kind() {
+            let index = token.text_range().into();
+            match token.kind() {
                 CharLit => Value::Char(index),
                 Float => Value::Int(index),
                 Int => Value::Int(index),
@@ -72,7 +72,7 @@ impl TryFrom<&SyntaxNode> for Literal {
             .find_map(SyntaxElement::into_token)
             .unwrap();
 
-        Literal::try_from(value_containing_token)
+        Literal::try_from(&value_containing_token)
     }
 }
 #[cfg(test)]
@@ -87,7 +87,7 @@ mod tests {
     use parser::parser::Parser;
 
     create! {
-        create_type_test,
+        create_literal_test,
         (program), {
         let ast_root = ast_root_from(program);
         let literal_node = ast_root.get_root().first_child().unwrap();
@@ -95,7 +95,7 @@ mod tests {
         }
     }
 
-    create_type_test! {
+    create_literal_test! {
         valid_bool_true: "true",
         valid_bool_false: "false",
         valid_char: "'c'",

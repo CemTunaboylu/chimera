@@ -24,7 +24,7 @@ impl Root {
     pub fn statements(&self) -> impl Iterator<Item = Stmt> {
         self.root
             .children()
-            .filter_map(|syntax_node| match Stmt::try_from(syntax_node) {
+            .filter_map(|syntax_node| match Stmt::try_from(&syntax_node) {
                 Ok(s) => Some(s),
                 Err(ast_err) => {
                     let src = self.root.text().to_string();
@@ -84,22 +84,17 @@ impl TryFrom<&ConcreteSyntaxTree> for Root {
 pub(crate) mod tests {
     use super::*;
 
-    use crate::{
-        ast::{self, Root},
-        expression::Expr,
-        literal::Value,
-    };
+    use crate::ast::Root;
     use parser::parser::Parser;
     use std::fmt::Debug;
     use thin_vec::ThinVec;
 
     pub(crate) fn ast_root_from(program: &str) -> Root {
         let root = Parser::new(program).parse();
-        println!("debug_tree {:?}", root.debug_tree());
         Root::try_from(root).expect("should have been ok")
     }
 
-    pub(crate) fn cast_into_type<'caller, T>(parent_node: &'caller SyntaxNode)
+    pub(crate) fn cast_into_type<'caller, T>(parent_node: &'caller SyntaxNode) -> T
     where
         T: TryFrom<&'caller SyntaxNode>,
         <T as TryFrom<&'caller SyntaxNode>>::Error: Debug,
@@ -111,6 +106,7 @@ pub(crate) mod tests {
             )
             .as_str(),
         );
+        _desired_type
     }
 
     #[test]

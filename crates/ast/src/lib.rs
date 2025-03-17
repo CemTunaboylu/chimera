@@ -1,11 +1,17 @@
 pub mod ast;
+pub mod container_ref;
+pub mod control_flow;
 pub mod delimited;
 pub mod errors;
 pub mod expression;
+pub mod function;
 pub mod jump;
 mod lang_elems;
 pub mod literal;
+pub mod mutable;
 pub mod operation;
+mod parameter;
+pub mod semi;
 pub mod statement;
 pub mod types;
 pub mod variable;

@@ -4,10 +4,11 @@ use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use crate::{
     errors::ASTError,
     expression::Expr,
-    lang_elems::{err_with_recovered, error_for_node, get_children_as_expr, get_token},
+    lang_elems::{ensure_node_kind_is, error_for_node, get_children_in_errs, get_token},
+    operation::Binary,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VarDef(VarRef, Option<Expr>);
 
 impl VarDef {
@@ -20,38 +21,35 @@ impl VarDef {
     }
 }
 
-impl TryFrom<SyntaxNode> for VarDef {
+impl TryFrom<&SyntaxNode> for VarDef {
     type Error = ASTError;
 
-    fn try_from(node: SyntaxNode) -> Result<Self, Self::Error> {
-        let exprs = get_children_as_expr(&node)?;
+    fn try_from(var_def_node: &SyntaxNode) -> Result<Self, Self::Error> {
+        let children = get_children_in_errs(&var_def_node, SyntaxKind::InfixBinOp)?;
+        let infix_node = children.first().unwrap();
+        let bin = Binary::new(&infix_node)?;
 
-        let infix = if let Some(Expr::Infix(inner_infix)) = exprs.get(0) {
-            inner_infix
-        } else {
-            return Err(err_with_recovered(node, "a valid assignment"));
-        };
-
-        let var_ref = if let Some(Expr::VarRef(var_ref)) = infix.lhs() {
+        let var_ref = if let Some(Expr::VarRef(var_ref)) = bin.lhs() {
             var_ref.clone()
         } else {
-            return Err(error_for_node(&node, SyntaxKind::VarRef));
+            return Err(error_for_node(
+                &bin.get_pre_computed().get_node(),
+                SyntaxKind::VarRef,
+            ));
         };
-        let assignment = infix.rhs().map(|e| e.clone());
+        let assignment = bin.rhs().map(|e| e.clone());
         Ok(Self(var_ref, assignment))
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VarRef(pub(crate) SmolStr);
 
 impl TryFrom<&SyntaxNode> for VarRef {
     type Error = ASTError;
 
     fn try_from(var_ref_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        if var_ref_node.kind() != SyntaxKind::VarRef {
-            return Err(error_for_node(var_ref_node, SyntaxKind::VarRef));
-        }
+        _ = ensure_node_kind_is(var_ref_node, SyntaxKind::VarRef)?;
         let name = get_token(var_ref_node).unwrap().text().to_smolstr();
         Ok(Self(name))
     }
@@ -67,19 +65,22 @@ impl VarRef {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::ast_root_from;
-    use parameterized_test::create;
+    use crate::ast::tests::{ast_root_from, cast_into_type};
 
-    create! {
-        create_var_ref_test,
-        (program), {
+    #[test]
+    fn valid_var_ref() {
+        let program = "var";
         let ast_root = ast_root_from(program);
-        let var_ref = VarRef::try_from(ast_root.get_root().first_child().as_ref().unwrap()).expect("should have been ok");
+        let var_ref = cast_into_type::<VarRef>(ast_root.get_root().first_child().as_ref().unwrap());
         assert_eq!(program, var_ref.name().as_str());
-        }
     }
 
-    create_var_ref_test! {
-        valid_var_ref: "var",
+    #[test]
+    fn var_def() {
+        let program = "let diff_norm = (point_1.locus() - point_2.locus()).normalize();";
+        let ast_root = ast_root_from(program);
+        let var_def_node = ast_root.get_root().first_child().unwrap();
+        let var_def = cast_into_type::<VarDef>(&var_def_node);
+        assert_eq!("diff_norm", var_def.name().as_str());
     }
 }

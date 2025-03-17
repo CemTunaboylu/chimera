@@ -4,6 +4,7 @@ use thiserror::Error;
 
 use std::ops::Range;
 use syntax::{
+    bitset::SyntaxKindBitSet,
     language::{NodeOrToken, SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
@@ -50,10 +51,26 @@ impl Stringer for &SyntaxNode {
         format!("{:?}", self)
     }
 }
+impl Stringer for Option<&SyntaxNode> {
+    fn into(self) -> String {
+        match self {
+            Some(node) => <&SyntaxNode as Stringer>::into(node),
+            None => "None".to_string(),
+        }
+    }
+}
 
 impl Stringer for &SyntaxToken {
     fn into(self) -> String {
         format!("{:?}", self)
+    }
+}
+impl Stringer for Option<&SyntaxToken> {
+    fn into(self) -> String {
+        match self {
+            Some(token) => <&SyntaxToken as Stringer>::into(token),
+            None => "None".to_string(),
+        }
     }
 }
 
@@ -62,6 +79,15 @@ impl Stringer for &NodeOrToken {
         match self {
             NodeOrToken::Node(node) => <&SyntaxNode as Stringer>::into(node),
             NodeOrToken::Token(token) => <&SyntaxToken as Stringer>::into(token),
+        }
+    }
+}
+
+impl Stringer for Option<&NodeOrToken> {
+    fn into(self) -> String {
+        match self {
+            Some(node_or_token) => <&NodeOrToken as Stringer>::into(node_or_token),
+            None => "None".to_string(),
         }
     }
 }
@@ -77,6 +103,17 @@ impl Stringer for &[SyntaxKind] {
         let expected = self
             .iter()
             .map(|s| <SyntaxKind as Stringer>::into(*s))
+            .collect::<Vec<String>>()
+            .join(" or ");
+        expected
+    }
+}
+
+impl Stringer for &[SyntaxNode] {
+    fn into(self) -> String {
+        let expected = self
+            .iter()
+            .map(|s| <&SyntaxNode as Stringer>::into(s))
             .collect::<Vec<String>>()
             .join(" or ");
         expected
@@ -105,6 +142,13 @@ impl Stringer for ThinVec<SyntaxKind> {
             .collect::<ThinVec<String>>()
             .join(" or ");
         expected
+    }
+}
+
+impl Stringer for SyntaxKindBitSet {
+    fn into(self) -> String {
+        let kinds = <SyntaxKindBitSet as Into<ThinVec<_>>>::into(self);
+        <ThinVec<SyntaxKind> as Stringer>::into(kinds)
     }
 }
 

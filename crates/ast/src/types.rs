@@ -10,7 +10,7 @@ use crate::{
     errors::ASTError,
     lang_elems::{
         assert_node_to_be_of_kind, error_for_node, error_for_token,
-        get_filtered_children_with_tokens, get_token,
+        get_filtered_children_with_tokens, get_token_of_errs,
     },
 };
 
@@ -56,14 +56,8 @@ impl TryFrom<&SyntaxNode> for Type {
         match node_or_token {
             NodeOrToken::Node(struct_as_type) => {
                 _ = assert_node_to_be_of_kind(struct_as_type, StructAsType)?;
-                if let Some(token) = get_token(struct_as_type) {
-                    Ok(Self::Struct(token))
-                } else {
-                    Err(error_for_node(
-                        struct_as_type,
-                        "expects an identifier token",
-                    ))
-                }
+                let token = get_token_of_errs(struct_as_type, Ident)?;
+                Ok(Self::Struct(token))
             }
             NodeOrToken::Token(primitive) => match primitive.kind() {
                 TyBool => Ok(Self::Bool(primitive.clone())),

@@ -6,11 +6,11 @@ use syntax::{
 
 use crate::{
     errors::ASTError,
-    lang_elems::{error_for_node, filtered_children_with_tokens, get_children_in},
+    lang_elems::{filtered_children_with_tokens, get_children_in_errs, get_tokens_in_errs},
 };
 
 // possible types are primitives + custom types i.e. structs
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Jump {
     Continue(SyntaxToken),
     Break(SyntaxToken, Option<NodeOrToken>),
@@ -20,26 +20,17 @@ impl TryFrom<&SyntaxNode> for Jump {
     type Error = ASTError;
 
     fn try_from(parent_of_jump: &SyntaxNode) -> Result<Self, Self::Error> {
-        let types = [Jump].as_ref();
-
-        let jump = get_children_in(&parent_of_jump, types);
-        let jump = if let Some(node) = jump.first() {
-            node
-        } else {
-            return Err(error_for_node(parent_of_jump, "a jumping statement"));
-        };
-        let kw = if let Some(cwt) = jump.children_with_tokens().next() {
-            cwt
-        } else {
-            return Err(error_for_node(jump, [KwContinue, KwBreak].as_ref()));
-        };
+        let jump = get_children_in_errs(&parent_of_jump, Jump)?;
+        let node = jump.first().unwrap();
+        let tokens = get_tokens_in_errs(node, [KwContinue, KwBreak].as_ref())?;
+        let kw = tokens.first().unwrap();
 
         let j = match kw {
-            cont if matches!(cont.kind(), KwContinue) => Self::Continue(cont.into_token().unwrap()),
+            cont if matches!(cont.kind(), KwContinue) => Self::Continue(cont.clone()),
             brk if matches!(brk.kind(), KwBreak) => {
-                let brk = brk.into_token().unwrap();
                 let ignore: SyntaxKindBitSet = [KwBreak, Whitespace, Semi].as_ref().into();
-                if let Some(returning) = filtered_children_with_tokens(jump, !ignore).first() {
+                let brk = brk.clone();
+                if let Some(returning) = filtered_children_with_tokens(node, !ignore).first() {
                     Self::Break(brk, Some(returning.clone()))
                 } else {
                     Self::Break(brk, None)
@@ -49,7 +40,7 @@ impl TryFrom<&SyntaxNode> for Jump {
                 return Err(ASTError::new(
                     unwanted.text_range().into(),
                     [KwContinue, KwBreak].as_ref(),
-                    &unwanted,
+                    unwanted,
                 ));
             }
         };
@@ -66,14 +57,14 @@ mod tests {
     use parameterized_test::create;
 
     create! {
-        create_type_test,
+        create_jump_test,
         (program), {
         let ast_root = ast_root_from(program);
         cast_into_type::<Jump>(ast_root.get_root());
         }
     }
 
-    create_type_test! {
+    create_jump_test! {
         valid_continue: "continue;",
         valid_break_no_return: "break;",
     }
