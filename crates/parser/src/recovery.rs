@@ -49,7 +49,6 @@ impl<'input> Parser<'input> {
         }
     }
 
-    // TODO: check restriction as well
     pub fn recover(&self) {
         let exps = if let Some(Ok(got)) = self.peek() {
             let ctx = self.context.borrow();
@@ -75,7 +74,7 @@ impl<'input> Parser<'input> {
         }
     }
 
-    pub fn recover_restricted(&self, restricted: SyntaxKind) {
+    pub fn recover_restricted(&self, restricted: SyntaxKind) -> Option<()> {
         let allowed: ThinVec<SyntaxKind> = self.context.borrow().get_allowed().into();
         self.push_event(Event::Error {
             err: ParseError::new(self.lexer.borrow().span().clone(), allowed, restricted),
@@ -83,5 +82,6 @@ impl<'input> Parser<'input> {
         if self.can_recover() {
             self.bump_with_marker(SyntaxKind::Recovered);
         }
+        None
     }
 }

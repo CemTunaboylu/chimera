@@ -111,6 +111,10 @@ impl<'input> Parser<'input> {
         self.context.borrow().is_expected(e)
     }
 
+    pub fn is_allowed(&self, e: impl Into<SyntaxKindBitSet>) -> bool {
+        self.context.borrow().is_allowed(e)
+    }
+
     pub fn peek(&self) -> Option<MietteResult<Syntax>> {
         let mut peeked = self.raw_peek()?;
         while let Ok(ref syntax) = peeked {
