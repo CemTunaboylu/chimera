@@ -65,13 +65,14 @@ impl VarRef {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_into_type};
+    use crate::ast::tests::{ast_root_from, cast_node_into_type};
 
     #[test]
     fn valid_var_ref() {
         let program = "var";
         let ast_root = ast_root_from(program);
-        let var_ref = cast_into_type::<VarRef>(ast_root.get_root().first_child().as_ref().unwrap());
+        let var_ref =
+            cast_node_into_type::<VarRef>(ast_root.get_root().first_child().as_ref().unwrap());
         assert_eq!(program, var_ref.name().as_str());
     }
 
@@ -80,7 +81,7 @@ mod tests {
         let program = "let diff_norm = (point_1.locus() - point_2.locus()).normalize();";
         let ast_root = ast_root_from(program);
         let var_def_node = ast_root.get_root().first_child().unwrap();
-        let var_def = cast_into_type::<VarDef>(&var_def_node);
+        let var_def = cast_node_into_type::<VarDef>(&var_def_node);
         assert_eq!("diff_norm", var_def.name().as_str());
     }
 }

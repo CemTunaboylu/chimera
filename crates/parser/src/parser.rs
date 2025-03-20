@@ -2,6 +2,7 @@ use crate::{
     event::Event,
     event_holder::EventHolder,
     marker::{Complete, Incomplete, Marker},
+    parse::CustomExpectationOnSyntax,
 };
 use std::cell::RefCell;
 
@@ -13,6 +14,13 @@ use syntax::{
 
 use miette::Result as MietteResult;
 use thin_vec::ThinVec;
+
+#[derive(Debug, PartialEq)]
+pub enum IsNext {
+    Yes,
+    No,
+    None,
+}
 
 #[derive(Debug)]
 pub struct Parser<'input> {
@@ -99,6 +107,18 @@ impl<'input> Parser<'input> {
         self.context.borrow().expect(e);
     }
 
+    pub fn allow_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
+        self.context.borrow().allow(e);
+    }
+
+    pub fn only_allow_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
+        self.context.borrow().allow_only(e);
+    }
+
+    pub fn forbid_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
+        self.context.borrow().forbid(e);
+    }
+
     pub fn dont_recover_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
         self.context.borrow().disallow_recovery_of(e);
     }
@@ -140,6 +160,30 @@ impl<'input> Parser<'input> {
         self.lexer.borrow_mut().peek().is_none()
     }
 
+    pub fn is_next_strict(&self, expected_kind: SyntaxKind) -> IsNext {
+        if let Some(Ok(token)) = self.peek() {
+            let syntax: Syntax = token;
+            match syntax.is_of_kind(expected_kind) {
+                true => IsNext::Yes,
+                false => IsNext::No,
+            }
+        } else {
+            IsNext::None
+        }
+    }
+
+    pub fn is_next_in_strict(&self, set: SyntaxKindBitSet) -> IsNext {
+        if let Some(Ok(token)) = self.peek() {
+            let syntax: Syntax = token;
+            match set.contains(&syntax.get_kind()) {
+                true => IsNext::Yes,
+                false => IsNext::No,
+            }
+        } else {
+            IsNext::None
+        }
+    }
+
     pub fn is_next(&self, expected_kind: SyntaxKind) -> bool {
         if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;
@@ -158,33 +202,47 @@ impl<'input> Parser<'input> {
         }
     }
 
-    pub fn is_next_f(&self, expect: fn(Syntax) -> bool) -> bool {
+    pub fn is_next_f(&self, expect: CustomExpectationOnSyntax) -> bool {
         if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;
-            expect(syntax)
+            expect(&syntax)
         } else {
             false
         }
     }
+
+    pub fn is_next_f_strict(&self, expect: CustomExpectationOnSyntax) -> IsNext {
+        if let Some(Ok(token)) = self.peek() {
+            let syntax: Syntax = token;
+            match expect(&syntax) {
+                true => IsNext::Yes,
+                false => IsNext::No,
+            }
+        } else {
+            IsNext::None
+        }
+    }
     // expect injects the syntax kind to expectations if not met
     pub fn expect_next(&self, kind: SyntaxKind) -> Option<()> {
-        self.is_next(kind).then(|| ()).or_else(|| {
-            self.context.borrow().expect(kind);
-            None
-        })
+        matches!(self.is_next_strict(kind), IsNext::Yes)
+            .then(|| ())
+            .or_else(|| {
+                self.expect_in_ctx(kind);
+                None
+            })
     }
     // expect_and_bump injects the syntax kind to expectations before acting
     pub fn expect_and_bump(&self, expected_kind: SyntaxKind) {
-        self.context.borrow().expect(expected_kind);
-        if self.is_next(expected_kind) {
+        self.expect_in_ctx(expected_kind);
+        if IsNext::Yes == self.is_next_strict(expected_kind) {
             self.bump();
             return;
         }
         self.recover();
     }
 
-    pub fn expect_f_and_bump(&self, expect: fn(Syntax) -> bool) {
-        if self.is_next_f(expect) {
+    pub fn expect_f_and_bump(&self, expect: CustomExpectationOnSyntax) {
+        if IsNext::Yes == self.is_next_f_strict(expect) {
             self.bump();
             return;
         }
@@ -197,8 +255,8 @@ impl<'input> Parser<'input> {
         expected_kind: SyntaxKind,
         bump_with: SyntaxKind,
     ) -> Option<Marker<Complete>> {
-        self.context.borrow().expect(expected_kind);
-        if self.is_next(expected_kind) {
+        self.expect_in_ctx(expected_kind);
+        if IsNext::Yes == self.is_next_strict(expected_kind) {
             return Some(self.bump_with_marker(bump_with));
         }
         self.recover();

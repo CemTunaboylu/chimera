@@ -4,7 +4,7 @@ use crate::{
     parser::Parser,
 };
 
-use syntax::{Syntax, anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
+use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
 
 use thin_vec::thin_vec;
 
@@ -41,9 +41,13 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(KwFor);
 
         self.parse_loop_identifiers();
-        self.expect_and_bump(KwIn);
-        // this can be 0_10, <iterable>, <iterable>.<method>,
-        self.parse_expression_until_binding_power(starting_precedence());
+        {
+            let in_marker = self.start();
+            self.expect_and_bump(KwIn);
+            // this can be 0_10, <iterable>, <iterable>.<method>,
+            self.parse_expression_until_binding_power(starting_precedence());
+            self.complete_marker_with(in_marker, In);
+        }
         self.parse_block();
 
         Some(self.complete_marker_with(marker, ForLoop))
@@ -62,9 +66,7 @@ impl<'input> Parser<'input> {
             use SeparatedElement::*;
 
             let idents = thin_vec![Kind(Ident)];
-            self.parse_separated_by(&idents, ForIdent, Comma, |syntax: Syntax| {
-                !syntax.is_of_kind(KwIn)
-            });
+            self.parse_separated_by(&idents, ForIdent, Comma, KwIn);
         }
     }
 }
@@ -86,30 +88,31 @@ mod tests {
 
       for_loop_iterated: ("for elm in arr { print(elm) }",
           expect![[r#"
-                Root@0..29
-                  ForLoop@0..29
-                    KwFor@0..3 "for"
-                    Whitespace@3..4 " "
-                    ForIdent@4..8
-                      Ident@4..7 "elm"
-                      Whitespace@7..8 " "
+              Root@0..29
+                ForLoop@0..29
+                  KwFor@0..3 "for"
+                  Whitespace@3..4 " "
+                  ForIdent@4..8
+                    Ident@4..7 "elm"
+                    Whitespace@7..8 " "
+                  In@8..15
                     KwIn@8..10 "in"
                     Whitespace@10..11 " "
                     VarRef@11..15
                       Ident@11..14 "arr"
                       Whitespace@14..15 " "
-                    Block@15..29
-                      LBrace@15..16 "{"
-                      Whitespace@16..17 " "
-                      FnCall@17..27
-                        Ident@17..22 "print"
-                        LParen@22..23 "("
-                        FnArg@23..26
-                          VarRef@23..26
-                            Ident@23..26 "elm"
-                        RParen@26..27 ")"
-                      Whitespace@27..28 " "
-                      RBrace@28..29 "}""#]],
+                  Block@15..29
+                    LBrace@15..16 "{"
+                    Whitespace@16..17 " "
+                    FnCall@17..27
+                      Ident@17..22 "print"
+                      LParen@22..23 "("
+                      FnArg@23..26
+                        VarRef@23..26
+                          Ident@23..26 "elm"
+                      RParen@26..27 ")"
+                    Whitespace@27..28 " "
+                    RBrace@28..29 "}""#]],
       ),
 
       for_loop_with_slicing: ("for elm in arr[0_arr.len()]{ print(elm) }",
@@ -121,25 +124,26 @@ mod tests {
                   ForIdent@4..8
                     Ident@4..7 "elm"
                     Whitespace@7..8 " "
-                  KwIn@8..10 "in"
-                  Whitespace@10..11 " "
-                  ContainerRef@11..27
-                    Ident@11..14 "arr"
-                    Indexing@14..27
-                      LBrack@14..15 "["
-                      InfixBinOp@15..26
-                        Literal@15..16
-                          Int@15..16 "0"
-                        Under@16..17 "_"
-                        InfixBinOp@17..26
-                          VarRef@17..20
-                            Ident@17..20 "arr"
-                          Dot@20..21 "."
-                          FnCall@21..26
-                            Ident@21..24 "len"
-                            LParen@24..25 "("
-                            RParen@25..26 ")"
-                      RBrack@26..27 "]"
+                  In@8..27
+                    KwIn@8..10 "in"
+                    Whitespace@10..11 " "
+                    ContainerRef@11..27
+                      Ident@11..14 "arr"
+                      Indexing@14..27
+                        LBrack@14..15 "["
+                        InfixBinOp@15..26
+                          Literal@15..16
+                            Int@15..16 "0"
+                          Under@16..17 "_"
+                          InfixBinOp@17..26
+                            VarRef@17..20
+                              Ident@17..20 "arr"
+                            Dot@20..21 "."
+                            FnCall@21..26
+                              Ident@21..24 "len"
+                              LParen@24..25 "("
+                              RParen@25..26 ")"
+                        RBrack@26..27 "]"
                   Block@27..41
                     LBrace@27..28 "{"
                     Whitespace@28..29 " "
@@ -164,32 +168,33 @@ mod tests {
                   ForIdent@6..10
                     Ident@6..9 "elm"
                     Whitespace@9..10 " "
-                  KwIn@10..12 "in"
-                  Whitespace@12..13 " "
-                  InfixBinOp@13..42
-                    ContainerRef@13..29
-                      Ident@13..16 "arr"
-                      Indexing@16..29
-                        LBrack@16..17 "["
-                        InfixBinOp@17..28
-                          Literal@17..18
-                            Int@17..18 "0"
-                          Under@18..19 "_"
-                          InfixBinOp@19..28
-                            VarRef@19..22
-                              Ident@19..22 "arr"
-                            Dot@22..23 "."
-                            FnCall@23..28
-                              Ident@23..26 "len"
-                              LParen@26..27 "("
-                              RParen@27..28 ")"
-                        RBrack@28..29 "]"
-                    Dot@29..30 "."
-                    FnCall@30..41
-                      Ident@30..39 "enumerate"
-                      LParen@39..40 "("
-                      RParen@40..41 ")"
-                    Whitespace@41..42 " "
+                  In@10..42
+                    KwIn@10..12 "in"
+                    Whitespace@12..13 " "
+                    InfixBinOp@13..42
+                      ContainerRef@13..29
+                        Ident@13..16 "arr"
+                        Indexing@16..29
+                          LBrack@16..17 "["
+                          InfixBinOp@17..28
+                            Literal@17..18
+                              Int@17..18 "0"
+                            Under@18..19 "_"
+                            InfixBinOp@19..28
+                              VarRef@19..22
+                                Ident@19..22 "arr"
+                              Dot@22..23 "."
+                              FnCall@23..28
+                                Ident@23..26 "len"
+                                LParen@26..27 "("
+                                RParen@27..28 ")"
+                          RBrack@28..29 "]"
+                      Dot@29..30 "."
+                      FnCall@30..41
+                        Ident@30..39 "enumerate"
+                        LParen@39..40 "("
+                        RParen@40..41 ")"
+                      Whitespace@41..42 " "
                   Block@42..59
                     LBrace@42..43 "{"
                     Whitespace@43..44 " "
@@ -216,14 +221,15 @@ mod tests {
                     ForIdent@4..7
                       Ident@4..6 "ix"
                       Whitespace@6..7 " "
-                    KwIn@7..9 "in"
-                    Whitespace@9..10 " "
-                    InfixBinOp@10..13
-                      Literal@10..11
-                        Int@10..11 "0"
-                      Under@11..12 "_"
-                      Literal@12..13
-                        Int@12..13 "9"
+                    In@7..13
+                      KwIn@7..9 "in"
+                      Whitespace@9..10 " "
+                      InfixBinOp@10..13
+                        Literal@10..11
+                          Int@10..11 "0"
+                        Under@11..12 "_"
+                        Literal@12..13
+                          Int@12..13 "9"
                     Block@13..31
                       LBrace@13..14 "{"
                       Whitespace@14..15 " "

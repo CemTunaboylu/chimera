@@ -8,7 +8,7 @@ use crate::{
     cst::ConcreteSyntaxTree,
     marker::{Complete, Incomplete, Marker},
     operator::{AssocBinOp, AssocUnOp, Bound, Op, starting_precedence},
-    parser::Parser,
+    parser::{IsNext, Parser},
     sink::Sink,
 };
 pub type Finished = Marker<Complete>;
@@ -16,7 +16,7 @@ pub type Started = Marker<Incomplete>;
 
 use SyntaxKind::*;
 
-pub type CustomExpectationOnSyntax = fn(Syntax) -> bool;
+pub type CustomExpectationOnSyntax = fn(&Syntax) -> bool;
 
 #[derive(Clone, Debug)]
 pub enum SeparatedElement {
@@ -48,9 +48,10 @@ impl<'input> Parser<'input> {
         elements_in_order: &ThinVec<SeparatedElement>,
         wrapping_kind_to_complete: SyntaxKind,
         separator: SyntaxKind,
-        until_false: fn(Syntax) -> bool,
+        unwanted: impl Into<SyntaxKindBitSet>,
     ) -> Option<()> {
-        while until_false(self.peek()?.ok()?) {
+        let unwanted: SyntaxKindBitSet = unwanted.into();
+        while let IsNext::No = self.is_next_in_strict(unwanted) {
             let marker = self.start();
 
             self.parse_with(&elements_in_order);
@@ -117,11 +118,14 @@ impl<'input> Parser<'input> {
         }
     }
 
+    #[allow(unused_variables)]
     pub fn parse_condition(&self) -> Option<Finished> {
         let marker = if self.is_next_f(|syntax| matches!(syntax.get_kind(), KwFalse | KwTrue)) {
             self.bump_with_marker(Condition)
         } else {
             let cond_marker = self.start();
+            let rollback_when_dropped = self.roll_back_context_after_drop();
+            self.expect_in_ctx(SyntaxKind::operators());
             self.parse_expression_until_binding_power(starting_precedence());
             self.complete_marker_with(cond_marker, Condition)
         };
@@ -144,8 +148,11 @@ impl<'input> Parser<'input> {
                         break;
                     }
                     if !self.context.borrow().is_allowed(kind) {
-                        self.recover_restricted(kind);
-                        return None;
+                        if self.is_expected(kind) {
+                            break;
+                        }
+                        // note: returns None thus shortcircuits from here
+                        self.recover_restricted(kind)?;
                     }
 
                     if kind.is_posfix_unary_operator() {
@@ -199,15 +206,23 @@ impl<'input> Parser<'input> {
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             typing if is_a_type(&typing) => {
+                if !self.is_allowed(typing) {
+                    self.recover_restricted(typing)?;
+                }
+                if typing == TyTensor {
+                    return self.parse_tensor_typing();
+                }
                 self.bump();
                 // should not continue with expression parsing, because
                 // a type cannot be an operand.
                 None
             }
             operator if is_an_operator(&operator) => {
-                if !self.context.borrow().is_expected(operator) {
+                println!("DIRTY WATERS : {:?}", self.peek());
+                if !self.is_expected(operator) {
                     self.recover_unmet_expectation();
-                } else if !self.context.borrow().is_allowed(operator) {
+                } else if !self.is_allowed(operator) {
+                    // note: returns None thus shortcircuits from here
                     self.recover_restricted(operator);
                 }
                 None
@@ -219,6 +234,7 @@ impl<'input> Parser<'input> {
     }
 
     // Possible options: a variable reference, function/method call or an iterable indexing
+    #[allow(unused_variables)]
     fn parse_starting_with_identifier(&self) -> Option<Finished> {
         let marker = self.start();
         self.expect_and_bump(Ident);
@@ -226,6 +242,7 @@ impl<'input> Parser<'input> {
         let finished = if self.is_next(LParen) {
             self.parse_function_call(marker)
         } else if self.is_next(LBrack) {
+            self.expect_in_ctx(ContainerRef);
             self.parse_container_indexing();
             self.complete_marker_with(marker, ContainerRef)
         } else {
@@ -287,19 +304,25 @@ impl<'input> Parser<'input> {
                 self.recover();
                 None
             }
-            KwStruct => self.parse_struct_definition(),
-            KwSelf | Kwself => {
-                if self.is_expected([FnCall, FnDef].as_ref()) {
-                    Some(self.bump_with_marker(StructAsType))
-                } else {
-                    Some(self.bump_with_marker(SelfRef))
-                }
-            }
             KwMut => {
                 // TODO: mut should not be here, it should wrap what's coming into its own node
                 todo!()
             }
             KwReturn => self.parse_return(),
+            KwStruct => self.parse_struct_definition(),
+            KwSelf | Kwself => Some(self.bump_with_marker(SelfRef)),
+
+            // Kwself => {
+            //     if self.is_expected([FnCall, FnDef].as_ref()) {
+            //         let marker = self.start();
+            //         self.bump_with_marker(SelfRef);
+            //         Some(self.complete_marker_with(marker, StructAsType))
+            //     } else {
+            //         Some(self.bump_with_marker(SelfRef))
+            //     }
+            // }
+            // KwSelf => Some(self.bump_with_marker(SelfRef)),
+            KwTensor => self.parse_tensor_structure(),
             nope => {
                 println!("{:?} is not implemented yet", nope);
                 todo!()
@@ -307,9 +330,12 @@ impl<'input> Parser<'input> {
         }
     }
 
+    #[allow(unused_variables)]
     pub fn parse_prefix_unary_operation(&self, kind: SyntaxKind) -> Option<Finished> {
         let prefix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let marker = self.start();
+        let rollback_after_drop = self.roll_back_context_after_drop();
+        self.expect_in_ctx(SyntaxKind::operators());
         self.expect_and_bump(kind);
         let bounded_precedence = Bound::from_op(prefix_unary_op.clone());
         _ = self.parse_expression_until_binding_power(bounded_precedence);

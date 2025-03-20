@@ -183,6 +183,7 @@ mod tests {
             // kw_static: ("static", TokenKind::KwStatic),
             kw_struct: ("struct", TokenKind::KwStruct),
             // kw_trait: ("trait", TokenKind::KwTrait),
+            kw_tensor: ("Tensor", TokenKind::KwTensor),
             kw_true: ("true", TokenKind::KwTrue),
             kw_type: ("type", TokenKind::KwType),
             kw_while: ("while", TokenKind::KwWhile),
@@ -240,6 +241,7 @@ mod tests {
             // type_i64: ("i64", TokenKind::TypeI64),
             type_str_slice: ("str", TokenKind::TypeStrSlice),
             type_string: ("String", TokenKind::TypeString),
+            type_tensor: ("tensor", TokenKind::TypeTensor),
             // type_u32: ("u32", TokenKind::TypeU32),
             // type_u64: ("u64", TokenKind::TypeU64),
             underscore: ("_", TokenKind::Underscore),
@@ -340,6 +342,18 @@ mod tests {
             kind: TokenKind::CharLiteralMissingRight,
             ttype: TokenKind::CharLiteralMissingRight.into(),
             span: 1..3
+            },
+        ]),
+        underscored_identifier: ("_ident", &[
+            Token{
+            kind: TokenKind::Underscore,
+            ttype: TokenKind::Underscore.into(),
+            span: 0..1
+            },
+            Token{
+            kind: TokenKind::Identifier,
+            ttype: TokenKind::Identifier.into(),
+            span: 1..6
             },
         ]),
         member_and_two_bin_op: ("h.w+1/2", &[

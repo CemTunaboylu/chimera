@@ -63,6 +63,7 @@ impl TryFrom<&SyntaxNode> for Block {
         _ = ensure_node_kind_is(block_node, SyntaxKind::Block)?;
         // TODO: for now, we ignore the failures
         let stmts = get_children_as::<Stmt>(block_node)?;
+        println!("  stmts: {:?}", stmts);
         if matches!(stmts.last(), Some(Stmt::Expr(_))) {
             Ok(Self::Returning(ThinVec::from(stmts)))
         } else {
@@ -112,7 +113,7 @@ mod test {
     use crate::{
         ast::{
             Root,
-            tests::{ast_root_from, cast_into_type},
+            tests::{ast_root_from, cast_node_into_type},
         },
         literal::Value,
         operation::{Binary, test::assert_infix_bin_op_with},
@@ -216,9 +217,10 @@ mod test {
 
     #[test]
     fn happy_path_for_indexing() {
-        let program = "[arr.len()-1]";
+        let program = "arr[arr.len()-1]";
         let ast_root = ast_root_from(program);
-        let indexing = cast_into_type::<Expr>(&ast_root.get_root().first_child().unwrap());
+        let container_ref = ast_root.get_root().first_child().unwrap();
+        let indexing = cast_node_into_type::<Expr>(&container_ref.first_child().unwrap());
 
         assert!(matches!(indexing, Expr::Indexing(_)));
         if let Expr::Indexing(indexing) = indexing {

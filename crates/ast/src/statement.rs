@@ -1,6 +1,6 @@
 use crate::{
     control_flow::ControlFlow as ASTControlFlow, errors::ASTError, expression::Expr,
-    function::FnDef, jump::Jump, semi::Semi, variable::VarDef,
+    function::FnDef, jump::Jump, loops::Loop, semi::Semi, variable::VarDef,
 };
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 
@@ -10,6 +10,7 @@ pub enum Stmt {
     Expr(Expr),
     FnDef(FnDef),
     Jump(Jump),
+    Loop(Loop),
     Semi(Semi),
     VarDef(VarDef),
 }
@@ -25,6 +26,14 @@ impl TryFrom<&SyntaxNode> for Stmt {
             },
             SyntaxKind::FnDef => match FnDef::try_from(node) {
                 Ok(fn_def) => Ok(Self::FnDef(fn_def)),
+                Err(err) => Err(err),
+            },
+            SyntaxKind::Jump => match Jump::try_from(node) {
+                Ok(jump) => Ok(Self::Jump(jump)),
+                Err(err) => Err(err),
+            },
+            SyntaxKind::ForLoop | SyntaxKind::WhileLoop => match Loop::try_from(node) {
+                Ok(loop_) => Ok(Self::Loop(loop_)),
                 Err(err) => Err(err),
             },
             SyntaxKind::Semi => match Semi::try_from(node) {
@@ -55,13 +64,36 @@ impl TryFrom<SyntaxNode> for Stmt {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_into_type};
+    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use parameterized_test::create;
+
+    create! {
+        create_stmt_test,
+        (program), {
+        let ast_root = ast_root_from(program);
+        let stmt_node = ast_root.get_root().first_child().unwrap();
+        cast_node_into_type::<Stmt>(&stmt_node);
+        }
+    }
+    create_stmt_test! {
+        control_flow_just_if: "if is_ok { return self.block() }",
+        control_flow_just_if_else: "if is_ok { return self.block(); } else { return self.alternative(); }",
+        control_flow_just_if_elif_else: "if is_red { RED } elif is_blue { BLUE } else { GREEN }",
+        expr: "weights[0][0][0]",
+        fn_def_with_tensor_typing_just_typehint: "fn quantize(&mut self, mode: Mode) -> tensor<i32> { quantize(self) } ",
+        fn_def_with_tensor_typing_just_dimhint: "fn quantize(&mut self, mode: Mode) -> tensor<1000, 1000, 1000> { quantize(self) } ",
+        fn_def_with_tensor_typing_full: "fn quantize(&mut self, mode: Mode) -> tensor<i32><1000, 1000, 1000> { quantize(self) } ",
+        jump: "break weights.raw_tensor();",
+        loop_: "while is_ok { server.listen(); }",
+        semi: "cannot_return();",
+        var_def: "let unit = [[1,0,0],[0,1,0],[0,0,1]];",
+    }
 
     #[test]
     fn var_def() {
         let program = "let diff_norm = (point_1.locus() - point_2.locus()).normalize();";
         let ast_root = ast_root_from(program);
         let var_def_node = ast_root.get_root().first_child().unwrap();
-        cast_into_type::<Stmt>(&var_def_node);
+        cast_node_into_type::<Stmt>(&var_def_node);
     }
 }

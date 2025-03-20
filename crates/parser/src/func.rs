@@ -12,7 +12,8 @@ use syntax::{
 use SyntaxKind::*;
 use thin_vec::{ThinVec, thin_vec};
 
-fn ident_or_type(syntax: Syntax) -> bool {
+// TODO: move it to somewhere else
+fn ident_or_type(syntax: &Syntax) -> bool {
     matches!(
         syntax.get_token_type(),
         TokenType::Type | TokenType::Identifier
@@ -46,11 +47,14 @@ impl<'input> Parser<'input> {
 
         if self.is_next(RArrow) {
             let ret_type_marker = self.start();
+            let rollback_after_drop = self.roll_back_context_after_drop();
             self.expect_and_bump(RArrow);
+            self.allow_only_in_ctx(SyntaxKind::types().as_ref());
+            self.allow_in_ctx([And, Mut].as_ref());
             if self.is_next(And) {
                 self.parse_prefix_unary_operation(And);
             } else {
-                self.expect_f_and_bump(ident_or_type);
+                self.parse_left_hand_side();
             }
             self.complete_marker_with(ret_type_marker, RetType);
         }
@@ -61,9 +65,12 @@ impl<'input> Parser<'input> {
 
     // the identifier is already bumped at this point because we ended up here
     // from parsing an identifier and saw a LParen as well.
+    #[allow(unused_variables)]
     pub fn parse_function_call(&self, marker: Marker<Incomplete>) -> Finished {
         self.expect_and_bump(LParen);
-        self.parse_comma_separated_arguments_until(|syntax: Syntax| !syntax.is_of_kind(RParen));
+        let rollback_when_dropped = self.roll_back_context_after_drop();
+        self.expect_in_ctx(SyntaxKind::operators());
+        self.parse_comma_separated_arguments_until(RParen);
         self.expect_and_bump(RParen);
         self.complete_marker_with(marker, FnCall)
     }
@@ -155,13 +162,16 @@ impl<'input> Parser<'input> {
     }
 
     #[allow(unused_variables)]
-    pub fn parse_comma_separated_arguments_until(&self, until: fn(Syntax) -> bool) -> Option<()> {
+    pub fn parse_comma_separated_arguments_until(
+        &self,
+        unwanted: impl Into<SyntaxKindBitSet>,
+    ) -> Option<()> {
         let rollback_when_dropped = self.impose_comma_sep_args_restrictions();
         use SeparatedElement::*;
         let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
         let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];
 
-        self.parse_separated_by(&can_be, FnArg, Comma, until)
+        self.parse_separated_by(&can_be, FnArg, Comma, unwanted)
     }
 }
 
@@ -358,46 +368,46 @@ mod tests {
                         RBrace@109..110 "}""#]],
     ),
 
-    function_def_with_return: ("fn sum(a:i32, b:i32) -> i32 { return a+b; }",
+    function_def_with_return: ("fn sum(a:tensor, b:tensor) -> tensor{ return a+b; }",
               expect![[r#"
-                  Root@0..42
-                    FnDef@0..42
+                  Root@0..50
+                    FnDef@0..50
                       KwFn@0..2 "fn"
                       Whitespace@2..3 " "
                       Ident@3..6 "sum"
                       LParen@6..7 "("
-                      ParamDecl@7..12
+                      ParamDecl@7..15
                         Ident@7..8 "a"
                         Colon@8..9 ":"
-                        TyI32@9..12 "i32"
-                      Whitespace@12..13 " "
-                      ParamDecl@13..18
-                        Ident@13..14 "b"
-                        Colon@14..15 ":"
-                        TyI32@15..18 "i32"
-                      RParen@18..19 ")"
-                      Whitespace@19..20 " "
-                      RetType@20..26
-                        RArrow@20..22 "->"
-                        Whitespace@22..23 " "
-                        TyI32@23..26 "i32"
-                      Block@26..42
-                        Whitespace@26..27 " "
-                        LBrace@27..28 "{"
+                        TyTensor@9..15 "tensor"
+                      Whitespace@15..16 " "
+                      ParamDecl@16..24
+                        Ident@16..17 "b"
+                        Colon@17..18 ":"
+                        TyTensor@18..24 "tensor"
+                      RParen@24..25 ")"
+                      Whitespace@25..26 " "
+                      RetType@26..35
+                        RArrow@26..28 "->"
                         Whitespace@28..29 " "
-                        Semi@29..40
-                          Jump@29..39
-                            KwReturn@29..35 "return"
-                            Whitespace@35..36 " "
-                            InfixBinOp@36..39
-                              VarRef@36..37
-                                Ident@36..37 "a"
-                              Plus@37..38 "+"
-                              VarRef@38..39
-                                Ident@38..39 "b"
-                          Semi@39..40 ";"
-                        Whitespace@40..41 " "
-                        RBrace@41..42 "}""#]],
+                        TensorType@29..35
+                          TyTensor@29..35 "tensor"
+                      Block@35..50
+                        LBrace@35..36 "{"
+                        Whitespace@36..37 " "
+                        Semi@37..48
+                          Jump@37..47
+                            KwReturn@37..43 "return"
+                            Whitespace@43..44 " "
+                            InfixBinOp@44..47
+                              VarRef@44..45
+                                Ident@44..45 "a"
+                              Plus@45..46 "+"
+                              VarRef@46..47
+                                Ident@46..47 "b"
+                          Semi@47..48 ";"
+                        Whitespace@48..49 " "
+                        RBrace@49..50 "}""#]],
     ),
 
         fn_with_ref_mut_self: ("fn translate(&mut self, by: Point) { self.x += by.x; self.y += by.y;}",
@@ -598,14 +608,14 @@ mod tests {
                 RParen@30..31 ")""#]],
     ),
 
-    function_call_with_complex_parameters: ("am_i_happy(me.expectations().as_tensor() - reality.tensor )",
+    function_call_with_complex_parameters: ("am_i_happy(me.expectations().as_tensor() - reality.variable_tensor )",
         expect![[r#"
-            Root@0..59
-              FnCall@0..59
+            Root@0..68
+              FnCall@0..68
                 Ident@0..10 "am_i_happy"
                 LParen@10..11 "("
-                FnArg@11..58
-                  InfixBinOp@11..58
+                FnArg@11..67
+                  InfixBinOp@11..67
                     InfixBinOp@11..41
                       InfixBinOp@11..28
                         VarRef@11..13
@@ -623,14 +633,41 @@ mod tests {
                       Whitespace@40..41 " "
                     Minus@41..42 "-"
                     Whitespace@42..43 " "
-                    InfixBinOp@43..58
+                    InfixBinOp@43..67
                       VarRef@43..50
                         Ident@43..50 "reality"
                       Dot@50..51 "."
-                      VarRef@51..58
-                        Ident@51..57 "tensor"
-                        Whitespace@57..58 " "
-                RParen@58..59 ")""#]],
+                      VarRef@51..67
+                        Ident@51..66 "variable_tensor"
+                        Whitespace@66..67 " "
+                RParen@67..68 ")""#]],
+    ),
+    static_function_call: ("Life::diff(me.expectations().as_tensor())",
+        expect![[r#"
+            Root@0..41
+              InfixBinOp@0..41
+                VarRef@0..4
+                  Ident@0..4 "Life"
+                ColonColon@4..6 "::"
+                FnCall@6..41
+                  Ident@6..10 "diff"
+                  LParen@10..11 "("
+                  FnArg@11..40
+                    InfixBinOp@11..40
+                      InfixBinOp@11..28
+                        VarRef@11..13
+                          Ident@11..13 "me"
+                        Dot@13..14 "."
+                        FnCall@14..28
+                          Ident@14..26 "expectations"
+                          LParen@26..27 "("
+                          RParen@27..28 ")"
+                      Dot@28..29 "."
+                      FnCall@29..40
+                        Ident@29..38 "as_tensor"
+                        LParen@38..39 "("
+                        RParen@39..40 ")"
+                  RParen@40..41 ")""#]],
     ),
     }
 }

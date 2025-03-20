@@ -1,4 +1,7 @@
-use crate::{parse::Finished, parser::Parser};
+use crate::{
+    parse::Finished,
+    parser::{IsNext, Parser},
+};
 
 use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
 
@@ -20,7 +23,7 @@ impl<'input> Parser<'input> {
         self.parse_block();
         self.complete_marker_with(cond_marker, Conditional);
 
-        while self.is_next(KwElif) {
+        while IsNext::Yes == self.is_next_strict(KwElif) {
             let cond_marker = self.start();
             self.expect_and_bump(KwElif);
             {

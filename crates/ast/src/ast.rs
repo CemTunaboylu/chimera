@@ -87,14 +87,16 @@ pub(crate) mod tests {
     use crate::ast::Root;
     use parser::parser::Parser;
     use std::fmt::Debug;
+    use syntax::language::SyntaxToken;
     use thin_vec::ThinVec;
 
     pub(crate) fn ast_root_from(program: &str) -> Root {
         let root = Parser::new(program).parse();
+        println!("debug_tree: {:?}", root.debug_tree());
         Root::try_from(root).expect("should have been ok")
     }
 
-    pub(crate) fn cast_into_type<'caller, T>(parent_node: &'caller SyntaxNode) -> T
+    pub(crate) fn cast_node_into_type<'caller, T>(parent_node: &'caller SyntaxNode) -> T
     where
         T: TryFrom<&'caller SyntaxNode>,
         <T as TryFrom<&'caller SyntaxNode>>::Error: Debug,
@@ -103,6 +105,20 @@ pub(crate) mod tests {
             format!(
                 "try_into should have been successful for {:?}",
                 parent_node.text()
+            )
+            .as_str(),
+        );
+        _desired_type
+    }
+    pub(crate) fn cast_token_into_type<'caller, T>(token: &'caller SyntaxToken) -> T
+    where
+        T: TryFrom<&'caller SyntaxToken>,
+        <T as TryFrom<&'caller SyntaxToken>>::Error: Debug,
+    {
+        let _desired_type: T = token.try_into().expect(
+            format!(
+                "try_into should have been successful for {:?}",
+                token.text()
             )
             .as_str(),
         );

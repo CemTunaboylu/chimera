@@ -124,6 +124,7 @@ impl From<TokenKind> for TokenType {
             | KwStruct
             | KwTrue
             | KwType
+            | KwTensor
             | KwWhile
             | Kwself => Self::Keyword,
             LeftBrace => Self::OpeningDelimiter(RightBrace),
@@ -160,7 +161,9 @@ impl From<TokenKind> for TokenType {
             | TypeF32
             | TypeI32
             | TypeStrSlice
-            | TypeString => Self::Type,
+            | TypeString 
+            | TypeTensor
+            => Self::Type,
             BlockComment | LineComment => Self::Comment,
             // BlockCommentLeftStarMissing | 
             BlockCommentRightStarMissing => {

@@ -10,7 +10,7 @@ use SyntaxKind::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContainerRef {
-    name: SyntaxToken, // should be token
+    name: SyntaxToken,
     indices: ThinVec<Indexing>,
 }
 
@@ -50,7 +50,7 @@ impl TryFrom<&SyntaxNode> for ContainerRef {
 mod tests {
 
     use crate::{
-        ast::tests::{ast_root_from, cast_into_type},
+        ast::tests::{ast_root_from, cast_node_into_type},
         container_ref::ContainerRef,
         expression::Expr,
         literal::{Literal, Value},
@@ -63,7 +63,7 @@ mod tests {
         (program, exp_name, indices_count), {
             let ast_root = ast_root_from(program);
             let container_ref_node = ast_root.get_root().first_child().unwrap();
-            let container_ref= cast_into_type::<ContainerRef>(&container_ref_node);
+            let container_ref= cast_node_into_type::<ContainerRef>(&container_ref_node);
             assert_eq!(exp_name, container_ref.name());
             assert!(indices_count== container_ref.indices.len());
         }
@@ -74,19 +74,19 @@ mod tests {
          "arr[me.z - she.z]", "arr", 1,
         ),
         nested_index: (
-         "tensor[tensor[0].len() -1]", "tensor", 1,
+         "matrix[matrix[0].len() -1]", "matrix", 1,
         ),
         nested_and_two_dim_index: (
-         "tensor[tensor[0].len() -1][0]", "tensor", 2,
+         "matrix[matrix[0].len() -1][0]", "matrix", 2,
         ),
     }
 
     #[test]
     fn detailed_testing_of_complex_call() {
-        let program = "tensor[tensor[0].len() -1][0]";
+        let program = "matrix[matrix[0].len() -1][0]";
         let ast_root = ast_root_from(program);
         let container_ref_node = ast_root.get_root().first_child().unwrap();
-        let container_ref: ContainerRef = cast_into_type::<ContainerRef>(&container_ref_node);
+        let container_ref: ContainerRef = cast_node_into_type::<ContainerRef>(&container_ref_node);
         let indices = container_ref.indices();
         let first_index_expr = indices[0].index().expect("should have been ok");
         assert!(matches!(first_index_expr, Expr::Infix(Binary::Infix(_))));

@@ -1,7 +1,4 @@
-use syntax::{
-    language::{SyntaxNode, SyntaxToken},
-    syntax_kind::SyntaxKind,
-};
+use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
 use crate::{
@@ -10,8 +7,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        ensure_token_kind_is, ensure_token_kind_is_not, error_for_node, error_for_token,
-        first_token_expect, get_children_in, get_children_in_errs, get_token_of, get_token_of_errs,
+        ensure_token_kind_is, ensure_token_kind_is_not, error_for_node, first_token_expect,
+        get_children_in, get_children_in_errs, get_token_of_errs,
     },
 };
 
@@ -45,17 +42,15 @@ pub enum Conditional {
     Else(Block),
 }
 
-impl Conditional {
-    fn parse_condition_and_block(
-        condition_and_block: ThinVec<SyntaxNode>,
-    ) -> ASTResult<(Condition, Block)> {
-        let condition_node = condition_and_block.first().unwrap();
-        let condition = Condition::try_from(condition_node)?;
+pub(crate) fn parse_condition_and_block(
+    condition_and_block: ThinVec<SyntaxNode>,
+) -> ASTResult<(Condition, Block)> {
+    let condition_node = condition_and_block.first().unwrap();
+    let condition = Condition::try_from(condition_node)?;
 
-        let block_node = condition_and_block.last().unwrap();
-        let block = Block::try_from(block_node)?;
-        Ok((condition, block))
-    }
+    let block_node = condition_and_block.last().unwrap();
+    let block = Block::try_from(block_node)?;
+    Ok((condition, block))
 }
 
 impl TryFrom<&SyntaxNode> for Conditional {
@@ -78,7 +73,7 @@ impl TryFrom<&SyntaxNode> for Conditional {
             ));
         } else if condition_and_block.len() == 2 {
             _ = ensure_token_kind_is_not(&kw, SyntaxKind::KwElse);
-            let (condition, block) = Self::parse_condition_and_block(condition_and_block)?;
+            let (condition, block) = parse_condition_and_block(condition_and_block)?;
 
             let c_flow = match kw.kind() {
                 SyntaxKind::KwIf => Self::If(condition, block),
@@ -125,7 +120,7 @@ mod test {
     use parameterized_test::create;
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_into_type};
+    use crate::ast::tests::{ast_root_from, cast_node_into_type};
 
     create! {
         happy_path_condition_test,
@@ -134,7 +129,7 @@ mod test {
             let control_flow_node = ast_root.get_root().first_child().unwrap();
             let conditional_node = control_flow_node.first_child().unwrap();
             let condition_node = conditional_node.first_child().unwrap();
-            _ = cast_into_type::<Condition>(&condition_node);
+            _ = cast_node_into_type::<Condition>(&condition_node);
         }
     }
 
@@ -150,7 +145,7 @@ mod test {
         (program), {
             let ast_root = ast_root_from(program);
             let control_flow_node = ast_root.get_root().first_child().unwrap();
-            _ = cast_into_type::<ControlFlow>(&control_flow_node);
+            _ = cast_node_into_type::<ControlFlow>(&control_flow_node);
         }
     }
 

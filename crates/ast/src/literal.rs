@@ -5,7 +5,7 @@ use syntax::{
     syntax_kind::SyntaxKind,
 };
 
-use crate::errors::ASTError;
+use crate::{errors::ASTError, lang_elems::ensure_node_kind_is};
 
 pub type ParsedValueIndex = Range<usize>;
 #[derive(Clone, Debug, PartialEq)]
@@ -13,9 +13,11 @@ pub enum Value {
     Bool(bool),
     // Byte(ParsedValueIndex),
     Char(ParsedValueIndex),
-    Str(ParsedValueIndex),
-    Int(ParsedValueIndex),
     Float(ParsedValueIndex),
+    Int(ParsedValueIndex),
+    Str(ParsedValueIndex),
+    // TODO: [ ... ]
+    Tensor(ParsedValueIndex),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -66,6 +68,12 @@ impl TryFrom<&SyntaxNode> for Literal {
     type Error = ASTError;
 
     fn try_from(literal_node: &SyntaxNode) -> Result<Self, Self::Error> {
+        if let Some(child) = literal_node.first_child() {
+            if child.kind() == SyntaxKind::TensorLit {
+                let value: ParsedValueIndex = child.text_range().into();
+                return Ok(Self(Value::Tensor(value)));
+            }
+        }
         let value_containing_token = literal_node
             .children_with_tokens()
             .filter(|syntax_node| syntax_node.kind().is_literal_value())
@@ -81,7 +89,7 @@ mod tests {
     use super::*;
     use crate::ast::{
         Root,
-        tests::{ast_root_from, cast_into_type},
+        tests::{ast_root_from, cast_node_into_type},
     };
     use parameterized_test::create;
     use parser::parser::Parser;
@@ -91,7 +99,7 @@ mod tests {
         (program), {
         let ast_root = ast_root_from(program);
         let literal_node = ast_root.get_root().first_child().unwrap();
-        cast_into_type::<Literal>(&literal_node);
+        cast_node_into_type::<Literal>(&literal_node);
         }
     }
 
@@ -103,6 +111,8 @@ mod tests {
         valid_i32: "9",
         valid_string: "\"String\"",
         // valid_str_slice: "&\"slice\"",
+        valid_tensor: "[]",
+        tensor_2d_literal: "[[1,0,0],[0,1,0],[0,0,1]]",
     }
 
     #[test]

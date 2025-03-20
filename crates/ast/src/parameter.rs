@@ -89,7 +89,7 @@ impl Param {
             type_ if is_a_type(&type_) => ParameterType::ByValue(node.clone()),
             no => {
                 let mut types = SyntaxKind::types();
-                types.extend_from_slice(&[PrefixUnaryOp, Mut, StructAsType, SelfRef]);
+                types.extend_from_slice(&[PrefixUnaryOp, Mut, SelfRef]);
                 return Err(ASTError::new(node.text_range().into(), types, no));
             }
         };
@@ -132,7 +132,7 @@ impl TryFrom<&SyntaxNode> for Param {
             Self::get_parameter_type_from_node(&node_or_token)?
         } else {
             let mut types = SyntaxKind::types();
-            types.extend_from_slice(&[PrefixUnaryOp, Mut, StructAsType, SelfRef]);
+            types.extend_from_slice(&[PrefixUnaryOp, Mut, SelfRef]);
             return Err(error_for_node(param_decl_node, types));
         };
         Ok(Self { name, of_type })
@@ -146,7 +146,7 @@ mod tests {
     use super::*;
     use crate::ast::{
         Root,
-        tests::{ast_root_from, cast_into_type},
+        tests::{ast_root_from, cast_node_into_type},
     };
 
     use parameterized_test::create;
@@ -156,7 +156,7 @@ mod tests {
         (program, assertion, text), {
         let ast_root = ast_root_from(program);
         let params_nodes = get_params_nodes_from(ast_root);
-        let p = cast_into_type::<Param>(params_nodes.first().unwrap());
+        let p = cast_node_into_type::<Param>(params_nodes.first().unwrap());
         assertion(p.of_type, text);
         }
     }
@@ -236,7 +236,7 @@ mod tests {
             |p: Param| assert_by_value(p.of_type, "i32"),
         ];
         for (ix, param_node) in params_nodes.iter().enumerate() {
-            let p = cast_into_type::<Param>(param_node);
+            let p = cast_node_into_type::<Param>(param_node);
             let exp_name = names[ix];
             assert_eq!(exp_name, p.name.as_ref().map(|smol| smol.as_str()));
             let assertion = assert_param_types[ix];

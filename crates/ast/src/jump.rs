@@ -6,7 +6,7 @@ use syntax::{
 
 use crate::{
     errors::ASTError,
-    lang_elems::{filtered_children_with_tokens, get_children_in_errs, get_tokens_in_errs},
+    lang_elems::{filtered_children_with_tokens, get_tokens_in_errs},
 };
 
 // possible types are primitives + custom types i.e. structs
@@ -19,10 +19,8 @@ pub enum Jump {
 impl TryFrom<&SyntaxNode> for Jump {
     type Error = ASTError;
 
-    fn try_from(parent_of_jump: &SyntaxNode) -> Result<Self, Self::Error> {
-        let jump = get_children_in_errs(&parent_of_jump, Jump)?;
-        let node = jump.first().unwrap();
-        let tokens = get_tokens_in_errs(node, [KwContinue, KwBreak].as_ref())?;
+    fn try_from(node: &SyntaxNode) -> Result<Self, Self::Error> {
+        let tokens = get_tokens_in_errs(&node, [KwContinue, KwBreak].as_ref())?;
         let kw = tokens.first().unwrap();
 
         let j = match kw {
@@ -30,7 +28,7 @@ impl TryFrom<&SyntaxNode> for Jump {
             brk if matches!(brk.kind(), KwBreak) => {
                 let ignore: SyntaxKindBitSet = [KwBreak, Whitespace, Semi].as_ref().into();
                 let brk = brk.clone();
-                if let Some(returning) = filtered_children_with_tokens(node, !ignore).first() {
+                if let Some(returning) = filtered_children_with_tokens(&node, !ignore).first() {
                     Self::Break(brk, Some(returning.clone()))
                 } else {
                     Self::Break(brk, None)
@@ -53,14 +51,15 @@ impl TryFrom<&SyntaxNode> for Jump {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_into_type};
+    use crate::ast::tests::{ast_root_from, cast_node_into_type};
     use parameterized_test::create;
 
     create! {
         create_jump_test,
         (program), {
         let ast_root = ast_root_from(program);
-        cast_into_type::<Jump>(ast_root.get_root());
+        let jump_node = ast_root.get_root().first_child().unwrap();
+        cast_node_into_type::<Jump>(&jump_node);
         }
     }
 
@@ -73,7 +72,6 @@ mod tests {
     fn valid_returning_break() {
         let program = "break do_something();";
         let ast_root = ast_root_from(program);
-
-        cast_into_type::<Jump>(ast_root.get_root());
+        cast_node_into_type::<Jump>(ast_root.get_root().first_child().as_ref().unwrap());
     }
 }

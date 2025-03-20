@@ -70,6 +70,10 @@ pub fn is_a_type(kind: &SyntaxKind) -> bool {
     TYPES.contains(kind)
 }
 
+pub fn is_of_type(syntax: &Syntax) -> bool {
+    TYPES.contains(&syntax.get_kind())
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ParsedValue {
     Char(char),

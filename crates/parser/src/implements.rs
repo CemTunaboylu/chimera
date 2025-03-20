@@ -1,4 +1,7 @@
-use crate::{parse::Finished, parser::Parser};
+use crate::{
+    parse::Finished,
+    parser::{IsNext, Parser},
+};
 
 use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
 
@@ -56,7 +59,7 @@ impl<'input> Parser<'input> {
         let rollback_when_dropped = self.roll_back_context_after_drop();
         self.dont_recover_in_ctx(RBrace);
 
-        while !self.is_next(RBrace) {
+        while IsNext::No == self.is_next_strict(RBrace) {
             println!("next: {:?}", self.peek());
             self.parse_function_def();
         }

@@ -133,6 +133,7 @@ pub(crate) mod test {
     use super::*;
     use crate::{
         ast::{Root, tests::ast_root_from},
+        function::FnCall,
         literal::{Literal, Value},
         variable::VarRef,
     };
@@ -279,6 +280,31 @@ pub(crate) mod test {
             if let Expr::Literal(Literal(value)) = operand {
                 assert_eq!(Value::Int(3..4), *value);
             }
+        }
+    }
+
+    #[test]
+    fn tensor_struct_construction() {
+        let program = "Tensor<3,3,3><f32>::new()";
+        let ast_root = ast_root_from(program);
+        let infix_bin_op = new_bin_from(&ast_root);
+
+        let op = infix_bin_op.op().unwrap();
+        assert_eq!("::", op.text());
+
+        let tensor = infix_bin_op.lhs().unwrap();
+        assert!(matches!(tensor, Expr::TensorStruct(_)));
+
+        if let Expr::Literal(Literal(Value::Tensor(t))) = tensor {
+            assert_eq!(1..20, *t);
+        }
+
+        let method_call = infix_bin_op.rhs().unwrap();
+        assert!(matches!(method_call, Expr::FnCall(_)));
+
+        if let Expr::FnCall(call) = method_call {
+            assert_eq!("new", call.name());
+            assert!(call.arguments().is_empty());
         }
     }
 }

@@ -25,13 +25,6 @@ pub fn compare_thin_vecs<T: PartialEq>(a: &ThinVec<T>, b: &ThinVec<T>) -> bool {
     a.len() == b.len() && a.starts_with(b.as_ref())
 }
 
-pub fn assert_node_to_be_of_kind(node: &SyntaxNode, kind: SyntaxKind) -> ASTResult<()> {
-    if node.kind() != kind {
-        return Err(error_for_node(node, kind));
-    }
-    Ok(())
-}
-
 pub fn first_token_expect(
     node: &SyntaxNode,
     set: impl Into<SyntaxKindBitSet>,
@@ -74,6 +67,17 @@ pub fn ensure_node_kind_is(node: &SyntaxNode, kind: SyntaxKind) -> ASTResult<()>
     }
     Ok(())
 }
+
+pub fn ensure_node_kind_is_any(
+    node: &SyntaxNode,
+    set: impl Into<SyntaxKindBitSet>,
+) -> ASTResult<()> {
+    let set: SyntaxKindBitSet = set.into();
+    if !set.contains(&node.kind()) {
+        return Err(error_for_node(node, set));
+    }
+    Ok(())
+}
 pub fn get_single_children_as_expr(node: &SyntaxNode) -> ASTResult<Expr> {
     node.children()
         .find_map(|node| Expr::try_from(&node).ok())
@@ -102,10 +106,18 @@ pub fn filtered_children_with_tokens(
 pub fn get_children_as<T>(node: &SyntaxNode) -> ASTResult<ThinVec<T>>
 where
     T: TryFrom<SyntaxNode> + Debug,
+    <T as TryFrom<SyntaxNode>>::Error: Debug,
 {
     let results = node
         .children()
-        .filter_map(|node| T::try_from(node).ok())
+        // .filter_map(|node| T::try_from(node).ok())
+        .filter_map(|node| match T::try_from(node) {
+            Ok(t) => Some(t),
+            Err(err) => {
+                println!("err: {:?}", err);
+                None
+            }
+        })
         .collect::<ThinVec<_>>();
 
     if results.is_empty() {

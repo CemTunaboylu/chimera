@@ -159,7 +159,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        ast::tests::{ast_root_from, cast_into_type},
+        ast::tests::{ast_root_from, cast_node_into_type},
         operation::Binary,
     };
     use parameterized_test::create;
@@ -169,7 +169,7 @@ mod tests {
         (program, exp_name, ret_type_some, params_count), {
             let ast_root = ast_root_from(program);
             let fn_def_node = ast_root.get_root().first_child().unwrap();
-            let fn_def = cast_into_type::<FnDef>(&fn_def_node);
+            let fn_def = cast_node_into_type::<FnDef>(&fn_def_node);
             assert_eq!(exp_name, fn_def.name());
             assert!(ret_type_some == fn_def.return_type.is_some());
             assert!(params_count == fn_def.parameters.len());
@@ -207,7 +207,7 @@ mod tests {
         (program, exp_name, exp_arg_len), {
             let ast_root = ast_root_from(program);
             let fn_call_node = ast_root.get_root().first_child().unwrap();
-            let fn_call = cast_into_type::<FnCall>(&fn_call_node);
+            let fn_call = cast_node_into_type::<FnCall>(&fn_call_node);
             assert_eq!(exp_name, fn_call.name());
             assert!(exp_arg_len == fn_call.arguments.len());
         }
@@ -215,17 +215,17 @@ mod tests {
 
     happy_path_func_call_test! {
         fn_call_with_bin_expr: ("foo(3+2)", "foo", 1),
-        fn_call_with_complex_expr: ("am_i_happy(me.expectation().as_tensor() - reality.tensor)", "am_i_happy", 1),
+        fn_call_with_complex_expr: ("am_i_happy(me.expectation().as_tensor() - reality.variable_tensor)", "am_i_happy", 1),
         fn_call_with_no_args: ("solitude()", "solitude", 0),
-        fn_call_with_ref_mut: ("mutating(&mut tensor)", "mutating", 1),
+        fn_call_with_ref_mut: ("mutating(&mut matrix)", "mutating", 1),
     }
 
     #[test]
     fn detailed_testing_of_complex_call() {
-        let program = "foo(me.expectation().as_tensor() - reality.tensor)";
+        let program = "foo(me.expectation().as_tensor() - reality.variable_tensor)";
         let ast_root = ast_root_from(program);
         let fn_call_node = ast_root.get_root().first_child().unwrap();
-        let fn_call: FnCall = cast_into_type::<FnCall>(&fn_call_node);
+        let fn_call: FnCall = cast_node_into_type::<FnCall>(&fn_call_node);
         let args = fn_call.arguments();
         assert!(matches!(args[0].0, Expr::Infix(Binary::Infix(_))));
         if let Expr::Infix(binary) = &args[0].0 {

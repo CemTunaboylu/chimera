@@ -11,6 +11,8 @@ use crate::{
     literal::Literal as ASTLiteral,
     mutable::Mut as ASTMut,
     operation::{Binary, Unary},
+    self_ref::SelfRef as ASTSelfRef,
+    tensor_struct::TensorStruct as ASTTensorStruct,
     variable::VarRef as ASTVarRef,
 };
 
@@ -24,6 +26,8 @@ pub enum Expr {
     Literal(ASTLiteral),
     Mut(ASTMut),
     Paren(Paren),
+    SelfRef(ASTSelfRef),
+    TensorStruct(ASTTensorStruct),
     Unary(Unary),
     VarRef(ASTVarRef),
 }
@@ -68,6 +72,14 @@ impl TryFrom<&SyntaxNode> for Expr {
                 let prefix = Unary::prefix(node)?;
                 Self::Unary(prefix)
             }
+            SelfRef => {
+                let self_ref = ASTSelfRef::try_from(node)?;
+                Self::SelfRef(self_ref)
+            }
+            TensorStruct => {
+                let tensor_struct = ASTTensorStruct::try_from(node)?;
+                Self::TensorStruct(tensor_struct)
+            }
             VarRef => {
                 let var_ref = ASTVarRef::try_from(node)?;
                 Self::VarRef(var_ref)
@@ -87,6 +99,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                         ParenExpr,
                         PostfixUnaryOp,
                         PrefixUnaryOp,
+                        SelfRef,
                         VarRef,
                     ]
                     .as_ref(),
@@ -127,5 +140,38 @@ impl TryFrom<&SyntaxToken> for Expr {
         };
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use parameterized_test::create;
+
+    create! {
+        create_expr_test,
+        (program), {
+        let ast_root = ast_root_from(program);
+        let expr_node = ast_root.get_root().first_child().unwrap();
+        cast_node_into_type::<Expr>(&expr_node);
+        }
+    }
+
+    create_expr_test! {
+        block: "{ return self.block() }",
+        container_ref: "weights[0][0][0]",
+        fn_call: "random_tensor()",
+        method_call: "weights.raw_tensor()",
+        static_method_call: "NN::raw_tensor()",
+        nested_infix: "3 + 14/100",
+        tensor_literal: "[[1,0,0],[0,1,0],[0,0,1]]",
+        mutable: "new(mut self)",
+        paren: "(1+1)",
+        self_ref_instance: "self",
+        self_ref_struct: "Self",
+        tensor_struct: "Tensor<i32><3,3,3>",
+        unary: "-[[1,0,0],[0,1,0],[0,0,1]]",
+        var_ref: "my_tensor_ref",
     }
 }

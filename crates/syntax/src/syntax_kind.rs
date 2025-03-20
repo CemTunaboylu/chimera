@@ -15,9 +15,13 @@ pub enum SyntaxKind {
     PostfixUnaryOp,
     // token-tree roots for expressions/sub-expressions
     CharLit,
+    DimHints,
+    DimHint,
+    DimValue,
     FnCall,
-    Jump,
+    In,
     ImplBlock,
+    Jump,
     Literal,
     Mut,
     ParenExpr,
@@ -30,6 +34,11 @@ pub enum SyntaxKind {
     StructFields,
     StructRef,
     StructAsType,
+    TensorInit,
+    TensorLit,
+    TensorStruct,
+    TensorType,
+    TypeHint,
     VarRef,
     // token-tree roots for statements
     Block,
@@ -82,6 +91,7 @@ pub enum SyntaxKind {
     KwReturn,
     KwSelf,
     KwStruct,
+    KwTensor,
     KwTrue,
     KwType,
     KwWhile,
@@ -123,6 +133,7 @@ pub enum SyntaxKind {
     TyI32,
     TyStr,
     TyStrSlc,
+    TyTensor,
     Under,
     Whitespace,
     Xor,
@@ -159,12 +170,25 @@ impl SyntaxKind {
     }
     pub fn is_literal_value(&self) -> bool {
         use SyntaxKind::*;
-        matches!(self, Int | Float | StrLit | CharLit | KwTrue | KwFalse)
+        matches!(
+            self,
+            CharLit | Float | Int | KwFalse | KwTrue | StrLit | TensorLit
+        )
     }
 
     pub fn types() -> ThinVec<SyntaxKind> {
         use SyntaxKind::*;
-        thin_vec![TyBool, TyByte, TyChar, TyF32, TyI32, TyStr, TyStrSlc]
+        thin_vec![
+            TyBool,
+            TyByte,
+            TyChar,
+            TyF32,
+            TyI32,
+            TyStr,
+            TyStrSlc,
+            TyTensor,
+            StructAsType
+        ]
     }
 
     pub fn can_be_parameter() -> ThinVec<SyntaxKind> {
@@ -178,7 +202,8 @@ impl SyntaxKind {
             TyF32,
             TyI32,
             TyStr,
-            TyStrSlc
+            TyStrSlc,
+            TyTensor,
         ]
     }
 
@@ -278,6 +303,7 @@ impl From<TokenKind> for SyntaxKind {
             KwReturn => Self::KwReturn,
             KwSelf => Self::KwSelf,
             KwStruct => Self::KwStruct,
+            KwTensor => Self::KwTensor,
             KwTrue => Self::KwTrue,
             KwType => Self::KwType,
             KwWhile => Self::KwWhile,
@@ -322,6 +348,7 @@ impl From<TokenKind> for SyntaxKind {
             TypeI32 => Self::TyI32,
             TypeStrSlice => Self::TyStrSlc,
             TypeString => Self::TyStr,
+            TypeTensor => Self::TyTensor,
             Underscore => Self::Under,
             Xor => Self::Xor,
             _ => {

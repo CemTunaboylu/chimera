@@ -10,7 +10,7 @@ use syntax::{
 
 use thin_vec::thin_vec;
 
-fn ident_or_type(syntax: Syntax) -> bool {
+fn ident_or_type(syntax: &Syntax) -> bool {
     matches!(
         syntax.get_token_type(),
         TokenType::Type | TokenType::Identifier
@@ -52,9 +52,7 @@ impl<'input> Parser<'input> {
         use SeparatedElement::*;
 
         let idents = thin_vec![Kind(Ident), Kind(Colon), Fn(ident_or_type)];
-        self.parse_separated_by(&idents, StructField, Comma, |syntax: Syntax| {
-            !syntax.is_of_kind(RBrace)
-        });
+        self.parse_separated_by(&idents, StructField, Comma, RBrace);
 
         Some(self.complete_marker_with(marker, StructFields))
     }

@@ -140,6 +140,8 @@ pub enum TokenKind {
     KwStruct,
     // #[token("trait")]
     // KwTrait,
+    #[token("Tensor")]
+    KwTensor,
     #[token("true")]
     KwTrue,
     #[token("type")]
@@ -244,6 +246,8 @@ pub enum TokenKind {
     TypeStrSlice,
     #[token("String")]
     TypeString,
+    #[token("tensor")]
+    TypeTensor,
     // #[token("u32")]
     // TypeU32,
     // #[token("u64")]

@@ -1,21 +1,13 @@
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
-use syntax::{
-    language::{NodeOrToken, SyntaxToken},
-    syntax_kind::SyntaxKind::*,
-};
-use thin_vec::ThinVec;
+use syntax::{language::SyntaxToken, syntax_kind::SyntaxKind::*};
 
 use crate::{
-    ast::ASTResult,
     errors::ASTError,
-    lang_elems::{
-        assert_node_to_be_of_kind, error_for_node, error_for_token,
-        get_filtered_children_with_tokens, get_token_of_errs,
-    },
+    lang_elems::{ensure_node_kind_is_any, error_for_token, get_token_of_errs},
 };
 
 // possible types are primitives + custom types i.e. structs
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Type {
     Bool(SyntaxToken),
     Byte(SyntaxToken),
@@ -24,51 +16,42 @@ pub enum Type {
     Integer32(SyntaxToken),
     String(SyntaxToken),
     Struct(SyntaxToken),
-}
-
-impl Type {
-    fn validate_nodes_or_tokens(thin: &ThinVec<NodeOrToken>, parent: &SyntaxNode) -> ASTResult<()> {
-        if thin.is_empty() {
-            return Err(error_for_node(parent, "a type node"));
-        } else if thin.len() > 1 {
-            return Err(ASTError::new(
-                parent.text_range().into(),
-                "a single type",
-                thin.as_ref(),
-            ));
-        }
-        Ok(())
-    }
+    Tensor(SyntaxNode),
 }
 
 impl TryFrom<&SyntaxNode> for Type {
     type Error = ASTError;
 
     fn try_from(parent_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let mut types = SyntaxKind::types();
-        types.push(StructAsType);
-
-        // parent wraps the type token/node as ParamDecl(Ident, Colon, TyI32), or ParamDecl(Ident, Colon, StructAsType(Ident))
-        let nodes_or_tokens = get_filtered_children_with_tokens(&parent_node, types);
-        _ = Self::validate_nodes_or_tokens(&nodes_or_tokens, parent_node)?;
-
-        let node_or_token = nodes_or_tokens.first().unwrap();
-        match node_or_token {
-            NodeOrToken::Node(struct_as_type) => {
-                _ = assert_node_to_be_of_kind(struct_as_type, StructAsType)?;
-                let token = get_token_of_errs(struct_as_type, Ident)?;
-                Ok(Self::Struct(token))
+        println!("from node: {:?}", parent_node);
+        let t = match parent_node.kind() {
+            StructAsType => {
+                let token = get_token_of_errs(parent_node, Ident)?;
+                Self::Struct(token)
             }
-            NodeOrToken::Token(primitive) => match primitive.kind() {
-                TyBool => Ok(Self::Bool(primitive.clone())),
-                TyByte => Ok(Self::Byte(primitive.clone())),
-                TyChar => Ok(Self::Char(primitive.clone())),
-                TyF32 => Ok(Self::Float32(primitive.clone())),
-                TyI32 => Ok(Self::Integer32(primitive.clone())),
-                // str slice is a ref str
-                TyStr | TyStrSlc => Ok(Self::String(primitive.clone())),
-                _ => Err(error_for_token(primitive, SyntaxKind::types())),
-            },
+            TensorType => Self::Tensor(parent_node.clone()),
+            _ => {
+                _ = ensure_node_kind_is_any(parent_node, [StructAsType, TensorType].as_ref())?;
+                unreachable!()
+            }
+        };
+        Ok(t)
+    }
+}
+
+impl TryFrom<&SyntaxToken> for Type {
+    type Error = ASTError;
+
+    fn try_from(primitive: &SyntaxToken) -> Result<Self, Self::Error> {
+        match primitive.kind() {
+            TyBool => Ok(Self::Bool(primitive.clone())),
+            TyByte => Ok(Self::Byte(primitive.clone())),
+            TyChar => Ok(Self::Char(primitive.clone())),
+            TyF32 => Ok(Self::Float32(primitive.clone())),
+            TyI32 => Ok(Self::Integer32(primitive.clone())),
+            // str slice is a ref str
+            TyStr | TyStrSlc => Ok(Self::String(primitive.clone())),
+            _ => Err(error_for_token(primitive, SyntaxKind::types())),
         }
     }
 }
@@ -77,14 +60,18 @@ impl TryFrom<&SyntaxNode> for Type {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_into_type};
+    use crate::ast::{
+        ASTResult,
+        tests::{ast_root_from, cast_node_into_type, cast_token_into_type},
+    };
     use parameterized_test::create;
 
     create! {
         create_type_test,
         (program), {
         let ast_root = ast_root_from(program);
-        cast_into_type::<Type>(ast_root.get_root());
+        let token = ast_root.get_root().first_token().unwrap();
+        cast_token_into_type::<Type>(&token);
         }
     }
 
@@ -95,7 +82,7 @@ mod tests {
         valid_f32: "f32",
         valid_i32: "i32",
         valid_string: "String",
-        valid_str_slice: "&str",
+        valid_str_slice: "str",
     }
 
     #[test]
@@ -108,17 +95,29 @@ mod tests {
             .children()
             .find(|node| node.kind() == ParamDecl)
             .unwrap();
-        cast_into_type::<Type>(&param_node);
+        let struct_as_type_node = param_node.first_child().unwrap();
+        cast_node_into_type::<Type>(&struct_as_type_node);
+    }
+
+    #[test]
+    fn valid_tensor_identifier() {
+        let program = "tensor<i32><10,10,10>";
+        let ast_root = ast_root_from(program);
+
+        let node = ast_root.get_root().first_child().unwrap();
+        println!("node : {:?}", node);
+        cast_node_into_type::<Type>(&node);
     }
     #[test]
     fn invalid_type() {
         let program = "structure";
         let ast_root = ast_root_from(program);
+        let child = ast_root.get_root().first_child().unwrap();
 
-        let result: ASTResult<Type> = ast_root.get_root().try_into();
+        let result: ASTResult<Type> = (&child).try_into();
         let err = result.expect_err("should have been errored");
         assert_eq!(
-            "ASTError { err_span: 0..9, expected_but_found: \"expected a type node, but got Root\" }",
+            "ASTError { err_span: 0..9, expected_but_found: \"expected TensorType or StructAsType, but got VarRef\" }",
             format!("{:?}", err)
         );
     }

@@ -1,4 +1,8 @@
-use crate::{operator::starting_precedence, parse::Finished, parser::Parser};
+use crate::{
+    operator::starting_precedence,
+    parse::Finished,
+    parser::{IsNext, Parser},
+};
 
 use lexer::token_type::TokenType;
 use syntax::{
@@ -12,11 +16,9 @@ impl<'input> Parser<'input> {
     #[allow(unused_variables)] // for rollback anchor
     pub fn parse_delimited(&self, syntax: Syntax) -> Option<Finished> {
         let kind = syntax.get_kind();
-        // TODO: fix this, too much detail
-        if !self.context.borrow().is_allowed(kind) {
-            // TODO: recovery methods can return options
-            self.recover_restricted(kind);
-            return None;
+        if !self.is_allowed(kind) {
+            // note: returns None thus shortcircuits from here
+            self.recover_restricted(kind)?;
         }
         use TokenType::*;
         match syntax.get_token_type() {
@@ -24,7 +26,11 @@ impl<'input> Parser<'input> {
                 LParen => self.parse_paren_expr(syntax),
                 LBrace => self.parse_block(),
                 LBrack => {
-                    self.parse_container_indexing();
+                    if self.is_expected(ContainerRef) {
+                        self.parse_container_indexing();
+                    } else {
+                        self.parse_tensor_literal();
+                    }
                     return None;
                 }
                 _ => unreachable!(),
@@ -55,7 +61,7 @@ impl<'input> Parser<'input> {
         {
             let rollback_when_dropped = self.impose_block_restrictions();
             self.expect_and_bump(LBrace);
-            while !self.is_next(RBrace) && self.parse_statement().is_some() {}
+            while IsNext::No == self.is_next_strict(RBrace) && self.parse_statement().is_some() {}
         }
 
         self.expect_and_bump(RBrace);
@@ -66,6 +72,7 @@ impl<'input> Parser<'input> {
         let ctx = self.context.borrow();
         ctx.forbid(RBrace);
         ctx.disallow_recovery_of(RBrace);
+        self.expect_in_ctx(SyntaxKind::operators());
         rollback_when_dropped
     }
 }
@@ -83,7 +90,7 @@ mod tests {
         }
     }
     create_parser_test! {
-            only_parenthesis: ("()",
+        only_parenthesis: ("()",
             expect![[
                 "Root@0..2\n  ParenExpr@0..2\n    LParen@0..1 \"(\"\n    RParen@1..2 \")\""
             ]]
