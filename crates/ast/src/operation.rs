@@ -1,3 +1,4 @@
+use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
     is_a_binary_operator,
     language::{SyntaxNode, SyntaxToken},
@@ -15,7 +16,7 @@ use crate::{
 pub struct PreComputed {
     exprs: ThinVec<Expr>,
     node: SyntaxNode,
-    op: Option<SyntaxToken>,
+    op: Option<SmolStr>,
 }
 
 impl Clone for PreComputed {
@@ -29,7 +30,7 @@ impl Clone for PreComputed {
 }
 
 impl PreComputed {
-    fn get_op(&self) -> Option<&SyntaxToken> {
+    fn get_op(&self) -> Option<&SmolStr> {
         self.op.as_ref()
     }
     fn get_nth_expr(&self, n: usize) -> Option<&Expr> {
@@ -57,7 +58,8 @@ impl Binary {
         }
         let op = get_token_with(&infix_bin_op_node, |token: &SyntaxToken| {
             is_a_binary_operator(&token.kind())
-        });
+        })
+        .map(|t| t.text().to_smolstr());
         Ok(Self::Infix(PreComputed {
             exprs,
             node: infix_bin_op_node.clone(),
@@ -77,7 +79,7 @@ impl Binary {
         let pre_computed = self.get_pre_computed();
         pre_computed.get_nth_expr(1)
     }
-    pub fn op(&self) -> Option<&SyntaxToken> {
+    pub fn op(&self) -> Option<&SmolStr> {
         let pre_computed = self.get_pre_computed();
         pre_computed.get_op()
     }
@@ -91,7 +93,8 @@ pub enum Unary {
 
 fn prepare_pre_computed(node: &SyntaxNode, variant: fn(PreComputed) -> Unary) -> ASTResult<Unary> {
     let exprs = get_children_as::<Expr>(&node)?;
-    let op = get_token_with(node, |token: &SyntaxToken| token.kind().is_unary_operator());
+    let op = get_token_with(node, |token: &SyntaxToken| token.kind().is_unary_operator())
+        .map(|t| t.text().to_smolstr());
     let p = PreComputed {
         exprs,
         node: node.clone(),
@@ -114,9 +117,9 @@ impl Unary {
         }
     }
 
-    pub fn op(&self) -> Option<SyntaxToken> {
+    pub fn op(&self) -> Option<&SmolStr> {
         let pre = self.get_pre_computed();
-        pre.op.clone()
+        pre.op.as_ref()
     }
 
     pub fn operand(&self) -> Option<&Expr> {
@@ -133,7 +136,6 @@ pub(crate) mod test {
     use super::*;
     use crate::{
         ast::{Root, tests::ast_root_from},
-        function::FnCall,
         literal::{Literal, Value},
         variable::VarRef,
     };
@@ -158,7 +160,7 @@ pub(crate) mod test {
         let rhs = infix_bin_op.rhs().unwrap();
         assert_expr_literal_value_eq(rhs, rhs_val);
         let token = infix_bin_op.op().unwrap();
-        assert_eq!(op, token.text());
+        assert_eq!(op, token);
     }
 
     fn new_bin_from(ast_root: &Root) -> Binary {
@@ -205,7 +207,7 @@ pub(crate) mod test {
             }
         }
         let op = infix_bin_op.op().unwrap();
-        assert_eq!("*", op.text());
+        assert_eq!("*", op);
     }
 
     #[test]
@@ -215,10 +217,10 @@ pub(crate) mod test {
         let unary_prefix_op = new_unary_from(&ast_root, Unary::prefix);
         let operand = unary_prefix_op.operand().unwrap();
         let op = unary_prefix_op.op().unwrap();
-        assert_eq!("-", op.text());
+        assert_eq!("-", op);
         assert!(matches!(operand, Expr::Unary(Unary::Prefix(_))));
         if let Expr::Unary(prefix) = operand {
-            assert_eq!("-", prefix.op().unwrap().text());
+            assert_eq!("-", prefix.op().unwrap());
             let operand = prefix.operand().unwrap();
             assert!(matches!(operand, Expr::Literal(Literal(Value::Int(_)))));
             if let Expr::Literal(Literal(Value::Int(range))) = operand {
@@ -234,10 +236,10 @@ pub(crate) mod test {
         let unary_postfix_op = new_unary_from(&ast_root, Unary::postfix);
         let operand = unary_postfix_op.operand().unwrap();
         let op = unary_postfix_op.op().unwrap();
-        assert_eq!("?", op.text());
+        assert_eq!("?", op);
         assert!(matches!(operand, Expr::Unary(Unary::Postfix(_))));
         if let Expr::Unary(postfix) = operand {
-            assert_eq!("?", postfix.op().unwrap().text());
+            assert_eq!("?", postfix.op().unwrap());
             let operand = postfix.operand().unwrap();
             assert!(matches!(operand, Expr::VarRef(VarRef(_))));
             if let Expr::VarRef(VarRef(smol_str)) = operand {
@@ -254,7 +256,7 @@ pub(crate) mod test {
         let infix_bin_op = new_bin_from(&ast_root);
 
         let op = infix_bin_op.op().unwrap();
-        assert_eq!("*", op.text());
+        assert_eq!("*", op);
 
         let prefix = infix_bin_op.lhs().unwrap();
         assert!(matches!(prefix, Expr::Unary(Unary::Prefix(_))));
@@ -262,7 +264,7 @@ pub(crate) mod test {
         if let Expr::Unary(prefix) = prefix {
             let operand = prefix.operand().unwrap();
             let op = prefix.op().unwrap();
-            assert_eq!("-", op.text());
+            assert_eq!("-", op);
             assert!(matches!(operand, Expr::Literal(Literal(Value::Int(_)))));
             if let Expr::Literal(Literal(value)) = operand {
                 assert_eq!(Value::Int(1..2), *value);
@@ -275,7 +277,7 @@ pub(crate) mod test {
         if let Expr::Unary(postfix) = postfix {
             let operand = postfix.operand().unwrap();
             let op = postfix.op().unwrap();
-            assert_eq!("?", op.text());
+            assert_eq!("?", op);
             assert!(matches!(operand, Expr::Literal(Literal(Value::Int(_)))));
             if let Expr::Literal(Literal(value)) = operand {
                 assert_eq!(Value::Int(3..4), *value);
@@ -290,7 +292,7 @@ pub(crate) mod test {
         let infix_bin_op = new_bin_from(&ast_root);
 
         let op = infix_bin_op.op().unwrap();
-        assert_eq!("::", op.text());
+        assert_eq!("::", op);
 
         let tensor = infix_bin_op.lhs().unwrap();
         assert!(matches!(tensor, Expr::TensorStruct(_)));

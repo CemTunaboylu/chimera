@@ -159,7 +159,7 @@ mod test {
                     );
                 }
             }
-            assert_eq!("-", infix_bin_op.op().unwrap().text());
+            assert_eq!("-", infix_bin_op.op().unwrap());
         }
     }
 

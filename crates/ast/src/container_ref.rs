@@ -99,7 +99,7 @@ mod tests {
                 binary.rhs().unwrap(),
                 Expr::Literal(Literal(Value::Int(_)))
             ));
-            assert_eq!("-", binary.op().unwrap().text());
+            assert_eq!("-", binary.op().unwrap());
         }
     }
 }
