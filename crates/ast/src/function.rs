@@ -1,8 +1,5 @@
 use smol_str::{SmolStr, ToSmolStr};
-use syntax::{
-    language::{SyntaxNode, SyntaxToken},
-    syntax_kind::SyntaxKind,
-};
+use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
 use crate::{
@@ -14,15 +11,22 @@ use crate::{
         error_for_node, first_child_of_kind, get_children_in, get_first_child_in, get_token_of_errs,
     },
     parameter::Param,
+    types::Type,
 };
 use SyntaxKind::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RetType(SyntaxNode);
 
+impl RetType {
+    pub fn return_type(&self) -> Option<Type> {
+        Type::try_from(&self.0).ok()
+    }
+}
+
 #[derive(Debug)]
 pub struct FnDef {
-    name: SyntaxToken, // should be token
+    name: SmolStr,
     parameters: ThinVec<Param>,
     return_type: Option<RetType>,
     body: ASTBlock,
@@ -72,12 +76,17 @@ impl FnDef {
             ))
         }
     }
-    pub fn name(&self) -> SmolStr {
-        self.name.text().to_smolstr()
+    pub fn name(&self) -> &SmolStr {
+        &self.name
     }
-
-    pub fn value(&self) -> Option<&Expr> {
-        todo!()
+    pub fn body(&self) -> &ASTBlock {
+        &self.body
+    }
+    pub fn parameters(&self) -> &ThinVec<Param> {
+        &self.parameters
+    }
+    pub fn return_type(&self) -> Option<&RetType> {
+        self.return_type.as_ref()
     }
 }
 
@@ -85,7 +94,7 @@ impl TryFrom<&SyntaxNode> for FnDef {
     type Error = ASTError;
 
     fn try_from(fn_def_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let name = get_token_of_errs(fn_def_node, Ident)?;
+        let name = get_token_of_errs(fn_def_node, Ident)?.text().to_smolstr();
         let mut parameters = ThinVec::new();
         for param in Param::get_params_nodes_from(fn_def_node) {
             parameters.push(Param::try_from(&param)?);
@@ -104,7 +113,7 @@ impl TryFrom<&SyntaxNode> for FnDef {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct FnArg(Expr);
+pub struct FnArg(pub Expr);
 
 impl FnArg {
     fn get_fn_arg_nodes_from(node: &SyntaxNode) -> ThinVec<SyntaxNode> {
@@ -126,13 +135,13 @@ impl TryFrom<&SyntaxNode> for FnArg {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct FnCall {
-    name: SyntaxToken,
+    name: SmolStr,
     arguments: ThinVec<FnArg>,
 }
 
 impl FnCall {
-    pub fn name(&self) -> SmolStr {
-        self.name.text().to_smolstr()
+    pub fn name(&self) -> &SmolStr {
+        &self.name
     }
     pub fn arguments(&self) -> &[FnArg] {
         self.arguments.as_ref()
@@ -143,7 +152,7 @@ impl TryFrom<&SyntaxNode> for FnCall {
     type Error = ASTError;
 
     fn try_from(fn_call_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let name = get_token_of_errs(fn_call_node, Ident)?;
+        let name = get_token_of_errs(fn_call_node, Ident)?.text().to_smolstr();
 
         let mut arguments = ThinVec::new();
         for arg in FnArg::get_fn_arg_nodes_from(fn_call_node) {
@@ -159,8 +168,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        ast::tests::{ast_root_from, cast_node_into_type},
         operation::Binary,
+        {ast_root_from, cast_node_into_type},
     };
     use parameterized_test::create;
 

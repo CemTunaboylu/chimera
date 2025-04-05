@@ -20,6 +20,7 @@ impl<'input> Parser<'input> {
             Ok(syntax) if syntax.is_of_kind(KwIf) => self.parse_conditionals(),
             Ok(syntax) if syntax.is_of_kind(KwImpl) => self.parse_impl_block(),
             Ok(syntax) if syntax.is_of_kind(KwLet) => self.parse_variable_def(),
+            Ok(syntax) if syntax.is_of_kind(KwReturn) => self.parse_return(),
             Ok(syntax) if syntax.is_of_kind(KwStruct) => self.parse_struct_definition(),
             Ok(syntax) if syntax.is_of_kind(KwWhile) => self.parse_while_loop(),
             // An expression produces a result (result of evalution), but if there is a ; at the end,
@@ -83,6 +84,22 @@ mod tests {
     }
 
     create_parser_test! {
+        return_stmt: ("return 3+14/100;", expect![[r#"
+            Root@0..16
+              Return@0..16
+                KwReturn@0..6 "return"
+                Whitespace@6..7 " "
+                InfixBinOp@7..15
+                  Literal@7..8
+                    Int@7..8 "3"
+                  Plus@8..9 "+"
+                  InfixBinOp@9..15
+                    Literal@9..11
+                      Int@9..11 "14"
+                    Slash@11..12 "/"
+                    Literal@12..15
+                      Int@12..15 "100"
+                Semi@15..16 ";""#]]),
         malformed_var_defs: ("let a = let b = let c = 5",
             expect![[r#"
                 Root@0..25

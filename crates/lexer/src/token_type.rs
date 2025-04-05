@@ -141,12 +141,12 @@ impl From<TokenKind> for TokenType {
             RightArrow => Self::ReturnTypeIndicator,
             SemiColon => Self::Semi,
             // literals
-            CharLiteral(_)
-            | Float(_)
-            | Integer(_)
+            CharLiteral
+            | Float
+            | Integer
             | StringLiteral => Self::Literal,
 
-            CharLiteralMissingRight => Self::Error(CharLiteral(' ')),
+            CharLiteralMissingRight => Self::Error(CharLiteral),
 
             StringLiteralMissingRightDoubleQuote => {
                 Self::Error(StringLiteral)
@@ -156,7 +156,6 @@ impl From<TokenKind> for TokenType {
                 Self::WhiteSpace
             }
             TypeBool
-            | TypeByte
             | TypeChar
             | TypeF32
             | TypeI32

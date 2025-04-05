@@ -368,7 +368,7 @@ mod tests {
                         RBrace@109..110 "}""#]],
     ),
 
-    function_def_with_return: ("fn sum(a:tensor, b:tensor) -> tensor{ return a+b; }",
+    fn_with_return: ("fn sum(a:tensor, b:tensor) -> tensor{ return a+b; }",
               expect![[r#"
                   Root@0..50
                     FnDef@0..50
@@ -395,16 +395,15 @@ mod tests {
                       Block@35..50
                         LBrace@35..36 "{"
                         Whitespace@36..37 " "
-                        Semi@37..48
-                          Jump@37..47
-                            KwReturn@37..43 "return"
-                            Whitespace@43..44 " "
-                            InfixBinOp@44..47
-                              VarRef@44..45
-                                Ident@44..45 "a"
-                              Plus@45..46 "+"
-                              VarRef@46..47
-                                Ident@46..47 "b"
+                        Return@37..48
+                          KwReturn@37..43 "return"
+                          Whitespace@43..44 " "
+                          InfixBinOp@44..47
+                            VarRef@44..45
+                              Ident@44..45 "a"
+                            Plus@45..46 "+"
+                            VarRef@46..47
+                              Ident@46..47 "b"
                           Semi@47..48 ";"
                         Whitespace@48..49 " "
                         RBrace@49..50 "}""#]],

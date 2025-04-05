@@ -131,12 +131,13 @@ impl Unary {
 #[cfg(test)]
 pub(crate) mod test {
 
-    use std::ops::Range;
-
     use super::*;
     use crate::{
-        ast::{Root, tests::ast_root_from},
+        ast::Root,
+        ast_root_from,
         literal::{Literal, Value},
+        tensor::Hint,
+        types::Type,
         variable::VarRef,
     };
 
@@ -177,7 +178,7 @@ pub(crate) mod test {
         let program = "3+14";
         let ast_root = ast_root_from(program);
         let infix_bin_op = new_bin_from(&ast_root);
-        assert_infix_bin_op_with(&infix_bin_op, &Value::Int(0..1), &Value::Int(2..4), "+");
+        assert_infix_bin_op_with(&infix_bin_op, &Value::Int(3), &Value::Int(14), "+");
     }
 
     #[test]
@@ -190,8 +191,8 @@ pub(crate) mod test {
 
         let to_assert = [lhs, rhs];
         let expected_value_tuples = [
-            (Value::Int(1..2), Value::Int(3..5), "+"),
-            (Value::Int(8..9), Value::Int(10..12), "-"),
+            (Value::Int(3), Value::Int(14), "+"),
+            (Value::Int(4), Value::Int(25), "-"),
         ];
 
         for (case, val_tup) in to_assert.iter().zip(expected_value_tuples.iter()) {
@@ -222,11 +223,7 @@ pub(crate) mod test {
         if let Expr::Unary(prefix) = operand {
             assert_eq!("-", prefix.op().unwrap());
             let operand = prefix.operand().unwrap();
-            assert!(matches!(operand, Expr::Literal(Literal(Value::Int(_)))));
-            if let Expr::Literal(Literal(Value::Int(range))) = operand {
-                let exp_range: Range<usize> = 2..3;
-                assert_eq!(&exp_range, range);
-            }
+            assert!(matches!(operand, Expr::Literal(Literal(Value::Int(3)))));
         }
     }
     #[test]
@@ -267,7 +264,7 @@ pub(crate) mod test {
             assert_eq!("-", op);
             assert!(matches!(operand, Expr::Literal(Literal(Value::Int(_)))));
             if let Expr::Literal(Literal(value)) = operand {
-                assert_eq!(Value::Int(1..2), *value);
+                assert_eq!(Value::Int(1), *value);
             }
         }
 
@@ -280,7 +277,7 @@ pub(crate) mod test {
             assert_eq!("?", op);
             assert!(matches!(operand, Expr::Literal(Literal(Value::Int(_)))));
             if let Expr::Literal(Literal(value)) = operand {
-                assert_eq!(Value::Int(3..4), *value);
+                assert_eq!(Value::Int(9), *value);
             }
         }
     }
@@ -297,8 +294,18 @@ pub(crate) mod test {
         let tensor = infix_bin_op.lhs().unwrap();
         assert!(matches!(tensor, Expr::TensorStruct(_)));
 
-        if let Expr::Literal(Literal(Value::Tensor(t))) = tensor {
-            assert_eq!(1..20, *t);
+        if let Expr::TensorStruct(tensor_struct) = tensor {
+            assert_eq!(
+                &Hint::Type(Type::Float32),
+                tensor_struct.type_hint.as_ref().unwrap()
+            );
+            assert!(tensor_struct.init.is_none());
+            assert!(
+                tensor_struct
+                    .dims
+                    .iter()
+                    .all(|hint| matches!(hint, Hint::Dim(3)))
+            );
         }
 
         let method_call = infix_bin_op.rhs().unwrap();

@@ -4,7 +4,7 @@ use miette::Report;
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 use thin_vec::{ThinVec, thin_vec};
 
-use crate::{cst::IndicedParsedValues, event::Event};
+use crate::event::Event;
 
 use syntax::{language::ChimeraLanguage, syntax_kind::SyntaxKind};
 
@@ -13,7 +13,6 @@ pub(super) struct Sink<'input> {
     program: &'input str,
     events: ThinVec<Event>,
     errors: ThinVec<Report>,
-    parsed_values: IndicedParsedValues,
 }
 
 impl<'input> Sink<'input> {
@@ -23,7 +22,6 @@ impl<'input> Sink<'input> {
             events,
             program,
             errors: thin_vec![],
-            parsed_values: IndicedParsedValues::new(),
         }
     }
 
@@ -52,7 +50,7 @@ impl<'input> Sink<'input> {
         kinds
     }
 
-    pub(super) fn finish(mut self) -> (GreenNode, IndicedParsedValues, ThinVec<Report>) {
+    pub(super) fn finish(mut self) -> (GreenNode, ThinVec<Report>) {
         for ix in 0..self.events.len() {
             match mem::replace(&mut self.events[ix], Event::Moved) {
                 Event::StartNode {
@@ -68,10 +66,6 @@ impl<'input> Sink<'input> {
                     }
                 }
                 Event::AddSyntax { syntax } => {
-                    if let Some(parsed_value) = syntax.get_parsed_value() {
-                        self.parsed_values
-                            .insert(syntax.get_span(), parsed_value.clone());
-                    }
                     self.builder.token(
                         ChimeraLanguage::kind_to_raw(syntax.get_kind()),
                         &self.program[syntax.get_span()],
@@ -88,6 +82,6 @@ impl<'input> Sink<'input> {
                 }
             }
         }
-        (self.builder.finish(), self.parsed_values, self.errors)
+        (self.builder.finish(), self.errors)
     }
 }

@@ -1,19 +1,32 @@
 use syntax::{bitset::SyntaxKindBitSet, language::SyntaxNode};
-use syntax::{
-    language::{NodeOrToken, SyntaxToken},
-    syntax_kind::SyntaxKind::*,
-};
+use syntax::{language::NodeOrToken, syntax_kind::SyntaxKind::*};
 
 use crate::{
     errors::ASTError,
+    expression::Expr,
     lang_elems::{filtered_children_with_tokens, get_tokens_in_errs},
 };
 
 // possible types are primitives + custom types i.e. structs
 #[derive(Clone, Debug, PartialEq)]
 pub enum Jump {
-    Continue(SyntaxToken),
-    Break(SyntaxToken, Option<NodeOrToken>),
+    Continue,
+    Break(Option<NodeOrToken>),
+}
+
+impl Jump {
+    pub fn expr(&self) -> Option<Expr> {
+        match self {
+            Jump::Continue => None,
+            Jump::Break(node_or_token) => {
+                if let Some(not) = node_or_token {
+                    Expr::try_from(not).ok()
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
 impl TryFrom<&SyntaxNode> for Jump {
@@ -24,14 +37,13 @@ impl TryFrom<&SyntaxNode> for Jump {
         let kw = tokens.first().unwrap();
 
         let j = match kw {
-            cont if matches!(cont.kind(), KwContinue) => Self::Continue(cont.clone()),
+            cont if matches!(cont.kind(), KwContinue) => Self::Continue,
             brk if matches!(brk.kind(), KwBreak) => {
                 let ignore: SyntaxKindBitSet = [KwBreak, Whitespace, Semi].as_ref().into();
-                let brk = brk.clone();
                 if let Some(returning) = filtered_children_with_tokens(&node, !ignore).first() {
-                    Self::Break(brk, Some(returning.clone()))
+                    Self::Break(Some(returning.clone()))
                 } else {
-                    Self::Break(brk, None)
+                    Self::Break(None)
                 }
             }
             unwanted => {
@@ -51,7 +63,7 @@ impl TryFrom<&SyntaxNode> for Jump {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from, cast_node_into_type};
     use parameterized_test::create;
 
     create! {

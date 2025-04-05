@@ -1,42 +1,7 @@
-use std::{
-    char::ParseCharError,
-    num::{ParseFloatError, ParseIntError},
-};
-
 use logos::Logos;
 use thin_vec::{ThinVec, thin_vec};
 
-#[derive(Clone, Debug, Default, PartialEq)]
-pub enum ParsingFromStringError {
-    Char(ParseCharError),
-    I32(ParseIntError),
-    F32(ParseFloatError),
-    #[default]
-    No,
-}
-
-fn to_i32(lex: &mut logos::Lexer<TokenKind>) -> Result<i32, ParsingFromStringError> {
-    let slice = lex.slice();
-    slice
-        .parse::<i32>()
-        .map_err(|e| ParsingFromStringError::I32(e))
-}
-
-fn to_char(lex: &mut logos::Lexer<TokenKind>) -> Result<char, ParsingFromStringError> {
-    let slice = lex.slice();
-    let last = slice.len() - 1;
-    slice[1..last]
-        .parse::<char>()
-        .map_err(|e| ParsingFromStringError::Char(e))
-}
-
-fn to_f32(lex: &mut logos::Lexer<TokenKind>) -> Result<f32, ParsingFromStringError> {
-    let slice = lex.slice();
-    slice.parse().map_err(|e| ParsingFromStringError::F32(e))
-}
-
 #[derive(Copy, Clone, Debug, Logos, PartialEq)]
-#[logos(error = ParsingFromStringError)]
 pub enum TokenKind {
     Root,
     #[token("&")]
@@ -57,8 +22,8 @@ pub enum TokenKind {
     // BlockCommentLeftStarMissing,
     #[regex(r"/\*([^*/])*/*")]
     BlockCommentRightStarMissing,
-    #[regex("[\'].[\']", to_char)]
-    CharLiteral(char),
+    #[regex("[\'].[\']")]
+    CharLiteral,
     // possible errors to catch for CharLiteral
     #[regex("[\']([^\'])*")]
     CharLiteralMissingRight,
@@ -80,8 +45,8 @@ pub enum TokenKind {
     Exclamation,
     #[token("=>")]
     FatRightArrow,
-    #[regex(r"([0-9]*[.][0-9]+|[0-9]+[.][0-9]*)", to_f32)]
-    Float(f32),
+    #[regex(r"([0-9]*[.][0-9]+|[0-9]+[.][0-9]*)")]
+    Float,
     #[token(">")]
     GreaterThan,
     #[token(">=")]
@@ -90,8 +55,8 @@ pub enum TokenKind {
     Identifier,
     #[regex("[0-9]+[A-Za-z][A-Za-z0-9_]*")]
     IdentifierCannotBegin,
-    #[regex("[0-9]+", to_i32)]
-    Integer(i32),
+    #[regex("[0-9]+")]
+    Integer,
     #[token("break")]
     KwBreak,
     #[token("const")]
@@ -230,8 +195,6 @@ pub enum TokenKind {
     Tab,
     #[token("bool")]
     TypeBool,
-    #[token("byte")]
-    TypeByte,
     #[token("char")]
     TypeChar,
     #[token("f32")]

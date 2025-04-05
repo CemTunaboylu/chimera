@@ -2,7 +2,6 @@ use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
 use crate::{
-    ast::ASTResult,
     delimited::Block,
     errors::ASTError,
     expression::Expr,
@@ -44,7 +43,7 @@ pub enum Conditional {
 
 pub(crate) fn parse_condition_and_block(
     condition_and_block: ThinVec<SyntaxNode>,
-) -> ASTResult<(Condition, Block)> {
+) -> Result<(Condition, Block), ASTError> {
     let condition_node = condition_and_block.first().unwrap();
     let condition = Condition::try_from(condition_node)?;
 
@@ -91,26 +90,23 @@ impl TryFrom<&SyntaxNode> for Conditional {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ControlFlow {
-    head: Conditional,
-    following: ThinVec<Conditional>,
-}
+pub struct ControlFlow(pub ThinVec<Conditional>);
 
 impl TryFrom<&SyntaxNode> for ControlFlow {
     type Error = ASTError;
 
     fn try_from(control_flow_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let conditionals =
+        let conditional_nodes =
             get_children_in_errs(control_flow_node, [SyntaxKind::Conditional].as_ref())?;
-        let mut conditionals = conditionals.iter();
-        let first_conditional_if = conditionals.next().unwrap();
+        let first_conditional_if = conditional_nodes.first().unwrap();
         _ = get_token_of_errs(first_conditional_if, SyntaxKind::KwIf)?;
-        let head = Conditional::try_from(first_conditional_if)?;
-        let mut following = ThinVec::with_capacity(conditionals.len());
-        for c in conditionals {
-            following.push(Conditional::try_from(c)?);
+        let mut conditionals: ThinVec<Conditional> =
+            ThinVec::with_capacity(conditional_nodes.len());
+        for c in conditional_nodes {
+            let conditional = Conditional::try_from(&c)?;
+            conditionals.push(conditional);
         }
-        Ok(Self { head, following })
+        Ok(Self(conditionals))
     }
 }
 
@@ -120,7 +116,7 @@ mod test {
     use parameterized_test::create;
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from, cast_node_into_type};
 
     create! {
         happy_path_condition_test,

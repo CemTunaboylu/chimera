@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-use crate::{errors::ASTError, literal::ParsedValueIndex, statement::Stmt};
+use crate::{errors::ASTError, statement::Stmt};
 use miette::Report;
-use syntax::{ParsedValue, language::SyntaxNode, syntax_kind::SyntaxKind};
+use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 
-use parser::cst::{ConcreteSyntaxTree, IndicedParsedValues};
+use parser::cst::ConcreteSyntaxTree;
 
 // AST is a pseudo abstract syntax tree because it is built on
 // top of the CST that's constructed by rowan.
@@ -14,7 +14,6 @@ pub type ASTResult<R> = Result<R, ASTError>;
 #[derive(Debug)]
 pub struct Root {
     root: SyntaxNode,
-    parsed_values: IndicedParsedValues,
 }
 
 impl Root {
@@ -34,29 +33,13 @@ impl Root {
                 }
             })
     }
-
-    pub fn get_value_in_range(&self, index: ParsedValueIndex) -> Option<&ParsedValue> {
-        self.parsed_values.get(&index)
-    }
 }
 
 impl TryFrom<ConcreteSyntaxTree> for Root {
     type Error = ASTError;
 
     fn try_from(value: ConcreteSyntaxTree) -> Result<Self, Self::Error> {
-        if SyntaxKind::Root == value.root.kind() {
-            Ok(Self {
-                root: value.root,
-                parsed_values: value.parsed_values,
-            })
-        } else {
-            let kind = value.root.kind();
-            Err(ASTError::new(
-                value.root.text_range().into(),
-                SyntaxKind::Root,
-                kind,
-            ))
-        }
+        Self::try_from(&value)
     }
 }
 
@@ -67,7 +50,6 @@ impl TryFrom<&ConcreteSyntaxTree> for Root {
         if SyntaxKind::Root == value.root.kind() {
             Ok(Self {
                 root: value.root.clone(),
-                parsed_values: value.parsed_values.clone(),
             })
         } else {
             let kind = value.root.kind();
@@ -81,49 +63,9 @@ impl TryFrom<&ConcreteSyntaxTree> for Root {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
-    use super::*;
-
-    use crate::ast::Root;
-    use parser::parser::Parser;
-    use std::fmt::Debug;
-    use syntax::language::SyntaxToken;
+pub mod tests {
+    use crate::ast_root_from;
     use thin_vec::ThinVec;
-
-    pub(crate) fn ast_root_from(program: &str) -> Root {
-        let root = Parser::new(program).parse();
-        println!("debug_tree: {:?}", root.debug_tree());
-        Root::try_from(root).expect("should have been ok")
-    }
-
-    pub(crate) fn cast_node_into_type<'caller, T>(parent_node: &'caller SyntaxNode) -> T
-    where
-        T: TryFrom<&'caller SyntaxNode>,
-        <T as TryFrom<&'caller SyntaxNode>>::Error: Debug,
-    {
-        let _desired_type: T = parent_node.try_into().expect(
-            format!(
-                "try_into should have been successful for {:?}",
-                parent_node.text()
-            )
-            .as_str(),
-        );
-        _desired_type
-    }
-    pub(crate) fn cast_token_into_type<'caller, T>(token: &'caller SyntaxToken) -> T
-    where
-        T: TryFrom<&'caller SyntaxToken>,
-        <T as TryFrom<&'caller SyntaxToken>>::Error: Debug,
-    {
-        let _desired_type: T = token.try_into().expect(
-            format!(
-                "try_into should have been successful for {:?}",
-                token.text()
-            )
-            .as_str(),
-        );
-        _desired_type
-    }
 
     #[test]
     /*

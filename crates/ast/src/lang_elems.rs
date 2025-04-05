@@ -5,11 +5,7 @@ use syntax::{
 };
 use thin_vec::ThinVec;
 
-use crate::{
-    ast::ASTResult,
-    errors::{ASTError, Stringer},
-    expression::Expr,
-};
+use crate::{ast::ASTResult, errors::ASTError, expression::Expr};
 
 use std::fmt::Debug;
 
@@ -23,6 +19,14 @@ pub fn clone_thin_vec<T: Clone>(thin_vec: &ThinVec<T>) -> ThinVec<T> {
 }
 pub fn compare_thin_vecs<T: PartialEq>(a: &ThinVec<T>, b: &ThinVec<T>) -> bool {
     a.len() == b.len() && a.starts_with(b.as_ref())
+}
+
+pub fn unwrap_first_child_or_err(node: &SyntaxNode) -> ASTResult<SyntaxNode> {
+    if let Some(child) = node.first_child() {
+        Ok(child)
+    } else {
+        Err(error_for_node(node, "a children"))
+    }
 }
 
 pub fn first_token_expect(
@@ -228,10 +232,10 @@ pub fn get_token_with(
         .find(predicate)
 }
 
-pub fn error_for_node(node: &SyntaxNode, expected: impl Stringer) -> ASTError {
+pub fn error_for_node(node: &SyntaxNode, expected: impl Debug) -> ASTError {
     ASTError::new(node.text_range().into(), expected, node.kind())
 }
 
-pub fn error_for_token(token: &SyntaxToken, expected: impl Stringer) -> ASTError {
+pub fn error_for_token(token: &SyntaxToken, expected: impl Debug) -> ASTError {
     ASTError::new(token.text_range().into(), expected, token.kind())
 }

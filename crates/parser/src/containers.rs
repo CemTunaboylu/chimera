@@ -610,14 +610,13 @@ mod tests {
                         Whitespace@26..27 " "
                     Block@27..52
                       LBrace@27..28 "{"
-                      Semi@28..50
-                        Jump@28..49
-                          KwReturn@28..34 "return"
-                          Whitespace@34..35 " "
-                          FnCall@35..49
-                            Ident@35..47 "inner_matmul"
-                            LParen@47..48 "("
-                            RParen@48..49 ")"
+                      Return@28..50
+                        KwReturn@28..34 "return"
+                        Whitespace@34..35 " "
+                        FnCall@35..49
+                          Ident@35..47 "inner_matmul"
+                          LParen@47..48 "("
+                          RParen@48..49 ")"
                         Semi@49..50 ";"
                       Whitespace@50..51 " "
                       RBrace@51..52 "}""#]]

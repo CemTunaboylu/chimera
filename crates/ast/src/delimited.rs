@@ -111,12 +111,10 @@ mod test {
 
     use super::*;
     use crate::{
-        ast::{
-            Root,
-            tests::{ast_root_from, cast_node_into_type},
-        },
+        ast::Root,
         literal::Value,
         operation::{Binary, test::assert_infix_bin_op_with},
+        {ast_root_from, cast_node_into_type},
     };
 
     fn get_paren_from(ast_root: &Root) -> Paren {
@@ -135,7 +133,7 @@ mod test {
         let infix_bin_op = paren.expr().expect("shoud have been ok ");
         assert!(matches!(infix_bin_op, Expr::Infix(Binary::Infix(_))));
         if let Expr::Infix(infix_bin_op) = infix_bin_op {
-            assert_infix_bin_op_with(&infix_bin_op, &Value::Int(1..2), &Value::Int(3..5), "+");
+            assert_infix_bin_op_with(&infix_bin_op, &Value::Int(3), &Value::Int(14), "+");
         }
     }
 
@@ -151,12 +149,7 @@ mod test {
             assert!(matches!(lhs_paren, Expr::Paren(_)));
             if let Expr::Paren(inner_bin_op) = lhs_paren {
                 if let Expr::Infix(inner_binary) = inner_bin_op.expr().unwrap() {
-                    assert_infix_bin_op_with(
-                        &inner_binary,
-                        &Value::Int(2..3),
-                        &Value::Int(4..6),
-                        "+",
-                    );
+                    assert_infix_bin_op_with(&inner_binary, &Value::Int(3), &Value::Int(14), "+");
                 }
             }
             assert_eq!("-", infix_bin_op.op().unwrap());

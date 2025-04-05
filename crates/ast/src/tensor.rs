@@ -8,16 +8,17 @@ use thin_vec::{ThinVec, thin_vec};
 use crate::{
     ast::ASTResult,
     errors::ASTError,
+    expression::Expr,
     lang_elems::{
         ensure_token_kind_is, error_for_node, get_children_in, get_children_with_tokens_in_f,
     },
-    literal::{Literal, ParsedValueIndex},
+    literal::{Literal, Value},
     types::Type,
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Hint {
-    Dim(Literal),
+    Dim(usize),
     Type(Type),
 }
 
@@ -27,9 +28,18 @@ impl Hint {
         let hint_nodes = get_children_in(dim_hints_node, SyntaxKind::DimHint);
         let hint_nodes = hint_nodes
             .iter()
-            .map(|node| Literal::try_from(node.first_child().as_ref().unwrap()));
+            .filter_map(|node| node.first_child().map(|child| Literal::try_from(&child)));
         for dim_hint in hint_nodes {
-            dim_hints.push(Hint::Dim(dim_hint?));
+            let dim = match dim_hint?.0 {
+                Value::Int(dim) if dim > 0 => dim,
+                _ => {
+                    return Err(ASTError::with_err_msg(
+                        dim_hints_node.text_range().into(),
+                        "dimension must be a positive integer".to_string(),
+                    ));
+                }
+            };
+            dim_hints.push(Hint::Dim(dim as usize));
         }
         Ok(dim_hints)
     }
@@ -48,7 +58,16 @@ impl Hint {
 #[derive(Clone, Debug, PartialEq)]
 pub struct TensorInit {
     default_value: SyntaxNode,
-    dim: Option<ParsedValueIndex>,
+    dim: Option<usize>,
+}
+
+impl TensorInit {
+    pub fn get_default_value(&self) -> Option<Expr> {
+        Expr::try_from(&self.default_value).ok()
+    }
+    pub fn get_dim(&self) -> Option<usize> {
+        self.dim
+    }
 }
 
 impl TryFrom<&SyntaxNode> for TensorInit {
@@ -69,7 +88,7 @@ impl TryFrom<&SyntaxNode> for TensorInit {
             if let Some(r) = d {
                 let d = r?;
                 match d.value() {
-                    crate::literal::Value::Int(range) => Some(range),
+                    crate::literal::Value::Int(i) if i > 0 => Some(i as usize),
                     _ => {
                         return Err(ASTError::new(
                             init_node.text_range().into(),
@@ -93,12 +112,10 @@ impl TryFrom<&SyntaxNode> for TensorInit {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TensorStruct {
-    dims: ThinVec<Hint>,
-    type_hint: Option<Hint>,
-    init: Option<TensorInit>,
+    pub dims: ThinVec<Hint>,
+    pub type_hint: Option<Hint>,
+    pub init: Option<TensorInit>,
 }
-
-impl TensorStruct {}
 
 impl TryFrom<&SyntaxNode> for TensorStruct {
     type Error = ASTError;
@@ -140,7 +157,7 @@ impl TryFrom<&SyntaxNode> for TensorStruct {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from, cast_node_into_type};
     use parameterized_test::create;
 
     create! {

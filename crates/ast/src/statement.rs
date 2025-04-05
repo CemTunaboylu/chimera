@@ -1,12 +1,13 @@
 use crate::{
     control_flow::ControlFlow as ASTControlFlow, errors::ASTError, expression::Expr,
-    function::FnDef, jump::Jump, loops::Loop, semi::Semi, variable::VarDef,
+    function::FnDef, jump::Jump, loops::Loop, return_stmt::Return, semi::Semi, variable::VarDef,
 };
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
     ControlFlow(ASTControlFlow),
+    Return(Return),
     Expr(Expr),
     FnDef(FnDef),
     Jump(Jump),
@@ -28,12 +29,16 @@ impl TryFrom<&SyntaxNode> for Stmt {
                 Ok(fn_def) => Ok(Self::FnDef(fn_def)),
                 Err(err) => Err(err),
             },
+            SyntaxKind::ForLoop | SyntaxKind::WhileLoop => match Loop::try_from(node) {
+                Ok(loop_) => Ok(Self::Loop(loop_)),
+                Err(err) => Err(err),
+            },
             SyntaxKind::Jump => match Jump::try_from(node) {
                 Ok(jump) => Ok(Self::Jump(jump)),
                 Err(err) => Err(err),
             },
-            SyntaxKind::ForLoop | SyntaxKind::WhileLoop => match Loop::try_from(node) {
-                Ok(loop_) => Ok(Self::Loop(loop_)),
+            SyntaxKind::Return => match Return::try_from(node) {
+                Ok(ret) => Ok(Self::Return(ret)),
                 Err(err) => Err(err),
             },
             SyntaxKind::Semi => match Semi::try_from(node) {
@@ -64,7 +69,7 @@ impl TryFrom<SyntaxNode> for Stmt {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from, cast_node_into_type};
     use parameterized_test::create;
 
     create! {

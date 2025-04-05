@@ -1,12 +1,24 @@
 use num_traits::{FromPrimitive, ToPrimitive, Zero};
 use thin_vec::{ThinVec, thin_vec};
 
+use std::fmt::Debug;
 use std::ops::{Add, AddAssign, BitAnd, BitAndAssign, Not, Sub, SubAssign};
 
 use crate::syntax_kind::SyntaxKind;
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct SyntaxKindBitSet(u128);
+
+impl Debug for SyntaxKindBitSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let kinds: ThinVec<SyntaxKind> = (*self).into();
+        let for_debug = kinds
+            .iter()
+            .map(|kind| format!("{:?}", kind))
+            .collect::<ThinVec<_>>();
+        f.write_str(for_debug.join(" or ").as_str())
+    }
+}
 
 impl SyntaxKindBitSet {
     const LARGEST_INDEX: u32 = i128::BITS - 1;

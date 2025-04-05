@@ -1,21 +1,27 @@
-use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
+use smol_str::{SmolStr, ToSmolStr};
 use syntax::{language::SyntaxToken, syntax_kind::SyntaxKind::*};
+use syntax::{
+    language::{NodeOrToken, SyntaxNode},
+    syntax_kind::SyntaxKind,
+};
 
 use crate::{
     errors::ASTError,
     lang_elems::{ensure_node_kind_is_any, error_for_token, get_token_of_errs},
+    self_ref::SelfRef,
 };
 
 // possible types are primitives + custom types i.e. structs
 #[derive(Clone, Debug, PartialEq)]
 pub enum Type {
-    Bool(SyntaxToken),
-    Byte(SyntaxToken),
-    Char(SyntaxToken),
-    Float32(SyntaxToken),
-    Integer32(SyntaxToken),
-    String(SyntaxToken),
-    Struct(SyntaxToken),
+    Bool,
+    Byte,
+    Char,
+    Float32,
+    Integer32,
+    String,
+    Struct(SmolStr),
+    SelfRef(SelfRef),
     Tensor(SyntaxNode),
 }
 
@@ -23,11 +29,11 @@ impl TryFrom<&SyntaxNode> for Type {
     type Error = ASTError;
 
     fn try_from(parent_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        println!("from node: {:?}", parent_node);
         let t = match parent_node.kind() {
+            SelfRef => Self::SelfRef(SelfRef::try_from(parent_node)?),
             StructAsType => {
                 let token = get_token_of_errs(parent_node, Ident)?;
-                Self::Struct(token)
+                Self::Struct(token.text().to_smolstr())
             }
             TensorType => Self::Tensor(parent_node.clone()),
             _ => {
@@ -44,14 +50,24 @@ impl TryFrom<&SyntaxToken> for Type {
 
     fn try_from(primitive: &SyntaxToken) -> Result<Self, Self::Error> {
         match primitive.kind() {
-            TyBool => Ok(Self::Bool(primitive.clone())),
-            TyByte => Ok(Self::Byte(primitive.clone())),
-            TyChar => Ok(Self::Char(primitive.clone())),
-            TyF32 => Ok(Self::Float32(primitive.clone())),
-            TyI32 => Ok(Self::Integer32(primitive.clone())),
+            TyBool => Ok(Self::Bool),
+            TyChar => Ok(Self::Char),
+            TyF32 => Ok(Self::Float32),
+            TyI32 => Ok(Self::Integer32),
             // str slice is a ref str
-            TyStr | TyStrSlc => Ok(Self::String(primitive.clone())),
+            TyStr | TyStrSlc => Ok(Self::String),
             _ => Err(error_for_token(primitive, SyntaxKind::types())),
+        }
+    }
+}
+
+impl TryFrom<&NodeOrToken> for Type {
+    type Error = ASTError;
+
+    fn try_from(not: &NodeOrToken) -> Result<Self, Self::Error> {
+        match not {
+            NodeOrToken::Node(node) => Self::try_from(node),
+            NodeOrToken::Token(token) => Self::try_from(token),
         }
     }
 }
@@ -60,10 +76,7 @@ impl TryFrom<&SyntaxToken> for Type {
 mod tests {
 
     use super::*;
-    use crate::ast::{
-        ASTResult,
-        tests::{ast_root_from, cast_node_into_type, cast_token_into_type},
-    };
+    use crate::{ast::ASTResult, ast_root_from, cast_node_into_type, cast_token_into_type};
     use parameterized_test::create;
 
     create! {
@@ -77,7 +90,7 @@ mod tests {
 
     create_type_test! {
         valid_bool: "bool",
-        valid_byte: "byte",
+        // valid_byte: "byte",
         valid_char: "char",
         valid_f32: "f32",
         valid_i32: "i32",
@@ -105,7 +118,6 @@ mod tests {
         let ast_root = ast_root_from(program);
 
         let node = ast_root.get_root().first_child().unwrap();
-        println!("node : {:?}", node);
         cast_node_into_type::<Type>(&node);
     }
     #[test]

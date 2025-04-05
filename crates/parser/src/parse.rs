@@ -272,7 +272,7 @@ impl<'input> Parser<'input> {
     }
 
     #[allow(unused_variables)]
-    fn parse_return(&self) -> Option<Finished> {
+    pub fn parse_return(&self) -> Option<Finished> {
         let marker = self.start();
         self.expect_and_bump(KwReturn);
 
@@ -280,11 +280,9 @@ impl<'input> Parser<'input> {
         self.expect_in_ctx(Semi);
 
         self.parse_expression_until_binding_power(starting_precedence());
-
-        let finished_as_expr = self.complete_marker_with(marker, Jump);
-        let semi_marker = self.precede_marker_with(&finished_as_expr);
         self.expect_and_bump(Semi);
-        Some(self.complete_marker_with(semi_marker, Semi))
+
+        Some(self.complete_marker_with(marker, Return))
     }
 
     fn parse_continue(&self) -> Option<Finished> {

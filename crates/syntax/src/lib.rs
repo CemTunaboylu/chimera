@@ -7,7 +7,7 @@ pub mod syntax_kind;
 use std::ops::Range;
 
 use bitset::SyntaxKindBitSet;
-use lexer::{lexer::Token, token_kind::TokenKind, token_type::TokenType};
+use lexer::{lexer::Token, token_type::TokenType};
 use num_traits::{FromPrimitive, ToPrimitive};
 use syntax_kind::SyntaxKind;
 
@@ -74,13 +74,6 @@ pub fn is_of_type(syntax: &Syntax) -> bool {
     TYPES.contains(&syntax.get_kind())
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum ParsedValue {
-    Char(char),
-    I32(i32),
-    F32(f32),
-}
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum RestrictionType {
     Add(SyntaxKindBitSet),
@@ -105,7 +98,6 @@ impl RestrictionType {
 pub struct Syntax {
     kind: SyntaxKind,
     span: Range<usize>,
-    parsed_value: Option<ParsedValue>,
     token_type: TokenType,
 }
 
@@ -117,10 +109,6 @@ impl Syntax {
 
     pub fn get_span(&self) -> Range<usize> {
         self.span.clone()
-    }
-
-    pub fn get_parsed_value(&self) -> Option<&ParsedValue> {
-        self.parsed_value.as_ref()
     }
 
     pub fn get_token_type(&self) -> &TokenType {
@@ -178,18 +166,8 @@ impl Syntax {
     }
 }
 
-fn get_parsed_value_from_token(token: &Token) -> Option<ParsedValue> {
-    match token.kind {
-        TokenKind::CharLiteral(char) => Some(ParsedValue::Char(char)),
-        TokenKind::Integer(i) => Some(ParsedValue::I32(i)),
-        TokenKind::Float(f) => Some(ParsedValue::F32(f)),
-        _ => None,
-    }
-}
-
 impl From<Token> for Syntax {
     fn from(token: Token) -> Self {
-        let parsed_value = get_parsed_value_from_token(&token);
         let kind: SyntaxKind = match token.ttype {
             TokenType::Error(_) => SyntaxKind::Errored,
             // precedence is shared
@@ -199,7 +177,6 @@ impl From<Token> for Syntax {
         Self {
             kind,
             span: token.span,
-            parsed_value,
             token_type: token.ttype,
         }
     }

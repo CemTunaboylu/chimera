@@ -50,7 +50,7 @@ impl TryFrom<&SyntaxNode> for ContainerRef {
 mod tests {
 
     use crate::{
-        ast::tests::{ast_root_from, cast_node_into_type},
+        ast_root_from, cast_node_into_type,
         container_ref::ContainerRef,
         expression::Expr,
         literal::{Literal, Value},

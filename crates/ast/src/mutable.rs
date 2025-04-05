@@ -3,6 +3,7 @@ use thin_vec::ThinVec;
 
 use crate::{
     errors::ASTError,
+    expression::Expr,
     lang_elems::{error_for_node, get_children_in},
 };
 
@@ -12,6 +13,9 @@ pub struct Mut(SyntaxNode);
 impl Mut {
     pub fn get_mut_nodes_from(node: &SyntaxNode) -> ThinVec<SyntaxNode> {
         get_children_in(node, SyntaxKind::Mut)
+    }
+    pub fn expr(&self) -> Option<Expr> {
+        Expr::try_from(&self.0).ok()
     }
 }
 

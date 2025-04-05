@@ -1,5 +1,5 @@
 use syntax::{
-    language::{SyntaxNode, SyntaxToken},
+    language::{NodeOrToken, SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
 
@@ -12,7 +12,7 @@ use crate::{
     mutable::Mut as ASTMut,
     operation::{Binary, Unary},
     self_ref::SelfRef as ASTSelfRef,
-    tensor_struct::TensorStruct as ASTTensorStruct,
+    tensor::TensorStruct as ASTTensorStruct,
     variable::VarRef as ASTVarRef,
 };
 
@@ -143,10 +143,21 @@ impl TryFrom<&SyntaxToken> for Expr {
     }
 }
 
+impl TryFrom<&NodeOrToken> for Expr {
+    type Error = ASTError;
+
+    fn try_from(node_or_token: &NodeOrToken) -> Result<Self, Self::Error> {
+        match node_or_token {
+            NodeOrToken::Node(node) => Self::try_from(node),
+            NodeOrToken::Token(token) => Self::try_from(token),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from, cast_node_into_type};
     use parameterized_test::create;
 
     create! {

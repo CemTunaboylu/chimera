@@ -1,3 +1,4 @@
+use smol_str::{SmolStr, ToSmolStr};
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
@@ -5,14 +6,23 @@ use crate::{
     control_flow::{Condition, parse_condition_and_block},
     delimited::Block,
     errors::ASTError,
-    lang_elems::{ensure_node_kind_is, ensure_node_kind_is_any, get_children_in_errs},
+    expression::Expr,
+    lang_elems::{
+        ensure_node_kind_is, ensure_node_kind_is_any, get_children_in_errs, get_token_of,
+    },
 };
 
 // TODO: do I support multiple var defs at once?
 #[derive(Clone, Debug, PartialEq)]
-pub struct Identifiers(ThinVec<SyntaxNode>);
+pub struct Identifiers(pub ThinVec<SmolStr>);
 #[derive(Clone, Debug, PartialEq)]
 pub struct In(SyntaxNode);
+
+impl In {
+    pub fn expr(&self) -> Option<Expr> {
+        Expr::try_from(&self.0).ok()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Loop {
@@ -29,7 +39,13 @@ impl TryFrom<&SyntaxNode> for Loop {
         _ = ensure_node_kind_is_any(node, [SyntaxKind::ForLoop, SyntaxKind::WhileLoop].as_ref())?;
         match node.kind() {
             SyntaxKind::ForLoop => {
-                let identifiers = get_children_in_errs(node, SyntaxKind::ForIdent)?;
+                let identifiers = get_children_in_errs(node, SyntaxKind::ForIdent)?
+                    .iter()
+                    .map(|syntax_node| {
+                        let ident_token = get_token_of(syntax_node, SyntaxKind::Ident).unwrap();
+                        ident_token.text().to_smolstr()
+                    })
+                    .collect::<ThinVec<_>>();
                 let in_part = get_children_in_errs(node, SyntaxKind::In)?
                     .first()
                     .unwrap()
@@ -66,7 +82,7 @@ mod test {
     use parameterized_test::create;
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from, cast_node_into_type};
 
     create! {
         happy_path_loop_test,

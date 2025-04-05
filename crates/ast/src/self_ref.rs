@@ -37,7 +37,7 @@ impl TryFrom<&SyntaxNode> for SelfRef {
 mod tests {
 
     use super::*;
-    use crate::ast::tests::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from, cast_node_into_type};
 
     use parameterized_test::create;
 

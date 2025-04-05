@@ -1,3 +1,4 @@
+use hir::hir::lower;
 use miette::{Context, IntoDiagnostic, Report, Result as MietteResult};
 use parser::{cst::ConcreteSyntaxTree, parser::Parser as ChimeraParser};
 
@@ -78,6 +79,12 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
             .filter_map(|stmt| match stmt {
                 AstStmt::VarDef(var_def) => Some(var_def),
                 AstStmt::Expr(_) => None,
+                AstStmt::FnDef(_) => None,
+                AstStmt::Jump(_) => None,
+                AstStmt::Semi(_) => todo!(),
+                AstStmt::ControlFlow(_) => todo!(),
+                AstStmt::Loop(_) => todo!(),
+                AstStmt::Return(_) => todo!(),
             })
             // match expr {
             //     Expr::VarRef(var_ref) => Some(var_ref.name()),
@@ -92,12 +99,12 @@ fn display_as_hir(cst: &ConcreteSyntaxTree) {
     display_as_cst(cst);
     let ast_root = Root::try_from(cst).unwrap();
     println!("ast_root {:?}", ast_root);
-    // let mut expr_arena = lower(&ast_root);
+    let mut expr_arena = lower(ast_root);
     // dbg!("begin: {expr_arena :?}", &expr_arena);
 
-    // for elm in &mut expr_arena {
-    //     println!("{:?}", elm);
-    // }
+    for elm in &mut expr_arena {
+        println!("{:?}", elm);
+    }
     // dbg!("fin: {expr_arena :?}", &expr_arena);
 }
 
