@@ -106,6 +106,9 @@ impl Syntax {
     pub fn get_kind(&self) -> SyntaxKind {
         self.kind
     }
+    pub fn set_kind(&mut self, kind: SyntaxKind) {
+        self.kind = kind
+    }
 
     pub fn get_span(&self) -> Range<usize> {
         self.span.clone()

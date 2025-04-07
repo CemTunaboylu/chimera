@@ -21,6 +21,7 @@ pub type CustomExpectationOnSyntax = fn(&Syntax) -> bool;
 #[derive(Clone, Debug)]
 pub enum SeparatedElement {
     Kind(SyntaxKind),
+    KindAs(SyntaxKind, SyntaxKind),
     InSet(SyntaxKindBitSet),
     KindWithMarker(SyntaxKind, SyntaxKind),
     OptionalKind(SyntaxKind),
@@ -66,6 +67,7 @@ impl<'input> Parser<'input> {
         use SeparatedElement::*;
         match s {
             &Kind(syntax_kind) => self.is_next(syntax_kind),
+            &KindAs(syntax_kind, _) => self.is_next(syntax_kind),
             &KindWithMarker(syntax_kind, _) => self.is_next(syntax_kind),
             &Fn(f) => self.is_next_f(f),
             OptionalKind(_) => true,
@@ -81,6 +83,9 @@ impl<'input> Parser<'input> {
             match element {
                 &Kind(exp_kind) => {
                     self.expect_and_bump(exp_kind);
+                }
+                &KindAs(exp_kind, as_kind) => {
+                    self.expect_and_bump_as(exp_kind, as_kind);
                 }
                 &InSet(set) => {
                     if self.is_next_in(set) {
@@ -236,6 +241,10 @@ impl<'input> Parser<'input> {
     // Possible options: a variable reference, function/method call or an iterable indexing
     #[allow(unused_variables)]
     fn parse_starting_with_identifier(&self) -> Option<Finished> {
+        if self.is_expected(StructAsType) {
+            self.expect_and_bump_as(Ident, StructAsType);
+            return None;
+        }
         let marker = self.start();
         self.expect_and_bump(Ident);
 

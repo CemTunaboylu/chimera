@@ -97,6 +97,19 @@ pub fn first_child_of_kind(
     node.children().find(|node| set.contains(&node.kind()))
 }
 
+pub fn first_child_of_kind_errs(
+    node: &SyntaxNode,
+    set: impl Into<SyntaxKindBitSet>,
+) -> ASTResult<SyntaxNode> {
+    let set: SyntaxKindBitSet = set.into();
+
+    if let Some(node) = first_child_of_kind(node, set) {
+        Ok(node)
+    } else {
+        return Err(error_for_node(node, set));
+    }
+}
+
 pub fn filtered_children_with_tokens(
     node: &SyntaxNode,
     set: impl Into<SyntaxKindBitSet>,
@@ -169,17 +182,22 @@ pub fn get_token(node: &SyntaxNode) -> Option<SyntaxToken> {
         .find_map(SyntaxElement::into_token)
 }
 
-pub fn get_token_of(node: &SyntaxNode, kind: SyntaxKind) -> Option<SyntaxToken> {
+pub fn get_token_of(node: &SyntaxNode, set: impl Into<SyntaxKindBitSet>) -> Option<SyntaxToken> {
+    let set: SyntaxKindBitSet = set.into();
     node.children_with_tokens()
         .filter_map(SyntaxElement::into_token)
-        .find(|t| t.kind() == kind)
+        .find(|t| set.contains(&t.kind()))
 }
 
-pub fn get_token_of_errs(node: &SyntaxNode, kind: SyntaxKind) -> ASTResult<SyntaxToken> {
-    if let Some(token) = get_token_of(node, kind) {
+pub fn get_token_of_errs(
+    node: &SyntaxNode,
+    set: impl Into<SyntaxKindBitSet>,
+) -> ASTResult<SyntaxToken> {
+    let set: SyntaxKindBitSet = set.into();
+    if let Some(token) = get_token_of(node, set) {
         Ok(token)
     } else {
-        return Err(error_for_node(node, kind));
+        return Err(error_for_node(node, set));
     }
 }
 
@@ -211,16 +229,6 @@ pub fn get_children_with_tokens_in_f(
     node.children_with_tokens()
         .filter(|node_or_token| f(&node_or_token.kind()))
         .collect::<ThinVec<_>>()
-}
-
-pub fn get_filtered_children_with_tokens(
-    node: &SyntaxNode,
-    wanted: impl Into<SyntaxKindBitSet>,
-) -> ThinVec<NodeOrToken> {
-    let set: SyntaxKindBitSet = wanted.into();
-    node.children_with_tokens()
-        .filter(|node_or_token| set.contains(&node_or_token.kind()))
-        .collect()
 }
 
 pub fn get_token_with(

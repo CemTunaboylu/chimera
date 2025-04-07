@@ -179,6 +179,8 @@ impl SyntaxKind {
     pub fn types() -> ThinVec<SyntaxKind> {
         use SyntaxKind::*;
         thin_vec![
+            StructAsType,
+            TensorType,
             TyBool,
             TyChar,
             TyF32,
@@ -186,7 +188,6 @@ impl SyntaxKind {
             TyStr,
             TyStrSlc,
             TyTensor,
-            StructAsType
         ]
     }
 
@@ -195,6 +196,7 @@ impl SyntaxKind {
         thin_vec![
             SelfRef,
             StructAsType,
+            TensorType,
             TyBool,
             TyChar,
             TyF32,

@@ -63,7 +63,6 @@ impl TryFrom<&SyntaxNode> for Block {
         _ = ensure_node_kind_is(block_node, SyntaxKind::Block)?;
         // TODO: for now, we ignore the failures
         let stmts = get_children_as::<Stmt>(block_node)?;
-        println!("  stmts: {:?}", stmts);
         if matches!(stmts.last(), Some(Stmt::Expr(_))) {
             Ok(Self::Returning(ThinVec::from(stmts)))
         } else {

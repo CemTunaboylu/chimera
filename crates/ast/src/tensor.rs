@@ -23,7 +23,7 @@ pub enum Hint {
 }
 
 impl Hint {
-    fn dim_hints(dim_hints_node: &SyntaxNode) -> ASTResult<ThinVec<Self>> {
+    pub fn dim_hints(dim_hints_node: &SyntaxNode) -> ASTResult<ThinVec<Self>> {
         let mut dim_hints = ThinVec::new();
         let hint_nodes = get_children_in(dim_hints_node, SyntaxKind::DimHint);
         let hint_nodes = hint_nodes
@@ -44,7 +44,7 @@ impl Hint {
         Ok(dim_hints)
     }
 
-    fn type_hint(typehint_node: &SyntaxNode) -> ASTResult<Self> {
+    pub fn type_hint(typehint_node: &SyntaxNode) -> ASTResult<Self> {
         let type_node = get_children_with_tokens_in_f(typehint_node, is_a_type);
         let type_node = type_node.first().unwrap();
         let type_ = match type_node {

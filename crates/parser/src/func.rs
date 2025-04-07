@@ -4,21 +4,12 @@ use crate::{
     parse::{Finished, SeparatedElement},
     parser::Parser,
 };
-use lexer::token_type::TokenType;
 use syntax::{
     Syntax, anchor::RollingBackAnchor, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind,
 };
 
 use SyntaxKind::*;
 use thin_vec::{ThinVec, thin_vec};
-
-// TODO: move it to somewhere else
-fn ident_or_type(syntax: &Syntax) -> bool {
-    matches!(
-        syntax.get_token_type(),
-        TokenType::Type | TokenType::Identifier
-    )
-}
 
 impl<'input> Parser<'input> {
     // fn <ident>({parameters as CSV}) {-> RetType} {}
@@ -51,6 +42,8 @@ impl<'input> Parser<'input> {
             self.expect_and_bump(RArrow);
             self.allow_only_in_ctx(SyntaxKind::types().as_ref());
             self.allow_in_ctx([And, Mut].as_ref());
+            self.expect_in_ctx(StructAsType);
+
             if self.is_next(And) {
                 self.parse_prefix_unary_operation(And);
             } else {
@@ -95,8 +88,9 @@ impl<'input> Parser<'input> {
             Kind(Ident),
             Kind(Colon),
             ref_mut_with(Branched(
-                thin_vec![KindWithMarker(Ident, StructAsType)],
-                thin_vec![InSet(types_set)],
+                thin_vec![KindAs(Ident, StructAsType)],
+                // thin_vec![InSet(types_set)],
+                thin_vec![ParseExprWith(starting_precedence())],
             ))
         ];
         let can_be_a_method = thin_vec![Branched(
@@ -208,22 +202,19 @@ mod tests {
               ParamDecl@0..8
                 Ident@0..2 "me"
                 Colon@2..3 ":"
-                StructAsType@3..8
-                  Ident@3..8 "human"
+                StructAsType@3..8 "human"
               Whitespace@8..9 " "
               ParamDecl@9..23
                 Ident@9..13 "lang"
                 Colon@13..14 ":"
                 Whitespace@14..15 " "
-                StructAsType@15..23
-                  Ident@15..23 "Language"
+                StructAsType@15..23 "Language"
               Whitespace@23..24 " "
               ParamDecl@24..32
                 Ident@24..27 "pet"
                 Colon@27..28 ":"
                 Whitespace@28..29 " "
-                StructAsType@29..32
-                  Ident@29..32 "Cat""#]];
+                StructAsType@29..32 "Cat""#]];
 
         let debug_tree = cst.debug_tree();
         expect.assert_eq(&debug_tree);
@@ -286,8 +277,7 @@ mod tests {
                   Ident@31..36 "third"
                   Colon@36..37 ":"
                   Whitespace@37..38 " "
-                  StructAsType@38..47
-                    Ident@38..47 "Structure"
+                  StructAsType@38..47 "Structure"
                 RParen@47..48 ")"
                 Whitespace@48..49 " "
                 Block@49..51
@@ -379,12 +369,14 @@ mod tests {
                       ParamDecl@7..15
                         Ident@7..8 "a"
                         Colon@8..9 ":"
-                        TyTensor@9..15 "tensor"
+                        TensorType@9..15
+                          TyTensor@9..15 "tensor"
                       Whitespace@15..16 " "
                       ParamDecl@16..24
                         Ident@16..17 "b"
                         Colon@17..18 ":"
-                        TyTensor@18..24 "tensor"
+                        TensorType@18..24
+                          TyTensor@18..24 "tensor"
                       RParen@24..25 ")"
                       Whitespace@25..26 " "
                       RetType@26..35
@@ -430,8 +422,7 @@ mod tests {
                       Ident@23..25 "by"
                       Colon@25..26 ":"
                       Whitespace@26..27 " "
-                      StructAsType@27..32
-                        Ident@27..32 "Point"
+                      StructAsType@27..32 "Point"
                     RParen@32..33 ")"
                     Whitespace@33..34 " "
                     Block@34..68
@@ -503,8 +494,7 @@ mod tests {
                         Mut@28..37
                           KwMut@28..31 "mut"
                           Whitespace@31..32 " "
-                          StructAsType@32..37
-                            Ident@32..37 "Point"
+                          StructAsType@32..37 "Point"
                     RParen@37..38 ")"
                     Whitespace@38..39 " "
                     Block@39..42

@@ -1,6 +1,7 @@
 use crate::{
     control_flow::ControlFlow as ASTControlFlow, errors::ASTError, expression::Expr,
-    function::FnDef, jump::Jump, loops::Loop, return_stmt::Return, semi::Semi, variable::VarDef,
+    function::FnDef, impl_block::Impl, jump::Jump, loops::Loop, return_stmt::Return, semi::Semi,
+    structure::StructDef, variable::VarDef,
 };
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 
@@ -10,9 +11,11 @@ pub enum Stmt {
     Return(Return),
     Expr(Expr),
     FnDef(FnDef),
+    Impl(Impl),
     Jump(Jump),
     Loop(Loop),
     Semi(Semi),
+    StructDef(StructDef),
     VarDef(VarDef),
 }
 
@@ -33,6 +36,10 @@ impl TryFrom<&SyntaxNode> for Stmt {
                 Ok(loop_) => Ok(Self::Loop(loop_)),
                 Err(err) => Err(err),
             },
+            SyntaxKind::ImplBlock => match Impl::try_from(node) {
+                Ok(impl_block) => Ok(Self::Impl(impl_block)),
+                Err(err) => Err(err),
+            },
             SyntaxKind::Jump => match Jump::try_from(node) {
                 Ok(jump) => Ok(Self::Jump(jump)),
                 Err(err) => Err(err),
@@ -43,6 +50,10 @@ impl TryFrom<&SyntaxNode> for Stmt {
             },
             SyntaxKind::Semi => match Semi::try_from(node) {
                 Ok(semi) => Ok(Self::Semi(semi)),
+                Err(err) => Err(err),
+            },
+            SyntaxKind::StructDef => match StructDef::try_from(node) {
+                Ok(struct_def) => Ok(Self::StructDef(struct_def)),
                 Err(err) => Err(err),
             },
             SyntaxKind::VarDef => match VarDef::try_from(node) {
@@ -91,7 +102,9 @@ mod tests {
         jump: "break weights.raw_tensor();",
         loop_: "while is_ok { server.listen(); }",
         semi: "cannot_return();",
+        struct_def: "struct S {field: Field}",
         var_def: "let unit = [[1,0,0],[0,1,0],[0,0,1]];",
+        impl_block: "impl Point { fn translate(&mut self, by: Point) { self.x += by.x; self.y += by.y; } fn rotate(&mut self, by: Point) { self.rotate_around(&by);} \n}",
     }
 
     #[test]

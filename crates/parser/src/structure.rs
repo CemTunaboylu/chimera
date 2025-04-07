@@ -1,21 +1,15 @@
 use crate::{
+    operator::starting_precedence,
     parse::{Finished, SeparatedElement},
     parser::Parser,
 };
 
-use lexer::token_type::TokenType;
 use syntax::{
-    Syntax, anchor::RollingBackAnchor, syntax_kind::SyntaxKind, syntax_kind::SyntaxKind::*,
+    anchor::RollingBackAnchor,
+    syntax_kind::SyntaxKind::{self, *},
 };
 
 use thin_vec::thin_vec;
-
-fn ident_or_type(syntax: &Syntax) -> bool {
-    matches!(
-        syntax.get_token_type(),
-        TokenType::Type | TokenType::Identifier
-    )
-}
 
 #[allow(unused_variables)]
 impl<'input> Parser<'input> {
@@ -34,7 +28,7 @@ impl<'input> Parser<'input> {
             self.expect_and_bump(LBrace);
         }
 
-        self.parse_attributes();
+        self.parse_fields();
 
         {
             let rollback_when_dropped = self.roll_back_context_after_drop();
@@ -46,12 +40,19 @@ impl<'input> Parser<'input> {
     }
 
     #[allow(unused_variables)]
-    pub fn parse_attributes(&self) -> Option<Finished> {
+    pub fn parse_fields(&self) -> Option<Finished> {
         let marker = self.start();
 
         use SeparatedElement::*;
-
-        let idents = thin_vec![Kind(Ident), Kind(Colon), Fn(ident_or_type)];
+        let idents = thin_vec![
+            Kind(Ident),
+            Kind(Colon),
+            Branched(
+                thin_vec![KindAs(Ident, StructAsType)],
+                // thin_vec![Fn(is_of_type)]
+                thin_vec![ParseExprWith(starting_precedence())]
+            ),
+        ];
         self.parse_separated_by(&idents, StructField, Comma, RBrace);
 
         Some(self.complete_marker_with(marker, StructFields))
@@ -110,7 +111,7 @@ mod tests {
                         Ident@29..33 "item"
                         Colon@33..34 ":"
                         Whitespace@34..35 " "
-                        Ident@35..39 "Item"
+                        StructAsType@35..39 "Item"
                         Whitespace@39..40 " "
                     RBrace@40..41 "}""#]],
         ),

@@ -20,7 +20,7 @@ pub struct RetType(SyntaxNode);
 
 impl RetType {
     pub fn return_type(&self) -> Option<Type> {
-        Type::try_from(&self.0).ok()
+        Type::try_from(&self.0.first_child().unwrap()).ok()
     }
 }
 

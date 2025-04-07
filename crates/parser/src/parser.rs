@@ -241,6 +241,15 @@ impl<'input> Parser<'input> {
         self.recover();
     }
 
+    pub fn expect_and_bump_as(&self, expected_kind: SyntaxKind, kind: SyntaxKind) {
+        self.expect_in_ctx(expected_kind);
+        if IsNext::Yes == self.is_next_strict(expected_kind) {
+            self.bump_as(kind);
+            return;
+        }
+        self.recover();
+    }
+
     pub fn expect_f_and_bump(&self, expect: CustomExpectationOnSyntax) {
         if IsNext::Yes == self.is_next_f_strict(expect) {
             self.bump();
@@ -275,6 +284,16 @@ impl<'input> Parser<'input> {
             let syntax: Syntax = token.into();
             let kind = syntax.get_kind();
             self.context.borrow().del_expectation(kind);
+            self.push_event(Event::AddSyntax { syntax: syntax });
+        }
+        Some(())
+    }
+    pub fn bump_as(&self, kind: SyntaxKind) -> Option<()> {
+        if let Ok(token) = self.lexer.borrow_mut().next()? {
+            let mut syntax: Syntax = token.into();
+            let s_kind = syntax.get_kind();
+            self.context.borrow().del_expectation(s_kind);
+            syntax.set_kind(kind);
             self.push_event(Event::AddSyntax { syntax: syntax });
         }
         Some(())

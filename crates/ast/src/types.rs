@@ -4,11 +4,13 @@ use syntax::{
     language::{NodeOrToken, SyntaxNode},
     syntax_kind::SyntaxKind,
 };
+use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
     errors::ASTError,
-    lang_elems::{ensure_node_kind_is_any, error_for_token, get_token_of_errs},
+    lang_elems::{ensure_node_kind_is_any, error_for_token, get_first_child_in},
     self_ref::SelfRef,
+    tensor::Hint,
 };
 
 // possible types are primitives + custom types i.e. structs
@@ -22,7 +24,7 @@ pub enum Type {
     String,
     Struct(SmolStr),
     SelfRef(SelfRef),
-    Tensor(SyntaxNode),
+    Tensor(ThinVec<Hint>),
 }
 
 impl TryFrom<&SyntaxNode> for Type {
@@ -31,11 +33,17 @@ impl TryFrom<&SyntaxNode> for Type {
     fn try_from(parent_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let t = match parent_node.kind() {
             SelfRef => Self::SelfRef(SelfRef::try_from(parent_node)?),
-            StructAsType => {
-                let token = get_token_of_errs(parent_node, Ident)?;
-                Self::Struct(token.text().to_smolstr())
+            TensorType => {
+                let mut hints = thin_vec![];
+                if let Some(type_hint) = get_first_child_in(parent_node, SyntaxKind::TypeHint) {
+                    let hint = Hint::type_hint(&type_hint)?;
+                    hints.push(hint);
+                }
+                if let Some(dim_hints) = get_first_child_in(parent_node, SyntaxKind::DimHints) {
+                    hints.extend(Hint::dim_hints(&dim_hints)?);
+                }
+                Self::Tensor(hints)
             }
-            TensorType => Self::Tensor(parent_node.clone()),
             _ => {
                 _ = ensure_node_kind_is_any(parent_node, [StructAsType, TensorType].as_ref())?;
                 unreachable!()
@@ -48,16 +56,19 @@ impl TryFrom<&SyntaxNode> for Type {
 impl TryFrom<&SyntaxToken> for Type {
     type Error = ASTError;
 
-    fn try_from(primitive: &SyntaxToken) -> Result<Self, Self::Error> {
-        match primitive.kind() {
-            TyBool => Ok(Self::Bool),
-            TyChar => Ok(Self::Char),
-            TyF32 => Ok(Self::Float32),
-            TyI32 => Ok(Self::Integer32),
+    fn try_from(token: &SyntaxToken) -> Result<Self, Self::Error> {
+        let t = match token.kind() {
+            TyBool => Self::Bool,
+            TyChar => Self::Char,
+            TyF32 => Self::Float32,
+            TyI32 => Self::Integer32,
             // str slice is a ref str
-            TyStr | TyStrSlc => Ok(Self::String),
-            _ => Err(error_for_token(primitive, SyntaxKind::types())),
-        }
+            TyStr | TyStrSlc => Self::String,
+            StructAsType => Self::Struct(token.text().to_smolstr()),
+            _ => return Err(error_for_token(token, SyntaxKind::types())),
+        };
+
+        Ok(t)
     }
 }
 
@@ -108,8 +119,8 @@ mod tests {
             .children()
             .find(|node| node.kind() == ParamDecl)
             .unwrap();
-        let struct_as_type_node = param_node.first_child().unwrap();
-        cast_node_into_type::<Type>(&struct_as_type_node);
+        let struct_as_type = param_node.last_token().unwrap();
+        cast_token_into_type::<Type>(&struct_as_type);
     }
 
     #[test]
