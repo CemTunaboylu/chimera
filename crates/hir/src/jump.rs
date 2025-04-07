@@ -1,9 +1,6 @@
 use ast::jump::Jump as ASTJump;
 
-use crate::{
-    HIRResult,
-    hir::{ExprIdx, HIRBuilder},
-};
+use crate::{HIRResult, builder::HIRBuilder, scope::ExprIdx};
 
 // possible types are primitives + custom types i.e. structs
 #[derive(Clone, Debug, PartialEq)]

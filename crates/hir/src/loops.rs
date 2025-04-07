@@ -2,10 +2,7 @@ use smol_str::SmolStr;
 use thin_vec::ThinVec;
 
 use crate::{
-    HIRResult,
-    control_flow::Condition,
-    delimited::Block,
-    hir::{ExprIdx, HIRBuilder},
+    HIRResult, builder::HIRBuilder, control_flow::Condition, delimited::Block, scope::ExprIdx,
 };
 
 use ast::loops::{In as ASTIn, Loop as ASTLoop};

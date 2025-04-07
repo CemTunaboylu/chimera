@@ -1,9 +1,6 @@
 use ast::mutable::Mut as ASTMut;
 
-use crate::{
-    HIRResult,
-    hir::{ExprIdx, HIRBuilder},
-};
+use crate::{HIRResult, builder::HIRBuilder, scope::ExprIdx};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mut(ExprIdx);

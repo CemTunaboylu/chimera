@@ -1,14 +1,28 @@
 use std::{
-    cmp::min,
     collections::{HashMap, HashSet},
     fmt::Debug,
 };
 
 use thin_vec::ThinVec;
 
-use crate::{HIRResult, errors::HIRError, literal::Value, tensor::TensorOp, types::Type};
+use crate::{
+    HIRResult, errors::HIRError, literal::Value, scope::ScopeIdx, tensor::TensorOp, types::Type,
+};
+#[derive(Clone, Debug, PartialEq)]
+pub struct BaseMeta {
+    pub scope_idx: ScopeIdx,
+    pub _type: Type,
+    pub num_refs: usize,
+}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct BlkMeta {
+    pub is_pure: bool,                     // Is this block free of side effects?
+    pub return_indices: ThinVec<usize>, // Indices of statements within the block that are returning a value
+    pub capturing_indices: ThinVec<usize>, // Indices of statements within the block that capture variables from the parent scope
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct FnMeta {
     pub inline_hint: bool,  // Should this function be inlined?
     pub is_pure: bool,      // Is this function free of side effects?
@@ -20,7 +34,6 @@ pub struct FnMeta {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TenMeta {
-    pub data_type: Type,
     // can be used for quantization,
     // TODO: get rid of Option
     pub max: Option<Value>,
@@ -35,10 +48,9 @@ pub struct TenMeta {
 }
 
 impl TenMeta {
-    pub fn with(sparsity: Sparsity, type_check: TypeCheck, min_max: MinMax) -> Self {
+    pub fn with(sparsity: Sparsity, min_max: MinMax) -> Self {
         let MinMax { max, min } = min_max;
         Self {
-            data_type: type_check.get_only_type(),
             max: max,
             min: min,
             sparse: sparsity.is_sparse(),

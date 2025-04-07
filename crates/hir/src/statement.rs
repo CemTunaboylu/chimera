@@ -2,11 +2,13 @@ use ast::statement::Stmt as ASTStmt;
 
 use crate::{
     HIRResult,
+    builder::HIRBuilder,
     control_flow::ControlFlow,
-    hir::{ExprIdx, FnDefIdx, HIRBuilder, VarDefIdx},
+    impl_block::Impl,
     jump::Jump,
     loops::Loop,
     return_stmt::Return,
+    scope::{ExprIdx, FnDefIdx, StructDefIdx, VarDefIdx},
     semi::Semi,
 };
 
@@ -17,10 +19,12 @@ pub enum Stmt {
     // Expr(Expr),
     FnDef(FnDefIdx),
     // FnDef(FnDef),
+    Impl(Impl),
     Jump(Jump),
     Loop(Loop),
     Return(Return),
     Semi(Semi),
+    StructDef(StructDefIdx),
     VarDef(VarDefIdx),
 }
 
@@ -41,6 +45,10 @@ impl HIRBuilder {
                 let low_fn_def = self.lower_fn_def(fn_def)?;
                 Stmt::FnDef(low_fn_def)
             }
+            ASTStmt::Impl(imp) => {
+                let low_impl = self.lower_impl_block(imp)?;
+                Stmt::Impl(low_impl)
+            }
             ASTStmt::Jump(jump) => {
                 let low_jump = self.lower_jump(jump)?;
                 Stmt::Jump(low_jump)
@@ -56,6 +64,10 @@ impl HIRBuilder {
             ASTStmt::Semi(semi) => {
                 let low_semi = self.lower_semi(semi)?;
                 Stmt::Semi(low_semi)
+            }
+            ASTStmt::StructDef(struct_def) => {
+                let low_struct_def_idx = self.lower_struct_def(struct_def)?;
+                Stmt::StructDef(low_struct_def_idx)
             }
             ASTStmt::VarDef(var_def) => {
                 let low_var_def = self.lower_var_def(var_def)?;

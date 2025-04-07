@@ -4,11 +4,7 @@ use ast::control_flow::{
     Condition as ASTCondition, Conditional as ASTConditional, ControlFlow as ASTControlFlow,
 };
 
-use crate::{
-    HIRResult,
-    delimited::Block,
-    hir::{ExprIdx, HIRBuilder},
-};
+use crate::{HIRResult, builder::HIRBuilder, delimited::Block, scope::ExprIdx};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Condition(ExprIdx);

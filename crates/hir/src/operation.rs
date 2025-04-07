@@ -1,9 +1,6 @@
 use smol_str::SmolStr;
 
-use crate::{
-    HIRResult, err_if_none,
-    hir::{ExprIdx, HIRBuilder},
-};
+use crate::{HIRResult, builder::HIRBuilder, err_if_none, scope::ExprIdx};
 
 use ast::operation::{Binary as ASTBinary, Unary as ASTUnary};
 
@@ -142,7 +139,7 @@ impl HIRBuilder {
 #[cfg(test)]
 pub(crate) mod test {
 
-    use crate::hir::tests::ast_root_from;
+    use crate::builder::tests::ast_root_from;
 
     use parameterized_test::create;
 

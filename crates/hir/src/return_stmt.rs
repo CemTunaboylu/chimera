@@ -1,9 +1,6 @@
 use ast::return_stmt::Return as ASTReturn;
 
-use crate::{
-    HIRResult,
-    hir::{ExprIdx, HIRBuilder},
-};
+use crate::{HIRResult, builder::HIRBuilder, scope::ExprIdx};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Return(ExprIdx);
@@ -26,7 +23,7 @@ mod test {
 
     use parameterized_test::create;
 
-    use crate::hir::tests::ast_root_from;
+    use crate::builder::tests::ast_root_from;
 
     create! {
         happy_path_return_test,

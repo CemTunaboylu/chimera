@@ -1,13 +1,18 @@
-use smol_str::SmolStr;
 use thin_vec::ThinVec;
 
 use ast::container_ref::ContainerRef as ASTContainerRef;
 
-use crate::{HIRResult, delimited::Indexing, hir::HIRBuilder};
+use crate::{
+    HIRResult,
+    builder::HIRBuilder,
+    delimited::Indexing,
+    resolution::{Baggage, ResolutionType, Unresolved},
+    scope::VarDefIdx,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContainerRef {
-    pub name: SmolStr,
+    pub name: VarDefIdx,
     pub indices: ThinVec<Indexing>,
 }
 
@@ -15,7 +20,7 @@ impl HIRBuilder {
     pub fn lower_container_ref(
         &mut self,
         container_ref: &ASTContainerRef,
-    ) -> HIRResult<ContainerRef> {
+    ) -> HIRResult<Unresolved> {
         let name = container_ref.name();
         let indices = container_ref.indices();
 
@@ -25,10 +30,11 @@ impl HIRBuilder {
             lowered_indices.push(low_indexing);
         }
 
-        Ok(ContainerRef {
+        Ok(Unresolved::baggaged(
             name,
-            indices: lowered_indices,
-        })
+            Baggage::Index(lowered_indices),
+            ResolutionType::Container,
+        ))
     }
 }
 

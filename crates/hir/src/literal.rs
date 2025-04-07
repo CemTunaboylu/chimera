@@ -5,9 +5,11 @@ use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
     HIRResult,
-    hir::{HIRBuilder, StrIdx, TensorLiteralIdx},
+    builder::HIRBuilder,
     metadata::{MinMax, Sparsity, TenMeta, TypeCheck},
+    scope::{StrIdx, TensorLiteralIdx},
     tensor::{CanonicalTensor, Layout},
+    types::Type,
     unwrap_or_err,
 };
 
@@ -40,7 +42,7 @@ pub struct Literal(Value);
 impl HIRBuilder {
     fn flatten_tensor_tree(
         tensor_tree: ASTTensorTree,
-    ) -> HIRResult<(ThinVec<usize>, TenMeta, ThinVec<Value>)> {
+    ) -> HIRResult<(ThinVec<usize>, Type, TenMeta, ThinVec<Value>)> {
         let shape = tensor_tree.shape().0;
         let mut flattened: ThinVec<Value> = thin_vec![];
         let mut stack = thin_vec![tensor_tree];
@@ -72,9 +74,10 @@ impl HIRBuilder {
         }
 
         _ = type_check.type_check()?;
-        let ten_meta = TenMeta::with(sparsity, type_check, min_max);
+        let data_type = type_check.get_only_type();
+        let ten_meta = TenMeta::with(sparsity, min_max);
 
-        Ok((shape, ten_meta, flattened))
+        Ok((shape, data_type, ten_meta, flattened))
     }
     pub fn lower_literal(&mut self, literal: &ASTLiteral) -> HIRResult<Literal> {
         let value = match literal.value() {
@@ -83,9 +86,10 @@ impl HIRBuilder {
                 Value::Str(idx)
             }
             ASTValue::Tensor(tensor_tree) => {
-                let (shape, ten_meta, flattened) = Self::flatten_tensor_tree(tensor_tree)?;
+                let (shape, data_type, ten_meta, flattened) =
+                    Self::flatten_tensor_tree(tensor_tree)?;
                 let tensor_literal =
-                    CanonicalTensor::new(shape, flattened, ten_meta, Layout::row_major);
+                    CanonicalTensor::new(data_type, flattened, Layout::row_major, ten_meta, shape);
                 let tensor_idx = self.allocate_tensor_literal(tensor_literal);
                 Value::Tensor(tensor_idx)
             }
@@ -99,11 +103,11 @@ impl HIRBuilder {
 mod tests {
 
     use super::*;
-    use crate::{tensor::Shape, types::Type};
+    use crate::tensor::Shape;
     use ast::{ast_root_from, cast_node_into_type};
     use parameterized_test::create;
 
-    use crate::hir::into_idx;
+    use crate::scope::into_idx;
 
     fn get_tensor_literal_for(program: &str) -> CanonicalTensor {
         let ast_root = ast_root_from(program);
@@ -114,14 +118,13 @@ mod tests {
             .lower_literal(&ast_literal)
             .expect("should have been ok");
         let idx = into_idx::<CanonicalTensor>(0);
-        hir_builder.tensor_arena[idx].clone()
+        hir_builder.get_current_scope().tensor_literals[idx].clone()
     }
 
     create! {
         tensor_literal_happy_path_test,
         (program, exp_shape, exp_metadata, exp_data), {
             let tensor_literal = get_tensor_literal_for(program);
-            println!("{:?}", tensor_literal);
             assert_eq!(Shape(ThinVec::from(exp_shape)), tensor_literal.shape);
             assert_eq!(exp_metadata, tensor_literal.metadata);
             assert_eq!(exp_data, tensor_literal.data);
@@ -130,7 +133,6 @@ mod tests {
 
     fn test_metadata(max: Value, is_sparse: bool) -> TenMeta {
         TenMeta {
-            data_type: Type::Integer32,
             max: Some(max),
             min: Some(Value::Int(0)),
             sparse: is_sparse,
@@ -216,13 +218,7 @@ mod tests {
             let strides = match &tensor_literal.layout {
                 Layout::RowMajor(strides) => strides,
                 Layout::ColumnMajor(strides) => strides,
-                Layout::Blocked {
-                    block_size,
-                    block_span,
-                    num_blocks_in_shape,
-                    outer_strides,
-                    inner_strides,
-                } => unreachable!(),
+                _ => unreachable!(),
             };
             assert_eq!(ThinVec::from(expected_strides[ix]), strides.0);
             for (ind, exp) in expected_indices[ix] {

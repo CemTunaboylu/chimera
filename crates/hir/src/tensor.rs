@@ -5,12 +5,38 @@ use thin_vec::{ThinVec, thin_vec};
 use ast::tensor::{Hint as ASTHint, TensorInit as ASTTensorInit, TensorStruct as ASTTensorStruct};
 
 use crate::{
-    HIRResult,
-    hir::{ExprIdx, HIRBuilder},
-    literal::Value,
-    metadata::TenMeta,
-    types::Type,
+    HIRResult, builder::HIRBuilder, literal::Value, metadata::TenMeta, scope::ExprIdx, types::Type,
 };
+#[derive(Clone, Debug, PartialEq)]
+pub enum TensorOp {
+    Transpose,
+    Reshape(ThinVec<usize>),
+    Max,
+    Min,
+    Sum,
+    Scale(Value),
+    Add(Value),
+    Mul,
+    MatMul,
+}
+/// Represents a dense block in a block-sparse tensor.
+struct DenseBlock<T> {
+    // Flattened dense data for the block.
+    data: Vec<T>,
+}
+
+/// Coordinates identifying a block's position.
+type BlockIndex = Vec<usize>;
+
+/// The block-sparse tensor structure.
+struct BlockSparseTensor<T> {
+    // Overall shape of the tensor.
+    shape: Vec<usize>,
+    // Size of each block.
+    block_shape: Vec<usize>,
+    // Mapping from block coordinates to the dense block.
+    blocks: HashMap<BlockIndex, DenseBlock<T>>,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Strides(pub ThinVec<usize>);
@@ -63,9 +89,7 @@ impl Layout {
 
         let outer_strides = Strides(outer_strides);
         let inner_strides = Strides(inner_strides);
-        // given [i][j] ->  block_row = i/b, block_col = j/b
-        //                  inner_row = i%b, inner_col = j%b
-        // global_index = (block_row x num_block_cols + block_col) x (bxb) + inner_rowxb + inner_col
+
         Self::Blocked {
             block_size,
             block_span,
@@ -80,8 +104,8 @@ impl Layout {
             Layout::ColumnMajor(strides) => strides,
             Layout::Blocked {
                 block_size,
-                block_span,
-                num_blocks_in_shape,
+                block_span: _,
+                num_blocks_in_shape: _,
                 outer_strides,
                 inner_strides,
             } => {
@@ -114,32 +138,35 @@ impl Layout {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Shape(pub ThinVec<usize>);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CanonicalTensor {
-    pub shape: Shape,
-    pub metadata: TenMeta,
-    pub layout: Layout,
     // data: Cow<'arena, [PrimitiveValue]>,
     pub data: ThinVec<Value>,
+    pub data_type: Type,
+    pub layout: Layout,
+    pub metadata: TenMeta,
+    pub shape: Shape,
 }
 
 impl CanonicalTensor {
     pub fn new(
-        shape: ThinVec<usize>,
+        data_type: Type,
         flattened: ThinVec<Value>,
-        metadata: TenMeta,
         layout_f: fn(&Shape) -> Layout,
+        metadata: TenMeta,
+        shape: ThinVec<usize>,
     ) -> Self {
         let shape = Shape(shape);
         let layout = layout_f(&shape);
         CanonicalTensor {
-            shape,
-            metadata,
-            layout,
             data: flattened,
+            data_type,
+            layout,
+            metadata,
+            shape,
         }
     }
 
@@ -147,37 +174,9 @@ impl CanonicalTensor {
         let new_layout = layout_f(&self.shape);
         self.layout = new_layout;
     }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum TensorOp {
-    Transpose,
-    Reshape(ThinVec<usize>),
-    Max,
-    Min,
-    Sum,
-    Scale(Value),
-    Add(Value),
-    Mul,
-    MatMul,
-}
-/// Represents a dense block in a block-sparse tensor.
-struct DenseBlock<T> {
-    // Flattened dense data for the block.
-    data: Vec<T>,
-}
-
-/// Coordinates identifying a block's position.
-type BlockIndex = Vec<usize>;
-
-/// The block-sparse tensor structure.
-struct BlockSparseTensor<T> {
-    // Overall shape of the tensor.
-    shape: Vec<usize>,
-    // Size of each block.
-    block_shape: Vec<usize>,
-    // Mapping from block coordinates to the dense block.
-    blocks: HashMap<BlockIndex, DenseBlock<T>>,
+    pub fn apply_layout(&mut self) {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -200,7 +199,6 @@ impl HIRBuilder {
         };
         Ok(hint)
     }
-
     pub fn lower_dim_hints(&mut self, dim_hints: &ThinVec<ASTHint>) -> HIRResult<ThinVec<Hint>> {
         let mut low_dim_hints = ThinVec::new();
         for dim_hint in dim_hints {
@@ -209,13 +207,11 @@ impl HIRBuilder {
         }
         Ok(low_dim_hints)
     }
-
     pub fn lower_tensor_init(&mut self, tensor_init: &ASTTensorInit) -> HIRResult<TensorInit> {
         let default_value = self.try_lowering_expr_as_idx(tensor_init.get_default_value())?;
         let dim = tensor_init.get_dim();
         Ok(TensorInit { default_value, dim })
     }
-
     pub fn lower_tensor_struct(
         &mut self,
         tensor_struct: &ASTTensorStruct,
@@ -240,6 +236,7 @@ impl HIRBuilder {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+// TODO: this should finally be able to fill all the fields
 pub struct TensorStruct {
     dims: ThinVec<Hint>,
     type_hint: Option<Hint>,
@@ -253,7 +250,7 @@ mod tests {
     use ast::{ast_root_from, cast_node_into_type};
     use parameterized_test::create;
 
-    use crate::{expression::Expr, hir::into_idx};
+    use crate::{expression::Expr, scope::into_idx};
 
     create! {
         create_tensor_struct_test,

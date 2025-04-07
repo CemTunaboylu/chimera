@@ -1,4 +1,4 @@
-use crate::{HIRResult, hir::HIRBuilder};
+use crate::{HIRResult, builder::HIRBuilder};
 
 use ast::self_ref::SelfRef as ASTSelfRef;
 
@@ -9,7 +9,7 @@ pub enum SelfRef {
 }
 
 impl HIRBuilder {
-    pub fn lower_self_ref(&mut self, self_ref: &ASTSelfRef) -> HIRResult<SelfRef> {
+    pub fn lower_self_ref(&self, self_ref: &ASTSelfRef) -> HIRResult<SelfRef> {
         let sr = match self_ref {
             ASTSelfRef::Instance => SelfRef::Instance,
             ASTSelfRef::Struct => SelfRef::Struct,

@@ -1,6 +1,6 @@
 use smol_str::SmolStr;
 
-use crate::{HIRResult, hir::HIRBuilder, types::Type};
+use crate::{HIRResult, builder::HIRBuilder, types::Type};
 use ast::parameter::{By as ASTBy, Param as ASTParam};
 
 #[derive(Clone, Debug, PartialEq)]
