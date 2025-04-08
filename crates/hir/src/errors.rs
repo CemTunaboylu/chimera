@@ -1,13 +1,7 @@
 use miette::Diagnostic;
-use thin_vec::ThinVec;
 use thiserror::Error;
 
-use std::{fmt::Debug, ops::Range};
-use syntax::{
-    bitset::SyntaxKindBitSet,
-    language::{NodeOrToken, SyntaxNode, SyntaxToken},
-    syntax_kind::SyntaxKind,
-};
+use std::fmt::Debug;
 
 #[derive(Clone, Diagnostic, Debug, PartialEq, Error)]
 #[diagnostic()]
