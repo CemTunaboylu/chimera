@@ -1,37 +1,43 @@
-#![allow(dead_code)]
+use std::fmt::Debug;
 
-use la_arena::Arena;
+use la_arena::{Arena, Idx};
 use miette::Report;
 use smol_str::SmolStr;
+use thin_vec::ThinVec;
 
 use ast::{ast::Root as ASTRoot, statement::Stmt as ASTStmt};
 
-use thin_vec::ThinVec;
-
 use crate::{
-    scope::{FnDefIdx, Scope, ScopeIdx, ScopeKind, StrIdx, TensorLiteralIdx, VarDefIdx, into_idx},
+    HIRResult,
+    context::{LoweringContext, UsageContext},
+    scope::{
+        NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span, StrIdx, TensorLiteralIdx, into_idx,
+    },
     statement::Stmt,
     tensor::CanonicalTensor,
-    variable::VarDef,
 };
 
 // HIR is the high-level intermediate representation that is built on top of the AST
 #[derive(Debug)]
 pub struct HIRBuilder {
-    pub(crate) scopes: Arena<Scope>,
-    pub(crate) current_scope_cursor: ScopeIdx,
-    pub(crate) lowered: ThinVec<Stmt>,
     pub(crate) ast_root: ASTRoot,
-    stmts: ThinVec<ASTStmt>,
-
+    pub(crate) contexts: ThinVec<LoweringContext>,
+    pub(crate) current_scope_cursor: ScopeIdx,
     pub(crate) errors: ThinVec<Report>,
+    pub(crate) lowered: ThinVec<Stmt>,
+    pub(crate) scopes: Arena<Scope>,
+    stmts: ThinVec<ASTStmt>,
 }
 
 // Note: I may switch to LOUDS trie for some, measure the performance gain.
 impl HIRBuilder {
     pub fn new(ast_root: ASTRoot) -> Self {
-        let mut scopes = Arena::<Scope>::new();
+        let contexts = ThinVec::<LoweringContext>::new();
+
         let current_scope_cursor = into_idx::<Scope>(0);
+        let errors = ThinVec::<Report>::new();
+
+        let mut scopes = Arena::<Scope>::new();
         let master_scope = Scope::new(current_scope_cursor, ScopeKind::Master);
         assert_eq!(current_scope_cursor, scopes.alloc(master_scope));
 
@@ -40,15 +46,14 @@ impl HIRBuilder {
         let mut stmts = ast_root.statements().collect::<ThinVec<_>>();
         stmts.reverse();
 
-        let errors = ThinVec::<Report>::new();
-
         Self {
-            lowered,
             ast_root,
-            stmts,
-            errors,
-            scopes,
+            contexts,
             current_scope_cursor,
+            errors,
+            lowered,
+            scopes,
+            stmts,
         }
     }
     pub fn start_new_scope(&mut self, with: ScopeKind) -> ScopeIdx {
@@ -59,6 +64,17 @@ impl HIRBuilder {
     pub fn end_new_scope(&mut self) {
         let current_scope = &self.scopes[self.current_scope_cursor];
         self.current_scope_cursor = current_scope.parent;
+    }
+    pub fn push_usage_context(&mut self, usage: UsageContext) {
+        let lowering_ctx = LoweringContext {
+            usage,
+            statement_idx: self.lowered.len(),
+            scope_idx: self.current_scope_cursor,
+        };
+        self.contexts.push(lowering_ctx);
+    }
+    pub fn pop_usage_context(&mut self) {
+        self.contexts.pop();
     }
     pub fn get_current_scope_mut(&mut self) -> &mut Scope {
         &mut self.scopes[self.current_scope_cursor]
