@@ -22,9 +22,7 @@ use crate::{
 pub enum Expr {
     TensorStruct(TensorStruct),
     Block(Block),
-    // ContainerRef(ContainerRef),
     ContainerRef(Reference<ContainerRef>),
-    // FnCall(FnCall),
     FnCall(Reference<FnCall>),
     Indexing(Indexing),
     Infix(BinaryInfix),
@@ -36,12 +34,12 @@ pub enum Expr {
     StructRef(Reference<StructRef>),
     Unary(Unary),
     VarRef(Reference<VarRef>),
-    // VarRef(VarRef),
 }
 
 pub const MISSING: u32 = 0;
 
 impl HIRBuilder {
+    // TODO: Do I need to get in builder?
     pub fn get_expr(&self, idx: ExprIdx) -> &Expr {
         // TODO: try to find by 'climbing' the branch of scopes
         let current_scope = self.get_current_scope();

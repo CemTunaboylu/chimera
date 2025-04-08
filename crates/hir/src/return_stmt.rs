@@ -21,16 +21,19 @@ impl HIRBuilder {
 #[cfg(test)]
 mod test {
 
-    use parameterized_test::create;
-
+    use super::*;
     use crate::builder::tests::ast_root_from;
+    use ast::cast_node_into_type;
+    use parameterized_test::create;
 
     create! {
         happy_path_return_test,
         (program), {
             let ast_root = ast_root_from(program);
             let return_node = ast_root.get_root().first_child().unwrap();
-            // _ = cast_node_into_type::<Return>(&return_node);
+            let ast_return = cast_node_into_type::<ASTReturn>(&return_node);
+            let mut hir_builder = HIRBuilder::new(ast_root);
+            let low_return = hir_builder.lower_return(&ast_return).expect("should have been ok");
         }
     }
 

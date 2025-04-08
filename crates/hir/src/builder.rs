@@ -82,10 +82,9 @@ impl HIRBuilder {
     pub fn get_current_scope(&self) -> &Scope {
         &self.scopes[self.current_scope_cursor]
     }
-
-    pub fn allocate_var_def_with_name(&mut self, name: &SmolStr, var_def: VarDef) -> VarDefIdx {
+    pub fn allocate_span(&mut self, name: &SmolStr, span: Span) {
         let current_scope = self.get_current_scope_mut();
-        current_scope.allocate_var_def_with_name(name, var_def)
+        current_scope.allocate_span(name, span);
     }
     pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
         let current_scope = self.get_current_scope_mut();
@@ -95,9 +94,12 @@ impl HIRBuilder {
         let current_scope = self.get_current_scope_mut();
         current_scope.allocate_tensor_literal(tensor_literal)
     }
-    pub fn insert_fn_def_in_trie(&mut self, key: &SmolStr, value: FnDefIdx) {
+    pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, elm: E) -> HIRResult<Idx<E>>
+    where
+        E: Clone + Debug + PartialEq + NameIndexed,
+    {
         let current_scope = self.get_current_scope_mut();
-        current_scope.insert_fn_def_in_trie(key, value);
+        current_scope.allocate::<E, S>(name, elm)
     }
 }
 

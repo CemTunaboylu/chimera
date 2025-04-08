@@ -3,35 +3,41 @@ use patricia_tree::PatriciaMap;
 use smol_str::SmolStr;
 
 use crate::{
-    expression::Expr, function::FnDef, resolution::Unresolved, structure::StructDef,
-    tensor::CanonicalTensor, variable::VarDef,
+    HIRResult, errors::HIRError, expression::Expr, function::FnDef, resolution::Unresolved,
+    structure::StructDef, tensor::CanonicalTensor, variable::VarDef,
 };
+
+use std::{fmt::Debug, ops::Range};
 
 pub type ExprIdx = Idx<Expr>;
 pub type FnDefIdx = Idx<FnDef>;
-
+pub type ScopeIdx = Idx<Scope>;
 pub type StrIdx = Idx<SmolStr>;
 pub type StructDefIdx = Idx<StructDef>;
-// pub type UnresolvedStructAsTypeIdx = Idx<UnresolvedStructAsType>;
 pub type TensorLiteralIdx = Idx<CanonicalTensor>;
-// pub type UnresolvedFnCallIdx = Idx<UnresolvedFnCall>;
-// pub type UnresolvedVarRefIdx = Idx<UnresolvedVarRef>;
-// pub type UnresolvedContainerRefIdx = Idx<UnresolvedContainerRef>;
-
 pub type VarDefIdx = Idx<VarDef>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
+
+pub type Span = Range<usize>;
 
 pub(crate) fn into_idx<T>(from: u32) -> Idx<T> {
     Idx::from_raw(RawIdx::from_u32(from))
 }
 
-pub fn expr_arena_with_missing() -> Arena<Expr> {
+pub(crate) fn placeholder_idx<FOR>() -> Idx<FOR> {
+    Idx::from_raw(RawIdx::from_u32(0))
+}
+
+fn expr_arena_with_missing() -> Arena<Expr> {
     let mut arena = Arena::new();
     _ = arena.alloc(Expr::Missing);
     arena
 }
-pub type ScopeIdx = Idx<Scope>;
+
+pub trait NameIndexed {
+    fn set_name_index(&mut self, ix: Idx<SmolStr>);
+}
 
 #[derive(Debug)]
 pub enum ScopeKind {
@@ -42,135 +48,137 @@ pub enum ScopeKind {
     Struct,
 }
 
-// TODO: I may keep all symbols in one place?
+#[derive(Debug)]
+pub struct DefAllocator<D> {
+    pub names: Arena<SmolStr>,
+    pub definitions: Arena<D>,
+    pub name_to_idx_trie: NameToIndexTrie<D>,
+}
+
+pub trait Selector<E: Clone + Debug + PartialEq> {
+    fn select(scope: &Scope) -> &DefAllocator<E>;
+    fn select_mut(scope: &mut Scope) -> &mut DefAllocator<E>;
+}
+// note: container refs are also variable refs.
+pub struct VarSelector {}
+impl Selector<VarDef> for VarSelector {
+    fn select(scope: &Scope) -> &DefAllocator<VarDef> {
+        &scope.variable_allocator
+    }
+    fn select_mut(scope: &mut Scope) -> &mut DefAllocator<VarDef> {
+        &mut scope.variable_allocator
+    }
+}
+pub struct FnSelector {}
+impl Selector<FnDef> for FnSelector {
+    fn select(scope: &Scope) -> &DefAllocator<FnDef> {
+        &scope.fn_allocator
+    }
+    fn select_mut(scope: &mut Scope) -> &mut DefAllocator<FnDef> {
+        &mut scope.fn_allocator
+    }
+}
+
+pub struct StructSelector {}
+impl Selector<StructDef> for StructSelector {
+    fn select(scope: &Scope) -> &DefAllocator<StructDef> {
+        &scope.struct_allocator
+    }
+    fn select_mut(scope: &mut Scope) -> &mut DefAllocator<StructDef> {
+        &mut scope.struct_allocator
+    }
+}
+
+impl<D> DefAllocator<D> {
+    pub fn new() -> Self {
+        Self {
+            names: Arena::<SmolStr>::new(),
+            definitions: Arena::<D>::new(),
+            name_to_idx_trie: NameToIndexTrie::<D>::new(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Scope {
-    pub(crate) parent: ScopeIdx,
     pub(crate) kind: ScopeKind,
+    pub(crate) parent: ScopeIdx,
 
     pub(crate) exprs: Arena<Expr>,
-
-    pub(crate) var_names: Arena<SmolStr>,
-    pub(crate) var_defs: Arena<VarDef>,
-    pub(crate) var_name_to_idx_trie: NameToIndexTrie<VarDef>,
-
-    pub(crate) struct_names: Arena<SmolStr>,
-    pub(crate) struct_defs: Arena<StructDef>,
-    pub(crate) struct_name_to_idx_trie: NameToIndexTrie<StructDef>,
+    pub(crate) fn_allocator: DefAllocator<FnDef>,
+    pub(crate) struct_allocator: DefAllocator<StructDef>,
+    pub(crate) variable_allocator: DefAllocator<VarDef>,
 
     pub(crate) strs: Arena<SmolStr>,
     pub(crate) tensor_literals: Arena<CanonicalTensor>,
 
-    pub(crate) fn_defs: Arena<FnDef>,
-    pub(crate) fn_names: Arena<SmolStr>,
-    pub(crate) fn_name_to_idx_trie: NameToIndexTrie<FnDef>,
-
-    // pub(crate) vars_to_resolve: Arena<UnresolvedVarRef>,
-    // pub(crate) struct_as_types_to_resolve: Arena<UnresolvedStructAsType>,
-    // pub(crate) containers_to_resolve: Arena<UnresolvedContainerRef>,
-    // pub(crate) fns_to_resolve: Arena<UnresolvedFnCall>,
     pub(crate) to_resolve: Arena<Unresolved>,
+    pub(crate) name_to_spans: PatriciaMap<Span>,
 }
 
 impl Scope {
     pub fn new(parent: ScopeIdx, kind: ScopeKind) -> Self {
         let exprs = expr_arena_with_missing();
 
-        let var_names = Arena::<SmolStr>::new();
-        let var_defs = Arena::<VarDef>::new();
-        let var_name_to_idx_trie = NameToIndexTrie::<VarDef>::new();
-
-        let struct_names = Arena::<SmolStr>::new();
-        let struct_defs = Arena::<StructDef>::new();
-        let struct_name_to_idx_trie = NameToIndexTrie::<StructDef>::new();
+        let variable_allocator = DefAllocator::<VarDef>::new();
+        let struct_allocator = DefAllocator::<StructDef>::new();
+        let fn_allocator = DefAllocator::<FnDef>::new();
 
         let strs = Arena::<SmolStr>::new();
         let tensor_literals = Arena::<CanonicalTensor>::new();
 
-        let fn_defs = Arena::<FnDef>::new();
-        let fn_names = Arena::<SmolStr>::new();
-        let fn_name_to_idx_trie = NameToIndexTrie::<FnDef>::new();
-
-        // let vars_to_resolve = Arena::<UnresolvedVarRef>::new();
-        // let struct_as_types_to_resolve = Arena::<UnresolvedStructAsType>::new();
-        // let containers_to_resolve = Arena::<UnresolvedContainerRef>::new();
-        // let fns_to_resolve = Arena::<UnresolvedFnCall>::new();
-
         let to_resolve = Arena::<Unresolved>::new();
+        let name_to_spans = PatriciaMap::<Span>::new();
 
         Self {
-            parent,
             kind,
+            parent,
             exprs,
-            var_names,
-            var_defs,
-            var_name_to_idx_trie,
-            struct_names,
-            struct_defs,
-            struct_name_to_idx_trie,
+            fn_allocator,
+            struct_allocator,
+            variable_allocator,
             strs,
             tensor_literals,
-            fn_defs,
-            fn_names,
-            fn_name_to_idx_trie,
-            // vars_to_resolve,
-            // struct_as_types_to_resolve,
-            // fns_to_resolve,
-            // containers_to_resolve,
             to_resolve,
+            name_to_spans,
         }
     }
 
-    // pub fn allocate_unresolved_var(
-    //     &mut self,
-    //     unresolved_var: UnresolvedVarRef,
-    // ) -> UnresolvedVarRefIdx {
-    //     self.vars_to_resolve.alloc(unresolved_var)
-    // }
-    // pub fn allocate_unresolved_container(
-    //     &mut self,
-    //     unresolved_container: UnresolvedContainerRef,
-    // ) -> UnresolvedContainerRefIdx {
-    //     self.containers_to_resolve.alloc(unresolved_container)
-    // }
-    // pub fn allocate_unresolved_fn_call(
-    //     &mut self,
-    //     unresolved_fn_call: UnresolvedFnCall,
-    // ) -> UnresolvedFnCallIdx {
-    //     self.fns_to_resolve.alloc(unresolved_fn_call)
-    // }
-    // pub fn allocate_unresolved_struct_ref(
-    //     &mut self,
-    //     unresolved_struct_ref: UnresolvedStructAsType,
-    // ) -> UnresolvedStructAsTypeIdx {
-    //     self.struct_as_types_to_resolve.alloc(unresolved_struct_ref)
-    // }
-
-    pub fn allocate_var_def_with_name(&mut self, name: &SmolStr, var_def: VarDef) -> VarDefIdx {
-        let idx = self.var_defs.alloc(var_def);
-        self.var_name_to_idx_trie.insert(name, idx);
-        idx
+    pub fn resolve_in<E, S: Selector<E>>(&self, key: &SmolStr) -> Option<&Idx<E>>
+    where
+        E: Clone + Debug + PartialEq,
+    {
+        S::select(self).name_to_idx_trie.get(key)
     }
-    pub fn allocate_struct_def_with_name(
-        &mut self,
-        name: &SmolStr,
-        struct_def: StructDef,
-    ) -> StructDefIdx {
-        let idx = self.struct_defs.alloc(struct_def);
-        self.struct_name_to_idx_trie.insert(name, idx);
-        idx
+    pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, mut elm: E) -> HIRResult<Idx<E>>
+    where
+        E: Clone + Debug + PartialEq + NameIndexed,
+    {
+        let allocator = S::select_mut(self);
+        if allocator.name_to_idx_trie.get(&name).is_some() {
+            return Err(HIRError::with_msg(format!(
+                "shadowing is not allowed, {:?} is already defined",
+                name
+            ))
+            .into());
+        }
+        let name_index = allocator.names.alloc(name.clone());
+        elm.set_name_index(name_index);
+        let ix = allocator.definitions.alloc(elm);
+        allocator.name_to_idx_trie.insert(&name, ix);
+        Ok(ix)
     }
 
     pub fn allocate_expr(&mut self, expr: Expr) -> ExprIdx {
         self.exprs.alloc(expr)
+    }
+    pub fn allocate_span(&mut self, name: &SmolStr, span: Span) {
+        self.name_to_spans.insert(name, span);
     }
     pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
         self.strs.alloc(string)
     }
     pub fn allocate_tensor_literal(&mut self, tensor_literal: CanonicalTensor) -> TensorLiteralIdx {
         self.tensor_literals.alloc(tensor_literal)
-    }
-    pub fn insert_fn_def_in_trie(&mut self, key: &SmolStr, value: FnDefIdx) {
-        self.fn_name_to_idx_trie.insert(key, value);
     }
 }

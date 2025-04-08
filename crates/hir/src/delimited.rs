@@ -1,5 +1,5 @@
 use ast::delimited::{Block as ASTBlock, Indexing as ASTIndexing, Paren as ASTParen};
-use scoped_macro::scoped;
+use hir_macro::scoped;
 
 use thin_vec::ThinVec;
 

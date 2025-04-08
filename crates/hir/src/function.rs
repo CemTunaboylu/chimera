@@ -1,4 +1,6 @@
-use scoped_macro::scoped;
+use hir_macro::scoped;
+use la_arena::Idx;
+use smol_str::SmolStr;
 use thin_vec::ThinVec;
 
 use ast::function::{FnArg as ASTFnArg, FnCall as ASTFnCall, FnDef as ASTFnDef};
@@ -8,8 +10,10 @@ use crate::{
     builder::HIRBuilder,
     delimited::Block,
     parameter::Param,
-    resolution::{Baggage, ResolutionType, Unresolved},
-    scope::{ExprIdx, FnDefIdx, ScopeIdx, ScopeKind, StrIdx},
+    resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
+    scope::{
+        ExprIdx, FnDefIdx, FnSelector, NameIndexed, ScopeIdx, ScopeKind, StrIdx, placeholder_idx,
+    },
     types::Type,
 };
 
@@ -19,11 +23,17 @@ pub struct RetType(Type);
 #[derive(Debug)]
 // TODO: add metadata
 pub struct FnDef {
+    pub body: Block,
     pub name_index: StrIdx,
-    pub scope_idx: ScopeIdx,
     pub parameters: ThinVec<Param>,
     pub return_type: Option<RetType>,
-    pub body: Block,
+    pub scope_idx: ScopeIdx,
+}
+
+impl NameIndexed for FnDef {
+    fn set_name_index(&mut self, ix: Idx<SmolStr>) {
+        self.name_index = ix;
+    }
 }
 
 impl Clone for FnDef {
@@ -78,6 +88,12 @@ impl HIRBuilder {
             ResolutionType::Fn,
         ))
     }
+    pub fn resolve_fn_call(&self, unresolved: &Reference<FnDef>) -> HIRResult<Reference<FnDef>> {
+        let current_scope_idx = self.current_scope_cursor;
+        let (at, idx) = resolve::<FnDef, FnSelector>(current_scope_idx, &self.scopes, unresolved)?;
+        Ok(Reference::Resolved { at, idx })
+    }
+
     #[scoped(ScopeKind::Function)]
     pub fn lower_fn_params_and_body(
         &mut self,
@@ -108,22 +124,15 @@ impl HIRBuilder {
             }
         }
 
-        let current_scope = self.get_current_scope_mut();
-
-        let name_index = current_scope.fn_names.alloc(name.clone());
-
         let low_fn_def = FnDef {
             body,
-            name_index,
+            name_index: placeholder_idx(),
             parameters,
             return_type,
             scope_idx,
         };
 
-        let fn_def_idx = current_scope.fn_defs.alloc(low_fn_def);
-        self.insert_fn_def_in_trie(&name, fn_def_idx);
-
-        Ok(fn_def_idx)
+        self.allocate::<FnDef, FnSelector>(name, low_fn_def)
     }
     pub fn lower_fn_arg(&mut self, fn_arg: &ASTFnArg) -> HIRResult<FnArg> {
         let expr_id = self.lower_expr_as_idx(&fn_arg.0)?;
@@ -156,8 +165,8 @@ mod tests {
 
         let scope_idx = hir_builder.current_scope_cursor;
         let scope = hir_builder.get_current_scope();
-        let fn_defs = &scope.fn_defs;
-        let fn_names = &scope.fn_names;
+        let fn_defs = &scope.fn_allocator.definitions;
+        let fn_names = &scope.fn_allocator.names;
 
         let fn_def = &fn_defs[fn_def_idx];
         let fn_name = &fn_names[fn_def.name_index];

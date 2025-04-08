@@ -66,6 +66,7 @@ impl HIRBuilder {
             let ast_values = unwrap_or_err(node.values(), "expected a leaf")?;
             for ast_value in ast_values {
                 let value = Value::from(ast_value);
+                // TODO: keep this in a wrapping class
                 sparsity.count(&value);
                 type_check.add(&value);
                 min_max.min_max(&value);

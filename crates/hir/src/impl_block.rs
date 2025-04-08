@@ -1,4 +1,4 @@
-use scoped_macro::scoped;
+use hir_macro::scoped;
 use thin_vec::ThinVec;
 
 use ast::impl_block::Impl as ASTImpl;
@@ -57,8 +57,8 @@ mod tests {
 
         let scope_idx = impl_block.scope_idx;
         let scope = &hir_builder.scopes[scope_idx];
-        let fn_defs = &scope.fn_defs;
-        let fn_names = &scope.fn_names;
+        let fn_defs = &scope.fn_allocator.definitions;
+        let fn_names = &scope.fn_allocator.names;
 
         assert_eq!(
             Type::Struct(Reference::Unresolved(into_idx(0))),

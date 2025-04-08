@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 ast  = { path = "../ast" }
 syntax = { path = "../syntax" }
-scoped_macro = { path = "../scoped_macro" }  # adjust path as needed
+hir_macro = { path = "../hir_macro" }  # adjust path as needed
 
 la-arena = "0.3.1"
 miette = { version = "7.5.0", features = ["fancy"] }

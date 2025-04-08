@@ -1,4 +1,8 @@
-use crate::delimited::Indexing;
+use crate::{
+    climbing::climb,
+    delimited::Indexing,
+    scope::{Selector, Span},
+};
 use la_arena::{Arena, Idx};
 use miette::{Diagnostic, Report};
 use smol_str::SmolStr;
@@ -10,11 +14,9 @@ use core::hash::Hash;
 use std::{borrow::Cow, fmt::Debug};
 
 use crate::{
-    HIRResult,
     builder::HIRBuilder,
     function::FnArg,
     scope::{NameToIndexTrie, Scope, ScopeIdx},
-    variable::VarDef,
 };
 
 pub type ResolutionResult<T> = Result<T, Report>;
@@ -47,46 +49,79 @@ impl ResolutionError {
 }
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ResolutionType {
-    Container,
+    Container(Span),
     Fn,
     Struct,
-    Var,
+    Var(Span),
 }
 
-pub trait ScopeTrieClimber<E: Clone + Debug + PartialEq> {
-    fn corresponding_trie_in(scope: &Scope) -> &NameToIndexTrie<E>;
-}
-// note: container refs are also variable refs.
-pub struct VarRefClimber {}
-impl ScopeTrieClimber<VarDef> for VarRefClimber {
-    fn corresponding_trie_in(scope: &Scope) -> &NameToIndexTrie<VarDef> {
-        &scope.var_name_to_idx_trie
+impl ResolutionType {
+    fn get_span(&self) -> Option<Span> {
+        match self {
+            ResolutionType::Container(range) => Some(range.clone()),
+            ResolutionType::Var(range) => Some(range.clone()),
+            _ => None,
+        }
     }
 }
 
-fn resolve<E, TC: ScopeTrieClimber<E>>(
-    mut current: ScopeIdx,
-    scopes: &Arena<Scope>,
+fn span_check(
+    scope: &Scope,
     key: &SmolStr,
+    resolution_type: &ResolutionType,
+) -> ResolutionResult<()> {
+    match (resolution_type.get_span(), scope.name_to_spans.get(key)) {
+        (None, None) => Ok(()),
+        (None, Some(_)) => Ok(()),
+        (Some(_), None) => Err(ResolutionError {
+            msg: format!("cannot resolve binding {:?}", key),
+        }
+        .into()),
+        (Some(ref_scope), Some(def_scope)) => {
+            if ref_scope.start <= def_scope.end {
+                Err(ResolutionError {
+                    msg: format!(
+                        "binding {:?} references a value that is not yet defined",
+                        key
+                    ),
+                }
+                .into())
+            } else {
+                Ok(())
+            }
+        }
+    }
+}
+
+pub fn resolve<E, S: Selector<E>>(
+    current: ScopeIdx,
+    scopes: &Arena<Scope>,
+    unresolved_ref: &Reference<E>,
 ) -> ResolutionResult<(ScopeIdx, Idx<E>)>
 where
     E: Clone + Debug + PartialEq,
 {
-    let mut scope = &scopes[current];
+    let mut scope_climber = climb(current, scopes);
     let mut guesstimates = ThinVec::new();
-    loop {
-        if let Some(idx) = TC::corresponding_trie_in(scope).get(key) {
+    let (key, resolution_type) = if let Some(scope) = scope_climber.next() {
+        let idx = unresolved_ref.get_unresolved_index()?;
+        let unresolved = &scope.to_resolve[idx];
+        (&unresolved.name, &unresolved.for_type)
+    } else {
+        return Err(ResolutionError {
+            msg: format!("cannot find scope {:?} for {:?}", current, unresolved_ref),
+        }
+        .into());
+    };
+    for scope in scope_climber {
+        if let Some(idx) = scope.resolve_in::<E, S>(key) {
+            _ = span_check(scope, key, resolution_type)?;
             return Ok((current, *idx));
         } else {
-            let parent = scope.parent;
-            if parent == current {
-                return Err(ResolutionError::new_with_guestimate(key, guesstimates).into());
-            }
-            guesstimates.push(guess(&scope.var_name_to_idx_trie, key));
-            scope = &scopes[parent];
-            current = parent;
+            guesstimates.push(guess(&S::select(scope).name_to_idx_trie, key));
         }
     }
+    return Err(ResolutionError::new_with_guestimate(key, guesstimates).into());
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -98,7 +133,7 @@ pub enum Baggage {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Unresolved {
-    name: SmolStr,
+    pub name: SmolStr,
     baggage: Baggage,
     for_type: ResolutionType,
 }
@@ -123,38 +158,21 @@ impl Unresolved {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Reference<R> {
     Unresolved(Idx<Unresolved>),
-    Resolved { at: ScopeIdx, element: R },
+    Resolved { at: ScopeIdx, idx: Idx<R> },
 }
 
-// can implement a trait for masking Scope
-
+impl<R: Debug> Reference<R> {
+    pub fn get_unresolved_index(&self) -> ResolutionResult<Idx<Unresolved>> {
+        match self {
+            Reference::Resolved { .. } => Err(ResolutionError::already_resolved(self).into()),
+            Reference::Unresolved(idx) => Ok(*idx),
+        }
+    }
+}
 impl HIRBuilder {
     pub fn allocate_for_resolution(&mut self, unresolved: Unresolved) -> Idx<Unresolved> {
         let current_scope = self.get_current_scope_mut();
         current_scope.to_resolve.alloc(unresolved)
-    }
-
-    pub fn resolve<R: Clone + Debug + PartialEq>(
-        &mut self,
-        unresolved_reference: Reference<R>,
-    ) -> ResolutionResult<R> {
-        if matches!(unresolved_reference, Reference::Resolved { .. }) {
-            return Err(ResolutionError::already_resolved(unresolved_reference).into());
-        }
-
-        use ResolutionType::*;
-
-        if let Reference::Unresolved(idx) = unresolved_reference {
-            let current_scope = self.get_current_scope();
-            let unresolved = &current_scope.to_resolve[idx];
-            let trie = match unresolved.for_type {
-                Container => todo!(),
-                Fn => todo!(),
-                Struct => todo!(),
-                Var => todo!(),
-            };
-        }
-        todo!()
     }
 }
 

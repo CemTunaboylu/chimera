@@ -1,5 +1,7 @@
 pub mod builder;
+pub mod climbing;
 pub mod container_ref;
+pub mod context;
 pub mod control_flow;
 pub mod delimited;
 pub mod errors;
@@ -57,6 +59,4 @@ pub fn unwrap_or_err<'caller, Any>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-}
+mod tests {}

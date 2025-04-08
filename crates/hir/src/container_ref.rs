@@ -6,8 +6,9 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     delimited::Indexing,
-    resolution::{Baggage, ResolutionType, Unresolved},
-    scope::VarDefIdx,
+    resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
+    scope::{Span, VarDefIdx, VarSelector},
+    variable::VarDef,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,12 +30,22 @@ impl HIRBuilder {
             let low_indexing = self.lower_indexing(idx)?;
             lowered_indices.push(low_indexing);
         }
+        let span: Span = container_ref.span();
 
         Ok(Unresolved::baggaged(
             name,
             Baggage::Index(lowered_indices),
-            ResolutionType::Container,
+            ResolutionType::Container(span),
         ))
+    }
+    pub fn resolve_container_ref(
+        &self,
+        unresolved: &Reference<VarDef>,
+    ) -> HIRResult<Reference<VarDef>> {
+        let current_scope_idx = self.current_scope_cursor;
+        let (at, idx) =
+            resolve::<VarDef, VarSelector>(current_scope_idx, &self.scopes, unresolved)?;
+        Ok(Reference::Resolved { at, idx })
     }
 }
 

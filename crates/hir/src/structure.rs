@@ -1,4 +1,4 @@
-use la_arena::Arena;
+use la_arena::{Arena, Idx};
 use smol_str::SmolStr;
 
 use ast::{
@@ -11,17 +11,25 @@ use crate::{
     builder::HIRBuilder,
     errors::HIRError,
     expression::MISSING,
-    resolution::{ResolutionType, Unresolved},
-    scope::{ExprIdx, NameToIndexTrie, ScopeIdx, StrIdx, StructDefIdx, into_idx},
+    resolution::{Reference, ResolutionType, Unresolved, resolve},
+    scope::{
+        ExprIdx, NameIndexed, NameToIndexTrie, ScopeIdx, StrIdx, StructDefIdx, StructSelector,
+        into_idx, placeholder_idx,
+    },
     types::Type,
 };
 
 #[derive(Clone, Debug)]
 pub struct StructDef {
+    pub field_name_to_arena: NameToIndexTrie<StructField>,
+    pub fields: Arena<StructField>,
     pub name_index: StrIdx,
     pub scope_idx: ScopeIdx,
-    pub fields: Arena<StructField>,
-    pub field_name_to_arena: NameToIndexTrie<StructField>,
+}
+impl NameIndexed for StructDef {
+    fn set_name_index(&mut self, ix: Idx<SmolStr>) {
+        self.name_index = ix;
+    }
 }
 
 impl PartialEq for StructDef {
@@ -68,10 +76,6 @@ impl HIRBuilder {
     pub fn lower_struct_def(&mut self, struct_def: &ASTStructDef) -> HIRResult<StructDefIdx> {
         let name = struct_def.name.clone();
         let scope_idx = self.current_scope_cursor;
-        let name_index = {
-            let current_scope = self.get_current_scope_mut();
-            current_scope.struct_names.alloc(name.clone())
-        };
 
         let mut field_name_to_arena = NameToIndexTrie::<StructField>::new();
         let mut fields = Arena::<StructField>::with_capacity(struct_def.fields.len());
@@ -82,17 +86,13 @@ impl HIRBuilder {
         }
 
         let struct_def = StructDef {
-            name_index,
-            scope_idx,
-            fields,
             field_name_to_arena,
+            fields,
+            name_index: placeholder_idx(),
+            scope_idx,
         };
 
-        let idx = {
-            let current_scope = self.get_current_scope_mut();
-            current_scope.allocate_struct_def_with_name(&name, struct_def)
-        };
-        Ok(idx)
+        self.allocate::<StructDef, StructSelector>(name, struct_def)
     }
     pub fn lower_struct_ref(&mut self, struct_as_type: &ASTType) -> HIRResult<Unresolved> {
         if let ASTType::Struct(name) = struct_as_type {
@@ -100,6 +100,15 @@ impl HIRBuilder {
         } else {
             Err(HIRError::with_msg(format!("expects a struct type")).into())
         }
+    }
+    pub fn resolve_struct_ref(
+        &mut self,
+        unresolved: &Reference<StructDef>,
+    ) -> HIRResult<Reference<StructDef>> {
+        let current_scope_idx = self.current_scope_cursor;
+        let (at, idx) =
+            resolve::<StructDef, StructSelector>(current_scope_idx, &self.scopes, unresolved)?;
+        Ok(Reference::Resolved { at, idx })
     }
 }
 #[cfg(test)]
@@ -131,9 +140,12 @@ mod tests {
             .lower_struct_def(&ast_struct_def)
             .expect("should have been ok");
         let scope = hir_builder.get_current_scope();
-        let struct_def = &scope.struct_defs[idx];
+        let struct_def = &scope.struct_allocator.definitions[idx];
 
-        assert_eq!("Tester", scope.struct_names[struct_def.name_index]);
+        assert_eq!(
+            "Tester",
+            scope.struct_allocator.names[struct_def.name_index]
+        );
         let fields = &struct_def.fields;
         let missing: ExprIdx = into_idx(MISSING);
         for (ix, (n, t)) in field_names.iter().zip(field_types.iter()).enumerate() {
