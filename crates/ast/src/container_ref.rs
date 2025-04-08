@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
     language::{SyntaxNode, SyntaxToken},
@@ -12,15 +14,18 @@ use SyntaxKind::*;
 pub struct ContainerRef {
     name: SyntaxToken,
     indices: ThinVec<Indexing>,
+    span: Range<usize>,
 }
 
 impl ContainerRef {
     pub fn name(&self) -> SmolStr {
         self.name.text().to_smolstr()
     }
-
     pub fn indices(&self) -> &ThinVec<Indexing> {
         &self.indices
+    }
+    pub fn span(&self) -> Range<usize> {
+        self.span.clone()
     }
 }
 
@@ -42,7 +47,13 @@ impl TryFrom<&SyntaxNode> for ContainerRef {
             .map(|node| Indexing(node.clone()))
             .collect::<ThinVec<_>>();
 
-        Ok(Self { name, indices })
+        let span = container_ref_node.text_range().into();
+
+        Ok(Self {
+            name,
+            indices,
+            span,
+        })
     }
 }
 

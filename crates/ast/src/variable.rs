@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 
@@ -9,15 +11,22 @@ use crate::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VarDef(VarRef, Option<Expr>);
+pub struct VarDef {
+    name: VarRef,
+    expr: Option<Expr>,
+    span: Range<usize>,
+}
 
 impl VarDef {
     pub fn name(&self) -> &SmolStr {
-        self.0.name()
+        self.name.name()
     }
 
     pub fn value(&self) -> Option<&Expr> {
-        self.1.as_ref()
+        self.expr.as_ref()
+    }
+    pub fn span(&self) -> Range<usize> {
+        self.span.clone()
     }
 }
 
@@ -38,12 +47,20 @@ impl TryFrom<&SyntaxNode> for VarDef {
             ));
         };
         let assignment = bin.rhs().map(|e| e.clone());
-        Ok(Self(var_ref, assignment))
+        let span = var_def_node.text_range().into();
+        Ok(Self {
+            name: var_ref,
+            expr: assignment,
+            span,
+        })
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VarRef(pub(crate) SmolStr);
+pub struct VarRef {
+    name: SmolStr,
+    span: Range<usize>,
+}
 
 impl TryFrom<&SyntaxNode> for VarRef {
     type Error = ASTError;
@@ -51,13 +68,17 @@ impl TryFrom<&SyntaxNode> for VarRef {
     fn try_from(var_ref_node: &SyntaxNode) -> Result<Self, Self::Error> {
         _ = ensure_node_kind_is(var_ref_node, SyntaxKind::VarRef)?;
         let name = get_token(var_ref_node).unwrap().text().to_smolstr();
-        Ok(Self(name))
+        let span = var_ref_node.text_range().into();
+        Ok(Self { name, span })
     }
 }
 
 impl VarRef {
     pub fn name(&self) -> &SmolStr {
-        &self.0
+        &self.name
+    }
+    pub fn span(&self) -> Range<usize> {
+        self.span.clone()
     }
 }
 

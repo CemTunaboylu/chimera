@@ -238,9 +238,9 @@ pub(crate) mod test {
         if let Expr::Unary(postfix) = operand {
             assert_eq!("?", postfix.op().unwrap());
             let operand = postfix.operand().unwrap();
-            assert!(matches!(operand, Expr::VarRef(VarRef(_))));
-            if let Expr::VarRef(VarRef(smol_str)) = operand {
-                assert_eq!("opt_opt", smol_str.as_str());
+            assert!(matches!(operand, Expr::VarRef(VarRef { .. })));
+            if let Expr::VarRef(var_ref) = operand {
+                assert_eq!("opt_opt", var_ref.name().as_str());
             }
         }
     }
