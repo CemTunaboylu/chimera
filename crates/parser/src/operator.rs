@@ -74,9 +74,12 @@ pub enum Precedence {
     // * / %
     Multiplicative,
     // unary operators : *(deref), &(ref), -, !(not)
+    // &option? should be option.as_ref().unwrap() i.e. prec(&) > prec(?), thus I separete
+    // ? from coupling group
+    Unwrap,
     Prefix,
     // coupling operators that couple its operands:
-    // .(member) , :(typing), ::(namespace), ?
+    // .(member) , :(typing), ::(namespace)
     Coupling,
 }
 
@@ -198,8 +201,8 @@ impl Into<SyntaxKind> for AssocBinOp {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum AssocUnOp {
     // prefix
-    Deref,
-    Ref,
+    Deref, // *
+    Ref,   // &
     Neg,
     Not,
     // Postfix
@@ -210,7 +213,7 @@ impl Op for AssocUnOp {
     // in ascending order
     fn precedence(&self) -> Precedence {
         if matches!(self, AssocUnOp::QMark) {
-            Precedence::Coupling
+            Precedence::Unwrap
         } else {
             Precedence::Prefix
         }
@@ -234,11 +237,11 @@ impl Op for AssocUnOp {
     fn from_syntax_kind(kind: SyntaxKind) -> Option<impl Op> {
         use SyntaxKind::*;
         let op = match kind {
+            And => Self::Ref,
             Excl => Self::Not,
             Minus => Self::Neg,
-            Star => Self::Deref,
-            And => Self::Ref,
             QMark => Self::QMark,
+            Star => Self::Deref,
             _ => return None,
         };
         Some(op)
@@ -262,5 +265,6 @@ mod tests {
     #[test]
     fn precedence_comparison_test() {
         assert!(Precedence::Additive < Precedence::Multiplicative);
+        assert!(Precedence::Unwrap < Precedence::Prefix);
     }
 }

@@ -207,7 +207,7 @@ impl<'input> Parser<'input> {
         let marker = match kind {
             Ident => self.parse_starting_with_identifier(),
             Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
-            Minus | Excl => self.parse_prefix_unary_operation(kind),
+            And | Minus | Excl => self.parse_prefix_unary_operation(kind),
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             typing if is_a_type(&typing) => {
@@ -357,9 +357,9 @@ impl<'input> Parser<'input> {
     ) -> Option<Finished> {
         let postfix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let precedence = postfix_unary_op.precedence();
-        // this should never be the case since it has the highest precedence among operators
+        // note: ? has lower precedence then prefix operators to ensure that &opt? behaves like opt.as_ref().unwrap()
         if min_precedence.gt(&precedence) {
-            unreachable!();
+            return None;
         }
         let marker = self.precede_marker_with(marker);
         self.expect_and_bump(kind);
@@ -608,7 +608,7 @@ pub(crate) mod tests {
                         Ident@1..2 "a"
                     Semi@2..3 ";""#]]
         ),
-        postfix_excl_prefix_neg_precedence: ("-9?",
+        postfix_qmark_prefix_neg_precedence: ("-9?",
             expect![[r#"
                 Root@0..3
                   PrefixUnaryOp@0..3
@@ -618,7 +618,7 @@ pub(crate) mod tests {
                         Int@1..2 "9"
                       QMark@2..3 "?""#]]
         ),
-        postfix_excl_prefix_neg_precedence_with_semicolon: ("-9?;",
+        postfix_qmark_prefix_neg_precedence_with_semicolon: ("-9?;",
             expect![[r#"
                 Root@0..4
                   Semi@0..4
@@ -630,7 +630,19 @@ pub(crate) mod tests {
                         QMark@2..3 "?"
                     Semi@3..4 ";""#]]
         ),
-        postfix_excl_infix_mul_precedence: ("1*9?",
+        postfix_qmark_prefix_and_precedence_with_semicolon: ("&9?;",
+            expect![[r#"
+                Root@0..4
+                  Semi@0..4
+                    PostfixUnaryOp@0..3
+                      PrefixUnaryOp@0..2
+                        And@0..1 "&"
+                        Literal@1..2
+                          Int@1..2 "9"
+                      QMark@2..3 "?"
+                    Semi@3..4 ";""#]]
+        ),
+        postfix_qmark_infix_mul_precedence: ("1*9?",
             expect![[r#"
                 Root@0..4
                   InfixBinOp@0..4
