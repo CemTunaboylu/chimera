@@ -74,12 +74,9 @@ pub enum Precedence {
     // * / %
     Multiplicative,
     // unary operators : *(deref), &(ref), -, !(not)
-    // &option? should be option.as_ref().unwrap() i.e. prec(&) > prec(?), thus I separete
-    // ? from coupling group
-    Unwrap,
     Prefix,
     // coupling operators that couple its operands:
-    // .(member) , :(typing), ::(namespace)
+    // .(member) , :(typing), ::(namespace), ?(unwrap)
     Coupling,
 }
 
@@ -93,7 +90,7 @@ pub enum AssocBinOp {
     BitOr,
     Div,
     Dot,
-    Eq,
+    EqEq,
     Ge,
     Gt,
     LShift,
@@ -121,7 +118,7 @@ impl Op for AssocBinOp {
             Range => Ranging,
             BoolOr => BooleanOr,
             BoolAnd => BooleanAnd,
-            Gt | Ge | Lt | Le | Eq | NotEq => Comparison,
+            EqEq | Gt | Ge | Lt | Le | NotEq => Comparison,
             BitOr => BitwiseOr,
             Xor => BitwiseXor,
             BitAnd => BitwiseAnd,
@@ -137,7 +134,7 @@ impl Op for AssocBinOp {
         use Associativity::*;
         match self {
             Assgmt | AssgmtWith(_) => Right,
-            Range | Gt | Ge | Lt | Le | Eq | NotEq => None,
+            Range | Gt | Ge | Lt | Le | EqEq | NotEq => None,
             _ => Left,
         }
     }
@@ -161,7 +158,7 @@ impl Op for AssocBinOp {
             ColonColon => Self::Namespaced,
             Dot => Self::Dot,
             Eq => Self::Assgmt,
-            EqEq => Self::Eq,
+            EqEq => Self::EqEq,
             Gt => Self::Gt,
             Ge => Self::Ge,
             LShift => Self::LShift,
@@ -213,7 +210,7 @@ impl Op for AssocUnOp {
     // in ascending order
     fn precedence(&self) -> Precedence {
         if matches!(self, AssocUnOp::QMark) {
-            Precedence::Unwrap
+            Precedence::Coupling
         } else {
             Precedence::Prefix
         }
@@ -265,6 +262,6 @@ mod tests {
     #[test]
     fn precedence_comparison_test() {
         assert!(Precedence::Additive < Precedence::Multiplicative);
-        assert!(Precedence::Unwrap < Precedence::Prefix);
+        assert!(Precedence::Prefix < Precedence::Coupling);
     }
 }

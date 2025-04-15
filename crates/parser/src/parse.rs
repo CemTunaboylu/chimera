@@ -634,12 +634,12 @@ pub(crate) mod tests {
             expect![[r#"
                 Root@0..4
                   Semi@0..4
-                    PostfixUnaryOp@0..3
-                      PrefixUnaryOp@0..2
-                        And@0..1 "&"
+                    PrefixUnaryOp@0..3
+                      And@0..1 "&"
+                      PostfixUnaryOp@1..3
                         Literal@1..2
                           Int@1..2 "9"
-                      QMark@2..3 "?"
+                        QMark@2..3 "?"
                     Semi@3..4 ";""#]]
         ),
         postfix_qmark_infix_mul_precedence: ("1*9?",
