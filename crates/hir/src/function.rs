@@ -8,6 +8,7 @@ use ast::function::{FnArg as ASTFnArg, FnCall as ASTFnCall, FnDef as ASTFnDef};
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    climbing::climb,
     context::UsageContext,
     delimited::Block,
     parameter::Param,
@@ -73,15 +74,19 @@ pub struct FnCall {
 }
 
 impl HIRBuilder {
+    pub fn lower_fn_args(&mut self, fn_args: &[ASTFnArg]) -> HIRResult<ThinVec<FnArg>> {
+        let mut arguments = ThinVec::with_capacity(fn_args.len());
+
+        for arg in fn_args {
+            let fn_arg = self.lower_fn_arg(arg)?;
+            arguments.push(fn_arg);
+        }
+
+        Ok(arguments)
+    }
     pub fn lower_fn_call(&mut self, fn_call: &ASTFnCall) -> HIRResult<Unresolved> {
         let name = fn_call.name().clone();
-        let mut arguments = ThinVec::with_capacity(fn_call.arguments().len());
-
-        for arg in fn_call.arguments() {
-            let ast_expr = &arg.0;
-            let expr_id = self.lower_expr_as_idx(ast_expr)?;
-            arguments.push(FnArg(expr_id));
-        }
+        let arguments = self.lower_fn_args(fn_call.arguments())?;
 
         Ok(Unresolved::baggaged(
             name,
@@ -95,11 +100,7 @@ impl HIRBuilder {
         Ok(Reference::Resolved { at, idx })
     }
 
-    #[scoped(ScopeKind::Function)]
-    pub fn lower_fn_params_and_body(
-        &mut self,
-        fn_def: &ASTFnDef,
-    ) -> HIRResult<(Block, ThinVec<Param>)> {
+    pub fn lower_fn_params(&mut self, fn_def: &ASTFnDef) -> HIRResult<ThinVec<Param>> {
         let mut parameters = ThinVec::with_capacity(fn_def.parameters().len());
 
         for param in fn_def.parameters() {
@@ -127,6 +128,7 @@ impl HIRBuilder {
         fn_def: &ASTFnDef,
     ) -> HIRResult<(Block, ThinVec<Param>)> {
         let body = self.lower_block(fn_def.body())?;
+        let parameters = self.lower_fn_params(fn_def)?;
         Ok((body, parameters))
     }
     pub fn lower_fn_def(&mut self, fn_def: &ASTFnDef) -> HIRResult<FnDefIdx> {
@@ -135,14 +137,7 @@ impl HIRBuilder {
 
         let (body, parameters) = self.lower_fn_params_and_body(fn_def)?;
 
-        let mut return_type = None;
-        if let Some(ret_type) = fn_def.return_type() {
-            let typ = ret_type.return_type();
-            if let Some(t) = typ {
-                let low_type = self.lower_type(&t)?;
-                return_type = Some(RetType(low_type));
-            }
-        }
+        let return_type = self.lower_return_type(fn_def)?;
 
         let low_fn_def = FnDef {
             body,
