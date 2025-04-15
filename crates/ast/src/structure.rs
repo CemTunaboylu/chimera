@@ -129,7 +129,10 @@ impl TryFrom<&SyntaxNode> for StructInit {
 mod tests {
 
     use super::*;
-    use crate::{ast_root_from, cast_node_into_type, tensor::Hint, types::Type};
+    use crate::{
+        ast_root_from, cast_node_into_type,
+        types::{Hint, Type},
+    };
 
     #[test]
     fn struct_def() {

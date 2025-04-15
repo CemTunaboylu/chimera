@@ -1,7 +1,7 @@
-use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
     is_a_binary_operator,
     language::{SyntaxNode, SyntaxToken},
+    syntax_kind::SyntaxKind,
 };
 use thin_vec::ThinVec;
 
@@ -16,7 +16,7 @@ use crate::{
 pub struct PreComputed {
     exprs: ThinVec<Expr>,
     node: SyntaxNode,
-    op: Option<SmolStr>,
+    op: Option<SyntaxKind>,
 }
 
 impl Clone for PreComputed {
@@ -30,8 +30,8 @@ impl Clone for PreComputed {
 }
 
 impl PreComputed {
-    fn get_op(&self) -> Option<&SmolStr> {
-        self.op.as_ref()
+    fn get_op(&self) -> Option<SyntaxKind> {
+        self.op
     }
     fn get_nth_expr(&self, n: usize) -> Option<&Expr> {
         self.exprs.get(n)
@@ -59,7 +59,7 @@ impl Binary {
         let op = get_token_with(&infix_bin_op_node, |token: &SyntaxToken| {
             is_a_binary_operator(&token.kind())
         })
-        .map(|t| t.text().to_smolstr());
+        .map(|t| t.kind());
         Ok(Self::Infix(PreComputed {
             exprs,
             node: infix_bin_op_node.clone(),
@@ -79,7 +79,7 @@ impl Binary {
         let pre_computed = self.get_pre_computed();
         pre_computed.get_nth_expr(1)
     }
-    pub fn op(&self) -> Option<&SmolStr> {
+    pub fn op(&self) -> Option<SyntaxKind> {
         let pre_computed = self.get_pre_computed();
         pre_computed.get_op()
     }
@@ -94,7 +94,7 @@ pub enum Unary {
 fn prepare_pre_computed(node: &SyntaxNode, variant: fn(PreComputed) -> Unary) -> ASTResult<Unary> {
     let exprs = get_children_as::<Expr>(&node)?;
     let op = get_token_with(node, |token: &SyntaxToken| token.kind().is_unary_operator())
-        .map(|t| t.text().to_smolstr());
+        .map(|t| t.kind());
     let p = PreComputed {
         exprs,
         node: node.clone(),
@@ -117,9 +117,9 @@ impl Unary {
         }
     }
 
-    pub fn op(&self) -> Option<&SmolStr> {
+    pub fn op(&self) -> Option<SyntaxKind> {
         let pre = self.get_pre_computed();
-        pre.op.as_ref()
+        pre.get_op()
     }
 
     pub fn operand(&self) -> Option<&Expr> {
@@ -136,8 +136,7 @@ pub(crate) mod test {
         ast::Root,
         ast_root_from,
         literal::{Literal, Value},
-        tensor::Hint,
-        types::Type,
+        types::{Hint, Type},
         variable::VarRef,
     };
 
@@ -154,7 +153,7 @@ pub(crate) mod test {
         infix_bin_op: &Binary,
         lhs_val: &Value,
         rhs_val: &Value,
-        op: &str,
+        op: SyntaxKind,
     ) {
         let lhs = infix_bin_op.lhs().unwrap();
         assert_expr_literal_value_eq(lhs, lhs_val);
@@ -178,7 +177,12 @@ pub(crate) mod test {
         let program = "3+14";
         let ast_root = ast_root_from(program);
         let infix_bin_op = new_bin_from(&ast_root);
-        assert_infix_bin_op_with(&infix_bin_op, &Value::Int(3), &Value::Int(14), "+");
+        assert_infix_bin_op_with(
+            &infix_bin_op,
+            &Value::Int(3),
+            &Value::Int(14),
+            SyntaxKind::Plus,
+        );
     }
 
     #[test]
@@ -191,8 +195,8 @@ pub(crate) mod test {
 
         let to_assert = [lhs, rhs];
         let expected_value_tuples = [
-            (Value::Int(3), Value::Int(14), "+"),
-            (Value::Int(4), Value::Int(25), "-"),
+            (Value::Int(3), Value::Int(14), SyntaxKind::Plus),
+            (Value::Int(4), Value::Int(25), SyntaxKind::Minus),
         ];
 
         for (case, val_tup) in to_assert.iter().zip(expected_value_tuples.iter()) {
@@ -203,12 +207,12 @@ pub(crate) mod test {
                     .expect(format!("{:?} should have been ok", case).as_str());
                 assert!(matches!(expr, Expr::Infix(_)));
                 if let Expr::Infix(bin) = expr {
-                    assert_infix_bin_op_with(&bin, &val_tup.0, &val_tup.1, &val_tup.2);
+                    assert_infix_bin_op_with(&bin, &val_tup.0, &val_tup.1, val_tup.2);
                 }
             }
         }
         let op = infix_bin_op.op().unwrap();
-        assert_eq!("*", op);
+        assert_eq!(SyntaxKind::Star, op);
     }
 
     #[test]
@@ -218,10 +222,10 @@ pub(crate) mod test {
         let unary_prefix_op = new_unary_from(&ast_root, Unary::prefix);
         let operand = unary_prefix_op.operand().unwrap();
         let op = unary_prefix_op.op().unwrap();
-        assert_eq!("-", op);
+        assert_eq!(SyntaxKind::Minus, op);
         assert!(matches!(operand, Expr::Unary(Unary::Prefix(_))));
         if let Expr::Unary(prefix) = operand {
-            assert_eq!("-", prefix.op().unwrap());
+            assert_eq!(SyntaxKind::Minus, prefix.op().unwrap());
             let operand = prefix.operand().unwrap();
             assert!(matches!(operand, Expr::Literal(Literal(Value::Int(3)))));
         }
@@ -233,10 +237,10 @@ pub(crate) mod test {
         let unary_postfix_op = new_unary_from(&ast_root, Unary::postfix);
         let operand = unary_postfix_op.operand().unwrap();
         let op = unary_postfix_op.op().unwrap();
-        assert_eq!("?", op);
+        assert_eq!(SyntaxKind::QMark, op);
         assert!(matches!(operand, Expr::Unary(Unary::Postfix(_))));
         if let Expr::Unary(postfix) = operand {
-            assert_eq!("?", postfix.op().unwrap());
+            assert_eq!(SyntaxKind::QMark, postfix.op().unwrap());
             let operand = postfix.operand().unwrap();
             assert!(matches!(operand, Expr::VarRef(VarRef { .. })));
             if let Expr::VarRef(var_ref) = operand {
@@ -253,7 +257,7 @@ pub(crate) mod test {
         let infix_bin_op = new_bin_from(&ast_root);
 
         let op = infix_bin_op.op().unwrap();
-        assert_eq!("*", op);
+        assert_eq!(SyntaxKind::Star, op);
 
         let prefix = infix_bin_op.lhs().unwrap();
         assert!(matches!(prefix, Expr::Unary(Unary::Prefix(_))));
@@ -261,7 +265,7 @@ pub(crate) mod test {
         if let Expr::Unary(prefix) = prefix {
             let operand = prefix.operand().unwrap();
             let op = prefix.op().unwrap();
-            assert_eq!("-", op);
+            assert_eq!(SyntaxKind::Minus, op);
             assert!(matches!(operand, Expr::Literal(Literal(Value::Int(_)))));
             if let Expr::Literal(Literal(value)) = operand {
                 assert_eq!(Value::Int(1), *value);
@@ -274,7 +278,7 @@ pub(crate) mod test {
         if let Expr::Unary(postfix) = postfix {
             let operand = postfix.operand().unwrap();
             let op = postfix.op().unwrap();
-            assert_eq!("?", op);
+            assert_eq!(SyntaxKind::QMark, op);
             assert!(matches!(operand, Expr::Literal(Literal(Value::Int(_)))));
             if let Expr::Literal(Literal(value)) = operand {
                 assert_eq!(Value::Int(9), *value);
@@ -289,7 +293,7 @@ pub(crate) mod test {
         let infix_bin_op = new_bin_from(&ast_root);
 
         let op = infix_bin_op.op().unwrap();
-        assert_eq!("::", op);
+        assert_eq!(SyntaxKind::ColonColon, op);
 
         let tensor = infix_bin_op.lhs().unwrap();
         assert!(matches!(tensor, Expr::TensorStruct(_)));

@@ -132,7 +132,12 @@ mod test {
         let infix_bin_op = paren.expr().expect("shoud have been ok ");
         assert!(matches!(infix_bin_op, Expr::Infix(Binary::Infix(_))));
         if let Expr::Infix(infix_bin_op) = infix_bin_op {
-            assert_infix_bin_op_with(&infix_bin_op, &Value::Int(3), &Value::Int(14), "+");
+            assert_infix_bin_op_with(
+                &infix_bin_op,
+                &Value::Int(3),
+                &Value::Int(14),
+                SyntaxKind::Plus,
+            );
         }
     }
 
@@ -148,10 +153,15 @@ mod test {
             assert!(matches!(lhs_paren, Expr::Paren(_)));
             if let Expr::Paren(inner_bin_op) = lhs_paren {
                 if let Expr::Infix(inner_binary) = inner_bin_op.expr().unwrap() {
-                    assert_infix_bin_op_with(&inner_binary, &Value::Int(3), &Value::Int(14), "+");
+                    assert_infix_bin_op_with(
+                        &inner_binary,
+                        &Value::Int(3),
+                        &Value::Int(14),
+                        SyntaxKind::Plus,
+                    );
                 }
             }
-            assert_eq!("-", infix_bin_op.op().unwrap());
+            assert_eq!(SyntaxKind::Minus, infix_bin_op.op().unwrap());
         }
     }
 

@@ -1,11 +1,16 @@
 use hir_macro::with_context;
+use miette::Report;
+use syntax::syntax_kind::SyntaxKind;
 
 use crate::{
     HIRResult, builder::HIRBuilder, context::UsageContext, err_if_none, errors::HIRError,
     scope::ExprIdx,
 };
 
-use ast::operation::{Binary as ASTBinary, Unary as ASTUnary};
+use ast::{
+    expression::Expr as ASTExpr,
+    operation::{Binary as ASTBinary, Unary as ASTUnary},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Operand(ExprIdx);
@@ -13,46 +18,119 @@ pub struct Operand(ExprIdx);
 #[derive(Clone, Debug, PartialEq)]
 pub enum BinaryOp {
     Add,
+    AndAnd,
+    BitAnd,
+    BitOr,
+    BoolAnd,
+    BoolOr,
+    Assign,
+    AssgmtWith(Box<BinaryOp>),
     Div,
     Dot,
-    Eq,
+    EqEq,
+    Ge,
+    Gt,
+    LShift,
+    Le,
+    Lt,
+    Mod,
     Mul,
+    Namespaced,
     No,
+    NotEq,
+    RShift,
+    Range,
     Sub,
+    TypeHint, // <identifier> : <type keyword>
+    Xor,
 }
 
-impl From<&SmolStr> for BinaryOp {
-    fn from(value: &SmolStr) -> Self {
-        let op = match value.as_str() {
-            "+" => Self::Add,
-            "/" => Self::Div,
-            "." => Self::Dot,
-            "=" => Self::Eq,
-            "*" => Self::Mul,
-            "-" => Self::Sub,
-            _ => Self::No,
+fn not_an_op(kind: SyntaxKind) -> Report {
+    HIRError::with_msg(format!("Expected a binary operator, '{:?}' is not", kind)).into()
+}
+
+impl BinaryOp {
+    pub fn from_syntax_kind(kind: SyntaxKind) -> HIRResult<Self> {
+        use SyntaxKind::*;
+        let op = match kind {
+            And => Self::BitAnd,
+            AndAnd => Self::BoolAnd,
+            AndEq => Self::AssgmtWith(Box::new(Self::BitAnd)),
+            Colon => Self::TypeHint,
+            ColonColon => Self::Namespaced,
+            Dot => Self::Dot,
+            Eq => Self::Assign,
+            EqEq => Self::EqEq,
+            Gt => Self::Gt,
+            Ge => Self::Ge,
+            LShift => Self::LShift,
+            LShiftEq => Self::AssgmtWith(Box::new(Self::LShift)),
+            Lt => Self::Lt,
+            Le => Self::Le,
+            Minus => Self::Sub,
+            MinusEq => Self::AssgmtWith(Box::new(Self::Sub)),
+            NotEq => Self::NotEq,
+            OrEq => Self::AssgmtWith(Box::new(Self::BitOr)),
+            Or => Self::BitOr,
+            OrOr => Self::BoolOr,
+            Percent => Self::Mod,
+            PercentEq => Self::AssgmtWith(Box::new(Self::Mod)),
+            Plus => Self::Add,
+            PlusEq => Self::AssgmtWith(Box::new(Self::Add)),
+            RShift => Self::RShift,
+            RShiftEq => Self::AssgmtWith(Box::new(Self::RShift)),
+            Slash => Self::Div,
+            SlashEq => Self::AssgmtWith(Box::new(Self::Div)),
+            Star => Self::Mul,
+            StarEq => Self::AssgmtWith(Box::new(Self::Mul)),
+            Under => Self::Range,
+            Xor => Self::Xor,
+            no => {
+                return Err(not_an_op(no));
+            }
         };
-        op
+        Ok(op)
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UnaryOp {
+    Deref,
+    Ref,
     Neg,
     Not,
     CondUnwrap,
     No,
 }
 
-impl From<&SmolStr> for UnaryOp {
-    fn from(value: &SmolStr) -> Self {
-        let op = match value.as_str() {
-            "-" => Self::Neg,
-            "!" => Self::Not,
-            "?" => Self::CondUnwrap,
-            _ => Self::No,
+impl UnaryOp {
+    fn from_syntax_kind(kind: SyntaxKind) -> HIRResult<UnaryOp> {
+        use SyntaxKind::*;
+        let op = match kind {
+            And => Self::Ref,
+            Excl => Self::Not,
+            Minus => Self::Neg,
+            QMark => Self::CondUnwrap,
+            Star => Self::Deref,
+            no => {
+                return Err(not_an_op(no));
+            }
         };
-        op
+        Ok(op)
+    }
+}
+
+impl Into<UsageContext> for &UnaryOp {
+    fn into(self) -> UsageContext {
+        match self {
+            UnaryOp::Deref => UsageContext::Deref,
+            UnaryOp::Ref => UsageContext::Ref,
+            UnaryOp::Neg | UnaryOp::Not => UsageContext::Read,
+            // an unwrap moves the value
+            // in case of &opt? -> opt.as_ref().unwrap(), thus a move only takes the pointer
+            UnaryOp::CondUnwrap => UsageContext::Moved,
+            UnaryOp::No => UsageContext::Read,
+        }
     }
 }
 
@@ -76,7 +154,7 @@ impl BinaryInfix {
     fn validate_ast(bin: &ASTBinary) -> HIRResult<()> {
         _ = err_if_none(bin.lhs(), "a left operand")?;
         _ = err_if_none(bin.rhs(), "a right operand")?;
-        _ = err_if_none(bin.op(), "an operation")?;
+        _ = err_if_none(bin.op().as_ref(), "an operation")?;
         Ok(())
     }
 }
@@ -96,7 +174,7 @@ pub enum Unary {
 impl Unary {
     fn validate_ast(un: &ASTUnary) -> HIRResult<()> {
         _ = err_if_none(un.operand(), "an operand")?;
-        _ = err_if_none(un.op(), "an operation")?;
+        _ = err_if_none(un.op().as_ref(), "an operation")?;
         Ok(())
     }
     fn get_inner_unary_operation(&self) -> &UnaryOperation {
@@ -119,19 +197,43 @@ impl Unary {
 }
 
 impl HIRBuilder {
+    #[inline]
+    pub fn lower_operand_with_context(
+        &mut self,
+        o: &ASTExpr,
+        ctx: UsageContext,
+    ) -> HIRResult<Operand> {
+        self.push_usage_context(ctx);
+        let l_o = Operand(self.lower_expr_as_idx(o)?);
+        self.pop_usage_context();
+        Ok(l_o)
+    }
     pub fn lower_binary_operation(&mut self, value: &ASTBinary) -> HIRResult<BinaryInfix> {
         _ = BinaryInfix::validate_ast(&value)?;
-        let lhs = Operand(self.lower_expr_as_idx(value.lhs().unwrap())?);
-        let rhs = Operand(self.lower_expr_as_idx(value.rhs().unwrap())?);
-        let op = BinaryOp::from(value.op().unwrap());
+        let op = BinaryOp::from_syntax_kind(value.op().expect("binary operation"))?;
+        let ctx = self.get_context();
+        let ast_lhs = value.lhs().expect("left-hand-side operand");
+        let ctx = if op == BinaryOp::Assign {
+            if ctx.is_none_or(|l_ctx| !l_ctx.is_of_usage(UsageContext::Init)) {
+                UsageContext::Read
+            } else {
+                UsageContext::Init
+            }
+        } else {
+            UsageContext::Read
+        };
+        let lhs = self.lower_operand_with_context(ast_lhs, ctx)?;
+        let rhs = self.lower_operand_with_context(value.rhs().unwrap(), UsageContext::Read)?;
         Ok(BinaryInfix { op, lhs, rhs })
     }
 
     #[with_context(UsageContext::Read)]
     pub fn lower_unary_operation(&mut self, value: &ASTUnary) -> HIRResult<Unary> {
         _ = Unary::validate_ast(&value)?;
-        let operand = Operand(self.lower_expr_as_idx(value.operand().unwrap())?);
-        let op = UnaryOp::from(value.op().unwrap());
+        let op = UnaryOp::from_syntax_kind(value.op().expect("unary operation"))?;
+        let ast_value = value.operand().expect("unary operand");
+        let ctx: UsageContext = (&op).into();
+        let operand = self.lower_operand_with_context(ast_value, ctx)?;
         let unary_op = UnaryOperation { op, operand };
         let u = match value {
             ASTUnary::Prefix(_) => Unary::Prefix(unary_op),

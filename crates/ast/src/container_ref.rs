@@ -68,6 +68,7 @@ mod tests {
         operation::Binary,
     };
     use parameterized_test::create;
+    use syntax::syntax_kind::SyntaxKind;
 
     create! {
         happy_path_container_ref_test,
@@ -110,7 +111,7 @@ mod tests {
                 binary.rhs().unwrap(),
                 Expr::Literal(Literal(Value::Int(_)))
             ));
-            assert_eq!("-", binary.op().unwrap());
+            assert_eq!(SyntaxKind::Minus, binary.op().unwrap());
         }
     }
 }

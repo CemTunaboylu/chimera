@@ -246,7 +246,7 @@ mod tests {
                 binary.rhs().unwrap(),
                 Expr::Infix(Binary::Infix(_))
             ));
-            assert_eq!("-", binary.op().unwrap());
+            assert_eq!(SyntaxKind::Minus, binary.op().unwrap());
         }
     }
 }
