@@ -100,9 +100,9 @@ mod tests {
                     Literal@12..15
                       Int@12..15 "100"
                 Semi@15..16 ";""#]]),
-        malformed_var_defs: ("let a = let b = let c = 5",
+        malformed_var_defs: ("let a = let b = let c = 5;",
             expect![[r#"
-                Root@0..25
+                Root@0..26
                   VarDef@0..8
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
@@ -121,7 +121,7 @@ mod tests {
                         Whitespace@13..14 " "
                       Eq@14..15 "="
                       Whitespace@15..16 " "
-                  VarDef@16..25
+                  VarDef@16..26
                     KwLet@16..19 "let"
                     Whitespace@19..20 " "
                     InfixBinOp@20..25
@@ -131,15 +131,11 @@ mod tests {
                       Eq@22..23 "="
                       Whitespace@23..24 " "
                       Literal@24..25
-                        Int@24..25 "5""#]]
+                        Int@24..25 "5"
+                    Semi@25..26 ";""#]]
         ),
 
-    }
-
-    #[test]
-    fn parse_variable_definition() {
-        check(
-            "let foo = bar",
+        moving_var_def:    ("let foo = bar",
             expect![[r#"
                 Root@0..13
                   VarDef@0..13
@@ -152,13 +148,49 @@ mod tests {
                       Eq@8..9 "="
                       Whitespace@9..10 " "
                       VarRef@10..13
-                        Ident@10..13 "bar""#]],
-        );
-    }
-
-    #[test]
-    fn recover_on_let_token() {
-        check(
+                        Ident@10..13 "bar""#]]),
+        type_hinted_var_def:    ("let foo : Important = bar",
+            expect![[r#"
+                Root@0..25
+                  VarDef@0..25
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..25
+                      VarRef@4..19
+                        Ident@4..7 "foo"
+                        Whitespace@7..8 " "
+                        Colon@8..9 ":"
+                        TypeHint@9..19
+                          Whitespace@9..10 " "
+                          StructAsType@10..19 "Important"
+                      Whitespace@19..20 " "
+                      Eq@20..21 "="
+                      Whitespace@21..22 " "
+                      VarRef@22..25
+                        Ident@22..25 "bar""#]]),
+        mut_moving_var_def:    ("let mut foo : i32 = bar",
+            expect![[r#"
+                Root@0..23
+                  VarDef@0..23
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    Mut@4..23
+                      KwMut@4..7 "mut"
+                      Whitespace@7..8 " "
+                      InfixBinOp@8..23
+                        VarRef@8..17
+                          Ident@8..11 "foo"
+                          Whitespace@11..12 " "
+                          Colon@12..13 ":"
+                          TypeHint@13..17
+                            Whitespace@13..14 " "
+                            TyI32@14..17 "i32"
+                        Whitespace@17..18 " "
+                        Eq@18..19 "="
+                        Whitespace@19..20 " "
+                        VarRef@20..23
+                          Ident@20..23 "bar""#]]),
+        recover_on_let_token: (
             "let a =\nlet b = a;",
             expect![[r#"
                 Root@0..18
@@ -182,12 +214,9 @@ mod tests {
                       Whitespace@15..16 " "
                       VarRef@16..17
                         Ident@16..17 "a"
-                    Semi@17..18 ";""#]],
-        );
-    }
-    #[test]
-    fn recover_on_let_token_with_semicolon() {
-        check(
+                    Semi@17..18 ";""#]]),
+
+        recover_on_let_token_with_semicolon: (
             "let a =;let b = a;",
             expect![[r#"
                 Root@0..18
@@ -211,13 +240,9 @@ mod tests {
                       Whitespace@15..16 " "
                       VarRef@16..17
                         Ident@16..17 "a"
-                    Semi@17..18 ";""#]],
-        );
-    }
-
-    #[test]
-    fn parse_multiple_statements() {
-        check(
+                    Semi@17..18 ";""#]]
+        ),
+        parse_multiple_statements: (
             "let a = 1;\na",
             expect![[r#"
                 Root@0..12
@@ -236,11 +261,8 @@ mod tests {
                   Whitespace@10..11 "\n"
                   VarRef@11..12
                     Ident@11..12 "a""#]],
-        );
-    }
-    #[test]
-    fn parse_multiple_statements_with_semicolon() {
-        check(
+        ),
+        parse_multiple_statements_with_semicolon: (
             "let a = 0; a",
             expect![[r#"
                 Root@0..12
@@ -259,12 +281,8 @@ mod tests {
                   Whitespace@10..11 " "
                   VarRef@11..12
                     Ident@11..12 "a""#]],
-        );
-    }
-
-    #[test]
-    fn recover_on_let_token_in_block() {
-        check(
+        ),
+        recover_on_let_token_in_block: (
             "{let a =\n{let b =} 10 }",
             expect![[r#"
                 Root@0..23
@@ -295,12 +313,8 @@ mod tests {
                         Int@19..21 "10"
                     Whitespace@21..22 " "
                     RBrace@22..23 "}""#]],
-        );
-    }
-
-    #[test]
-    fn recover_on_let_token_in_block_with_semicolon() {
-        check(
+        ),
+        recover_on_let_token_in_block_with_semicolon: (
             "{let a =\n{let b =}; 10 }",
             expect![[r#"
                 Root@0..24
@@ -332,6 +346,6 @@ mod tests {
                       Int@20..22 "10"
                     Whitespace@22..23 " "
                     RBrace@23..24 "}""#]],
-        );
+        ),
     }
 }

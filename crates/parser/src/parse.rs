@@ -259,11 +259,25 @@ impl<'input> Parser<'input> {
             // self.expect_in_ctx(StructInit);
             self.parse_struct_init_block();
             self.complete_marker_with(marker, StructInit)
+        } else if self.is_next(Colon) {
+            self.parse_type_hint();
+            self.complete_marker_with(marker, VarRef)
         } else {
             self.complete_marker_with(marker, VarRef)
         };
 
         Some(finished)
+    }
+
+    fn parse_type_hint(&self) -> Finished {
+        self.expect_and_bump(Colon);
+        let marker = self.start();
+        if IsNext::Yes == self.is_next_strict(Ident) {
+            self.expect_and_bump_as(Ident, StructAsType);
+        } else if IsNext::Yes == self.is_next_in_strict(SyntaxKind::types().into()) {
+            self.bump();
+        }
+        self.complete_marker_with(marker, TypeHint)
     }
 
     fn parse_literal(&self, kind: SyntaxKind) -> Option<Finished> {
@@ -317,8 +331,10 @@ impl<'input> Parser<'input> {
                 None
             }
             KwMut => {
-                // TODO: mut should not be here, it should wrap what's coming into its own node
-                todo!()
+                let marker = self.start();
+                self.expect_and_bump(KwMut);
+                self.parse_expression_until_binding_power(starting_precedence());
+                Some(self.complete_marker_with(marker, Mut))
             }
             KwReturn => self.parse_return(),
             KwStruct => self.parse_struct_definition(),
