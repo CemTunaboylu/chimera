@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use thin_vec::{ThinVec, thin_vec};
 
-use ast::tensor::{Hint as ASTHint, TensorInit as ASTTensorInit, TensorStruct as ASTTensorStruct};
+use ast::{
+    tensor::{TensorInit as ASTTensorInit, TensorStruct as ASTTensorStruct},
+    types::Hint as ASTHint,
+};
 
 use crate::{
     HIRResult, builder::HIRBuilder, literal::Value, metadata::TenMeta, scope::ExprIdx, types::Type,
@@ -199,13 +202,15 @@ impl HIRBuilder {
         };
         Ok(hint)
     }
-    pub fn lower_dim_hints(&mut self, dim_hints: &ThinVec<ASTHint>) -> HIRResult<ThinVec<Hint>> {
+    pub fn lower_dim_hints(&mut self, dim_hints: &ThinVec<ASTHint>) -> HIRResult<Shape> {
         let mut low_dim_hints = ThinVec::new();
         for dim_hint in dim_hints {
             let hint = self.lower_hint(dim_hint)?;
-            low_dim_hints.push(hint);
+            if let Hint::Dim(s) = hint {
+                low_dim_hints.push(s);
+            }
         }
-        Ok(low_dim_hints)
+        Ok(Shape(low_dim_hints))
     }
     pub fn lower_tensor_init(&mut self, tensor_init: &ASTTensorInit) -> HIRResult<TensorInit> {
         let default_value = self.try_lowering_expr_as_idx(tensor_init.get_default_value())?;
@@ -238,9 +243,23 @@ impl HIRBuilder {
 #[derive(Clone, Debug, PartialEq)]
 // TODO: this should finally be able to fill all the fields
 pub struct TensorStruct {
-    dims: ThinVec<Hint>,
+    dims: Shape,
     type_hint: Option<Hint>,
     init: Option<TensorInit>,
+}
+
+impl TensorStruct {
+    pub fn as_type(&self) -> Type {
+        let dtype = if let Some(Hint::Type(t)) = &self.type_hint {
+            Some(Box::new(t.clone()))
+        } else {
+            None
+        };
+        Type::Tensor {
+            shape: Some(self.dims.clone()),
+            datatype: dtype,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -261,17 +280,17 @@ mod tests {
         let mut hir_builder = HIRBuilder::new(ast_root);
 
         let tensor_struct = hir_builder.lower_tensor_struct(&ast_tensor_struct).expect("should have been ok");
-        assert_eq!(exp_dims, tensor_struct.dims);
+        assert_eq!(exp_dims, tensor_struct.dims.0);
         assert_eq!(exp_type, tensor_struct.type_hint);
         assert_eq!(exp_init, tensor_struct.init);
         }
     }
 
     create_tensor_struct_test! {
-        tensor_struct: ("Tensor<i32><3,3,3>", thin_vec![Hint::Dim(3);3], Some(Hint::Type(Type::Integer32)), None),
-        tensor_struct_typed: ("Tensor<i32>", ThinVec::<Hint>::new(), Some(Hint::Type(Type::Integer32)), None),
-        tensor_struct_dim_hinted: ("Tensor<3,3,3>", thin_vec![Hint::Dim(3);3], None, None),
-        tensor_struct_dim_hinted_init: ("Tensor<3,3,3>[0.0]", thin_vec![Hint::Dim(3);3], None, Some(TensorInit{default_value: into_idx::<Expr>(1), dim: None})),
-        tensor_struct_type_hinted_full_init: ("Tensor<f32>[1.0;1000]", ThinVec::<Hint>::new(), Some(Hint::Type(Type::Float32)), Some(TensorInit{default_value: into_idx::<Expr>(1), dim: Some(1000)})),
+        tensor_struct: ("Tensor<i32><3,3,3>", thin_vec![3;3], Some(Hint::Type(Type::Integer32)), None),
+        tensor_struct_typed: ("Tensor<i32>", ThinVec::<usize>::new(), Some(Hint::Type(Type::Integer32)), None),
+        tensor_struct_dim_hinted: ("Tensor<3,3,3>", thin_vec![3;3], None, None),
+        tensor_struct_dim_hinted_init: ("Tensor<3,3,3>[0.0]", thin_vec![3;3], None, Some(TensorInit{default_value: into_idx::<Expr>(1), dim: None})),
+        tensor_struct_type_hinted_full_init: ("Tensor<f32>[1.0;1000]", ThinVec::<usize>::new(), Some(Hint::Type(Type::Float32)), Some(TensorInit{default_value: into_idx::<Expr>(1), dim: Some(1000)})),
     }
 }
