@@ -1,4 +1,4 @@
-use ast::variable::{VarDef as ASTVarDef, VarRef as ASTVarRef};
+use hir_macro::with_context;
 use la_arena::Idx;
 use smol_str::SmolStr;
 
@@ -28,11 +28,14 @@ impl NameIndexed for VarDef {
 }
 
 impl HIRBuilder {
-    pub fn lower_var_def(&mut self, var_def: &ASTVarDef) -> HIRResult<VarDefIdx> {
-        let name = var_def.name();
-        let expr_index = self.try_lower_expr_as_idx_with_default(var_def.value())?;
-
-        self.allocate_span(name, var_def.span());
+    #[with_context(UsageContext::Moved)]
+    pub fn lower_var_def_rhs(&mut self, expr: Option<&ASTExpr>) -> HIRResult<ExprIdx> {
+        self.try_lower_expr_as_idx_with_default(expr)
+    }
+    #[with_context(UsageContext::Init)]
+    pub fn lower_var_def(&mut self, ast_var_def: &ASTVarDef) -> HIRResult<VarDefIdx> {
+        let name = ast_var_def.name();
+        let expr_index = self.lower_var_def_rhs(ast_var_def.value())?;
 
         let var_def = VarDef {
             name_index: placeholder_idx::<SmolStr>(),

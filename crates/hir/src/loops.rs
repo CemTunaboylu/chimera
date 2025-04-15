@@ -1,8 +1,10 @@
+use hir_macro::with_context;
 use smol_str::SmolStr;
 use thin_vec::ThinVec;
 
 use crate::{
-    HIRResult, builder::HIRBuilder, control_flow::Condition, delimited::Block, scope::ExprIdx,
+    HIRResult, builder::HIRBuilder, context::UsageContext, control_flow::Condition,
+    delimited::Block, scope::ExprIdx,
 };
 
 use ast::loops::{In as ASTIn, Loop as ASTLoop};
@@ -23,6 +25,8 @@ pub enum Loop {
 impl Loop {}
 
 impl HIRBuilder {
+    // TODO: Is it? Isn't it also ref for the elements within?
+    #[with_context(UsageContext::Read)]
     pub fn lower_in(&mut self, in_: &ASTIn) -> HIRResult<In> {
         let expr_id = self.try_lowering_expr_as_idx(in_.expr())?;
         Ok(In(expr_id))

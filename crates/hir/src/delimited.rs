@@ -1,11 +1,12 @@
 use ast::delimited::{Block as ASTBlock, Indexing as ASTIndexing, Paren as ASTParen};
-use hir_macro::scoped;
+use hir_macro::{scoped, with_context};
 
 use thin_vec::ThinVec;
 
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    context::UsageContext,
     errors::HIRError,
     scope::{ExprIdx, ScopeIdx, ScopeKind},
     statement::Stmt,
@@ -56,6 +57,7 @@ impl HIRBuilder {
             statements: lowered_statements,
         })
     }
+    #[with_context(UsageContext::Read)]
     pub fn lower_indexing(&mut self, indexing: &ASTIndexing) -> HIRResult<Indexing> {
         let index = self.lower_expr_as_idx(&indexing.index().map_err(HIRError::from_err)?)?;
         Ok(Indexing(index))

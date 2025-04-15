@@ -1,6 +1,9 @@
-use smol_str::SmolStr;
+use hir_macro::with_context;
 
-use crate::{HIRResult, builder::HIRBuilder, err_if_none, scope::ExprIdx};
+use crate::{
+    HIRResult, builder::HIRBuilder, context::UsageContext, err_if_none, errors::HIRError,
+    scope::ExprIdx,
+};
 
 use ast::operation::{Binary as ASTBinary, Unary as ASTUnary};
 
@@ -123,6 +126,8 @@ impl HIRBuilder {
         let op = BinaryOp::from(value.op().unwrap());
         Ok(BinaryInfix { op, lhs, rhs })
     }
+
+    #[with_context(UsageContext::Read)]
     pub fn lower_unary_operation(&mut self, value: &ASTUnary) -> HIRResult<Unary> {
         _ = Unary::validate_ast(&value)?;
         let operand = Operand(self.lower_expr_as_idx(value.operand().unwrap())?);

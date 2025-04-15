@@ -1,3 +1,4 @@
+use hir_macro::with_context;
 use thin_vec::ThinVec;
 
 use ast::container_ref::ContainerRef as ASTContainerRef;
@@ -5,6 +6,7 @@ use ast::container_ref::ContainerRef as ASTContainerRef;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    context::UsageContext,
     delimited::Indexing,
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
     scope::{Span, VarDefIdx, VarSelector},
@@ -18,6 +20,7 @@ pub struct ContainerRef {
 }
 
 impl HIRBuilder {
+    #[with_context(UsageContext::Read)]
     pub fn lower_container_ref(
         &mut self,
         container_ref: &ASTContainerRef,

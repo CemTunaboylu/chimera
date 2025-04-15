@@ -4,7 +4,9 @@ use ast::control_flow::{
     Condition as ASTCondition, Conditional as ASTConditional, ControlFlow as ASTControlFlow,
 };
 
-use crate::{HIRResult, builder::HIRBuilder, delimited::Block, scope::ExprIdx};
+use crate::{
+    HIRResult, builder::HIRBuilder, context::UsageContext, delimited::Block, scope::ExprIdx,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Condition(ExprIdx);
@@ -20,6 +22,7 @@ pub enum Conditional {
 pub struct ControlFlow(ThinVec<Conditional>);
 
 impl HIRBuilder {
+    #[with_context(UsageContext::Read)]
     pub fn lower_condition(&mut self, cond: &ASTCondition) -> HIRResult<Condition> {
         let expr_id = self.lower_expr_as_idx(cond.expr())?;
         Ok(Condition(expr_id))

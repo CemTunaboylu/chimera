@@ -1,7 +1,7 @@
 use smol_str::SmolStr;
 
-use crate::{HIRResult, builder::HIRBuilder, types::Type};
-use ast::parameter::{By as ASTBy, Param as ASTParam};
+use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, types::Type};
+use ast::parameter::{By as ASTBy, Param as ASTParam, ParamType as ASTParamType};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum By {
@@ -29,12 +29,34 @@ pub enum Param {
 }
 
 impl HIRBuilder {
+    pub fn lower_type_with_ctx(
+        &mut self,
+        param_type: &ASTParamType,
+        ctx: UsageContext,
+    ) -> HIRResult<Type> {
+        self.push_usage_context(ctx);
+        let t = self.lower_type(&param_type.1);
+        self.pop_usage_context();
+        t
+    }
     pub fn lower_parameter(&mut self, param: &ASTParam) -> HIRResult<Param> {
         match param {
             ASTParam::Named(smol_str, param_type) => {
-                let lowered_type = self.lower_type(&param_type.1)?;
                 let by = By::from(&param_type.0);
-                Ok(Param::Named(smol_str.clone(), by, lowered_type))
+
+                let ctx = match by {
+                    By::Ref => UsageContext::Ref,
+                    By::RefMut => UsageContext::RefMut,
+                    // note: still a move but declared as mutable
+                    By::ValueMut => UsageContext::Mut,
+                    By::Value => UsageContext::Moved,
+                };
+
+                Ok(Param::Named(
+                    smol_str.clone(),
+                    by,
+                    self.lower_type_with_ctx(param_type, ctx)?,
+                ))
             }
             ASTParam::SelfRef(by) => {
                 let by = By::from(by);

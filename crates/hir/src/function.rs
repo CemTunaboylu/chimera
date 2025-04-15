@@ -1,4 +1,4 @@
-use hir_macro::scoped;
+use hir_macro::{scoped, with_context};
 use la_arena::Idx;
 use smol_str::SmolStr;
 use thin_vec::ThinVec;
@@ -8,6 +8,7 @@ use ast::function::{FnArg as ASTFnArg, FnCall as ASTFnCall, FnDef as ASTFnDef};
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    context::UsageContext,
     delimited::Block,
     parameter::Param,
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
@@ -106,6 +107,25 @@ impl HIRBuilder {
             parameters.push(p);
         }
 
+        Ok(parameters)
+    }
+    #[with_context(UsageContext::Return)]
+    pub fn lower_return_type(&mut self, fn_def: &ASTFnDef) -> HIRResult<Option<RetType>> {
+        let mut return_type = None;
+        if let Some(ret_type) = fn_def.return_type() {
+            if let Some(t) = ret_type.return_type() {
+                let low_type = self.lower_type(&t)?;
+                return_type = Some(RetType(low_type));
+            }
+        }
+        Ok(return_type)
+    }
+
+    #[scoped(ScopeKind::Function)]
+    pub fn lower_fn_params_and_body(
+        &mut self,
+        fn_def: &ASTFnDef,
+    ) -> HIRResult<(Block, ThinVec<Param>)> {
         let body = self.lower_block(fn_def.body())?;
         Ok((body, parameters))
     }
@@ -134,6 +154,7 @@ impl HIRBuilder {
 
         self.allocate::<FnDef, FnSelector>(name, low_fn_def)
     }
+    #[with_context(UsageContext::FnArg)]
     pub fn lower_fn_arg(&mut self, fn_arg: &ASTFnArg) -> HIRResult<FnArg> {
         let expr_id = self.lower_expr_as_idx(&fn_arg.0)?;
         Ok(FnArg(expr_id))

@@ -1,6 +1,7 @@
 use ast::return_stmt::Return as ASTReturn;
+use hir_macro::with_context;
 
-use crate::{HIRResult, builder::HIRBuilder, scope::ExprIdx};
+use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ExprIdx};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Return(ExprIdx);
@@ -12,6 +13,7 @@ impl Return {
 }
 
 impl HIRBuilder {
+    #[with_context(UsageContext::Return)]
     pub fn lower_return(&mut self, ret: &ASTReturn) -> HIRResult<Return> {
         let index = self.lower_expr_as_idx(ret.expr())?;
         Ok(Return(index))
