@@ -3,11 +3,18 @@ use patricia_tree::PatriciaMap;
 use smol_str::SmolStr;
 
 use crate::{
-    HIRResult, errors::HIRError, expression::Expr, function::FnDef, resolution::Unresolved,
-    structure::StructDef, tensor::CanonicalTensor, variable::VarDef,
+    HIRResult,
+    errors::HIRError,
+    expression::Expr,
+    function::FnDef,
+    metadata::{FnMeta, StructMeta, VarMeta},
+    resolution::Unresolved,
+    structure::StructDef,
+    tensor::CanonicalTensor,
+    variable::VarDef,
 };
 
-use std::{fmt::Debug, ops::Range};
+use std::{collections::HashMap, fmt::Debug, ops::Range};
 
 pub type ExprIdx = Idx<Expr>;
 pub type FnDefIdx = Idx<FnDef>;
@@ -49,53 +56,86 @@ pub enum ScopeKind {
 }
 
 #[derive(Debug)]
-pub struct DefAllocator<D> {
+pub struct DefAllocator<D: NameIndexed> {
     pub names: Arena<SmolStr>,
     pub definitions: Arena<D>,
     pub name_to_idx_trie: NameToIndexTrie<D>,
 }
 
-pub trait Selector<E: Clone + Debug + PartialEq> {
-    fn select(scope: &Scope) -> &DefAllocator<E>;
-    fn select_mut(scope: &mut Scope) -> &mut DefAllocator<E>;
-}
-// note: container refs are also variable refs.
-pub struct VarSelector {}
-impl Selector<VarDef> for VarSelector {
-    fn select(scope: &Scope) -> &DefAllocator<VarDef> {
-        &scope.variable_allocator
-    }
-    fn select_mut(scope: &mut Scope) -> &mut DefAllocator<VarDef> {
-        &mut scope.variable_allocator
-    }
-}
-pub struct FnSelector {}
-impl Selector<FnDef> for FnSelector {
-    fn select(scope: &Scope) -> &DefAllocator<FnDef> {
-        &scope.fn_allocator
-    }
-    fn select_mut(scope: &mut Scope) -> &mut DefAllocator<FnDef> {
-        &mut scope.fn_allocator
-    }
-}
-
-pub struct StructSelector {}
-impl Selector<StructDef> for StructSelector {
-    fn select(scope: &Scope) -> &DefAllocator<StructDef> {
-        &scope.struct_allocator
-    }
-    fn select_mut(scope: &mut Scope) -> &mut DefAllocator<StructDef> {
-        &mut scope.struct_allocator
-    }
-}
-
-impl<D> DefAllocator<D> {
+impl<D: NameIndexed> DefAllocator<D> {
     pub fn new() -> Self {
         Self {
             names: Arena::<SmolStr>::new(),
             definitions: Arena::<D>::new(),
             name_to_idx_trie: NameToIndexTrie::<D>::new(),
         }
+    }
+    pub fn alloc(&mut self, name: SmolStr, mut d: D) -> HIRResult<Idx<D>> {
+        if self.name_to_idx_trie.get(&name).is_some() {
+            return Err(HIRError::with_msg(format!(
+                "shadowing is not allowed, {:?} is already defined",
+                name
+            ))
+            .into());
+        }
+        let name_index = self.names.alloc(name.clone());
+        d.set_name_index(name_index);
+
+        let ix = self.definitions.alloc(d);
+        self.name_to_idx_trie.insert(&name, ix);
+        Ok(ix)
+    }
+}
+
+pub type MetaHolder<L, M> = HashMap<Idx<L>, M>;
+
+#[derive(Debug)]
+pub struct MetadataStore {
+    pub vars: MetaHolder<VarDef, VarMeta>,
+    pub fns: MetaHolder<FnDef, FnMeta>,
+    pub structs: MetaHolder<StructDef, StructMeta>,
+}
+impl MetadataStore {
+    pub fn new() -> Self {
+        Self {
+            vars: MetaHolder::<VarDef, VarMeta>::new(),
+            fns: MetaHolder::<FnDef, FnMeta>::new(),
+            structs: MetaHolder::<StructDef, StructMeta>::new(),
+        }
+    }
+}
+
+pub trait Selector<E: Clone + Debug + PartialEq + NameIndexed> {
+    fn select_alloc(scope: &Scope) -> &DefAllocator<E>;
+    fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<E>;
+}
+// note: container refs are also variable refs.
+pub struct VarSelector {}
+impl Selector<VarDef> for VarSelector {
+    fn select_alloc(scope: &Scope) -> &DefAllocator<VarDef> {
+        &scope.variable_allocator
+    }
+    fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<VarDef> {
+        &mut scope.variable_allocator
+    }
+}
+pub struct FnSelector {}
+impl Selector<FnDef> for FnSelector {
+    fn select_alloc(scope: &Scope) -> &DefAllocator<FnDef> {
+        &scope.fn_allocator
+    }
+    fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<FnDef> {
+        &mut scope.fn_allocator
+    }
+}
+
+pub struct StructSelector {}
+impl Selector<StructDef> for StructSelector {
+    fn select_alloc(scope: &Scope) -> &DefAllocator<StructDef> {
+        &scope.struct_allocator
+    }
+    fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<StructDef> {
+        &mut scope.struct_allocator
     }
 }
 
@@ -108,6 +148,8 @@ pub struct Scope {
     pub(crate) fn_allocator: DefAllocator<FnDef>,
     pub(crate) struct_allocator: DefAllocator<StructDef>,
     pub(crate) variable_allocator: DefAllocator<VarDef>,
+
+    pub(crate) metadata: MetadataStore,
 
     pub(crate) strs: Arena<SmolStr>,
     pub(crate) tensor_literals: Arena<CanonicalTensor>,
@@ -124,6 +166,8 @@ impl Scope {
         let struct_allocator = DefAllocator::<StructDef>::new();
         let fn_allocator = DefAllocator::<FnDef>::new();
 
+        let metadata = MetadataStore::new();
+
         let strs = Arena::<SmolStr>::new();
         let tensor_literals = Arena::<CanonicalTensor>::new();
 
@@ -137,6 +181,7 @@ impl Scope {
             fn_allocator,
             struct_allocator,
             variable_allocator,
+            metadata,
             strs,
             tensor_literals,
             to_resolve,
@@ -146,27 +191,16 @@ impl Scope {
 
     pub fn resolve_in<E, S: Selector<E>>(&self, key: &SmolStr) -> Option<&Idx<E>>
     where
-        E: Clone + Debug + PartialEq,
+        E: Clone + Debug + PartialEq + NameIndexed,
     {
-        S::select(self).name_to_idx_trie.get(key)
+        S::select_alloc(self).name_to_idx_trie.get(key)
     }
-    pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, mut elm: E) -> HIRResult<Idx<E>>
+    pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, elm: E) -> HIRResult<Idx<E>>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
     {
-        let allocator = S::select_mut(self);
-        if allocator.name_to_idx_trie.get(&name).is_some() {
-            return Err(HIRError::with_msg(format!(
-                "shadowing is not allowed, {:?} is already defined",
-                name
-            ))
-            .into());
-        }
-        let name_index = allocator.names.alloc(name.clone());
-        elm.set_name_index(name_index);
-        let ix = allocator.definitions.alloc(elm);
-        allocator.name_to_idx_trie.insert(&name, ix);
-        Ok(ix)
+        let allocator = S::select_alloc_mut(self);
+        allocator.alloc(name, elm)
     }
 
     pub fn allocate_expr(&mut self, expr: Expr) -> ExprIdx {
