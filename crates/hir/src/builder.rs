@@ -73,6 +73,12 @@ impl HIRBuilder {
         };
         self.contexts.push(lowering_ctx);
     }
+    pub fn get_context(&self) -> Option<&LoweringContext> {
+        self.contexts.last()
+    }
+    pub fn get_current_stmt_idx(&self) -> usize {
+        self.lowered.len()
+    }
     pub fn pop_usage_context(&mut self) {
         self.contexts.pop();
     }
@@ -94,6 +100,7 @@ impl HIRBuilder {
         let current_scope = self.get_current_scope_mut();
         current_scope.allocate_tensor_literal(tensor_literal)
     }
+    // TODO: use context for metadata population
     pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, elm: E) -> HIRResult<Idx<E>>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
