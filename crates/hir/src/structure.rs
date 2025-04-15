@@ -9,6 +9,7 @@ use ast::{
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    climbing::climb,
     errors::HIRError,
     expression::MISSING,
     resolution::{Reference, ResolutionType, Unresolved, resolve},
@@ -105,9 +106,8 @@ impl HIRBuilder {
         &mut self,
         unresolved: &Reference<StructDef>,
     ) -> HIRResult<Reference<StructDef>> {
-        let current_scope_idx = self.current_scope_cursor;
-        let (at, idx) =
-            resolve::<StructDef, StructSelector>(current_scope_idx, &self.scopes, unresolved)?;
+        let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
+        let (at, idx) = resolve::<StructDef, StructSelector>(scope_climbing_iter, unresolved)?;
         Ok(Reference::Resolved { at, idx })
     }
 }

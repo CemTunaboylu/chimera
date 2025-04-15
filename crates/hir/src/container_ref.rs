@@ -6,6 +6,7 @@ use ast::container_ref::ContainerRef as ASTContainerRef;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    climbing::climb,
     context::UsageContext,
     delimited::Indexing,
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
@@ -45,9 +46,8 @@ impl HIRBuilder {
         &self,
         unresolved: &Reference<VarDef>,
     ) -> HIRResult<Reference<VarDef>> {
-        let current_scope_idx = self.current_scope_cursor;
-        let (at, idx) =
-            resolve::<VarDef, VarSelector>(current_scope_idx, &self.scopes, unresolved)?;
+        let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
+        let (at, idx) = resolve::<VarDef, VarSelector>(scope_climbing_iter, unresolved)?;
         Ok(Reference::Resolved { at, idx })
     }
 }

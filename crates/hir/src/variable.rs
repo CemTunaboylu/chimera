@@ -5,6 +5,7 @@ use smol_str::SmolStr;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    climbing::climb,
     context::UsageContext,
     resolution::{Reference, ResolutionType, Unresolved, resolve},
     scope::{ExprIdx, NameIndexed, Span, StrIdx, VarDefIdx, VarSelector, placeholder_idx},
@@ -54,9 +55,8 @@ impl HIRBuilder {
         &mut self,
         unresolved: &Reference<VarDef>,
     ) -> HIRResult<Reference<VarDef>> {
-        let current_scope_idx = self.current_scope_cursor;
-        let (at, idx) =
-            resolve::<VarDef, VarSelector>(current_scope_idx, &self.scopes, unresolved)?;
+        let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
+        let (at, idx) = resolve::<VarDef, VarSelector>(scope_climbing_iter, unresolved)?;
         Ok(Reference::Resolved { at, idx })
     }
 }

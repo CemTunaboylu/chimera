@@ -90,8 +90,8 @@ impl HIRBuilder {
         ))
     }
     pub fn resolve_fn_call(&self, unresolved: &Reference<FnDef>) -> HIRResult<Reference<FnDef>> {
-        let current_scope_idx = self.current_scope_cursor;
-        let (at, idx) = resolve::<FnDef, FnSelector>(current_scope_idx, &self.scopes, unresolved)?;
+        let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
+        let (at, idx) = resolve::<FnDef, FnSelector>(scope_climbing_iter, unresolved)?;
         Ok(Reference::Resolved { at, idx })
     }
 

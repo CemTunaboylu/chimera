@@ -42,8 +42,16 @@ impl HIRBuilder {
     // TODO: Do I need to get in builder?
     pub fn get_expr(&self, idx: ExprIdx) -> &Expr {
         // TODO: try to find by 'climbing' the branch of scopes
-        let current_scope = self.get_current_scope();
-        &current_scope.exprs[idx]
+        let climber = climb(self.current_scope_cursor, &self.scopes);
+        let mut expr = &Expr::Missing;
+        for (_, scope) in climber {
+            if scope.exprs.len() <= idx.into_raw().into_u32() as usize {
+                continue;
+            }
+            expr = &scope.exprs[idx];
+            break;
+        }
+        expr
     }
     pub fn try_lowering_expr_as_idx(&mut self, ast_expr: Option<ASTExpr>) -> HIRResult<ExprIdx> {
         let expr = unwrap_or_err(ast_expr.as_ref(), "expression")?;
