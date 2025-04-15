@@ -47,7 +47,7 @@ impl<'input> Parser<'input> {
         let non_assignments: SyntaxKindBitSet = non_assigning_operators();
         ctx.allow(non_assignments);
         ctx.allow(SyntaxKind::opening_delimiters());
-        ctx.allow([Eq, Ident, Semi, VarDef, VarRef, SelfRef].as_ref());
+        ctx.allow([Eq, Ident, Semi, VarDef, VarRef, SelfRef, StructInit].as_ref());
         rollback_when_dropped
     }
 

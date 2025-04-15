@@ -245,6 +245,7 @@ impl<'input> Parser<'input> {
             self.expect_and_bump_as(Ident, StructAsType);
             return None;
         }
+
         let marker = self.start();
         self.expect_and_bump(Ident);
 
@@ -254,6 +255,10 @@ impl<'input> Parser<'input> {
             self.expect_in_ctx(ContainerRef);
             self.parse_container_indexing();
             self.complete_marker_with(marker, ContainerRef)
+        } else if self.is_next(LBrace) && self.is_allowed(StructInit) {
+            // self.expect_in_ctx(StructInit);
+            self.parse_struct_init_block();
+            self.complete_marker_with(marker, StructInit)
         } else {
             self.complete_marker_with(marker, VarRef)
         };
