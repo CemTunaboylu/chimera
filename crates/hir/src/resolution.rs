@@ -1,7 +1,8 @@
 use crate::{
-    climbing::climb,
+    climbing::{EnumeratedScope, climb},
     delimited::Indexing,
-    scope::{Selector, Span},
+    scope::{NameIndexed, Selector, Span},
+    unwrap_or_err,
 };
 use la_arena::{Arena, Idx};
 use miette::{Diagnostic, Report};
@@ -93,32 +94,46 @@ fn span_check(
     }
 }
 
-pub fn resolve<E, S: Selector<E>>(
-    current: ScopeIdx,
-    scopes: &Arena<Scope>,
+pub fn resolve<'caller, E, S: Selector<E>>(
+    mut scopes: impl Iterator<Item = EnumeratedScope<'caller>>,
     unresolved_ref: &Reference<E>,
 ) -> ResolutionResult<(ScopeIdx, Idx<E>)>
 where
-    E: Clone + Debug + PartialEq,
+    E: Clone + Debug + PartialEq + NameIndexed,
 {
-    let mut scope_climber = climb(current, scopes);
-    let mut guesstimates = ThinVec::new();
-    let (key, resolution_type) = if let Some(scope) = scope_climber.next() {
+    let current_scope = scopes.next();
+    let mut enumerated_scope = unwrap_or_err(
+        current_scope.as_ref(),
+        format!("cannot find scope for {:?}", unresolved_ref).as_str(),
+    )?
+    .clone();
+
+    let (key, resolution_type) = {
         let idx = unresolved_ref.get_unresolved_index()?;
-        let unresolved = &scope.to_resolve[idx];
+        let unresolved = &enumerated_scope.1.to_resolve[idx];
         (&unresolved.name, &unresolved.for_type)
-    } else {
-        return Err(ResolutionError {
-            msg: format!("cannot find scope {:?} for {:?}", current, unresolved_ref),
-        }
-        .into());
     };
-    for scope in scope_climber {
+    let mut guesstimates = ThinVec::new();
+    loop {
+        let (scope_idx, scope) = enumerated_scope;
         if let Some(idx) = scope.resolve_in::<E, S>(key) {
             _ = span_check(scope, key, resolution_type)?;
-            return Ok((current, *idx));
+            return Ok((scope_idx, *idx));
         } else {
-            guesstimates.push(guess(&S::select(scope).name_to_idx_trie, key));
+            guesstimates.push(guess(&S::select_alloc(scope).name_to_idx_trie, key));
+        }
+        if let Some(new) = scopes.next() {
+            enumerated_scope = new;
+        } else {
+            break;
+        };
+    }
+    for (scope_idx, scope) in scopes {
+        if let Some(idx) = scope.resolve_in::<E, S>(key) {
+            _ = span_check(scope, key, resolution_type)?;
+            return Ok((scope_idx, *idx));
+        } else {
+            guesstimates.push(guess(&S::select_alloc(scope).name_to_idx_trie, key));
         }
     }
     return Err(ResolutionError::new_with_guestimate(key, guesstimates).into());

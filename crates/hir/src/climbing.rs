@@ -2,7 +2,9 @@ use la_arena::Arena;
 
 use crate::scope::{Scope, ScopeIdx};
 
-pub fn climb(current: ScopeIdx, scopes: &Arena<Scope>) -> impl Iterator<Item = &Scope> {
+pub type EnumeratedScope<'c> = (ScopeIdx, &'c Scope);
+
+pub fn climb(current: ScopeIdx, scopes: &Arena<Scope>) -> impl Iterator<Item = EnumeratedScope> {
     ScopeClimber { current, scopes }
 }
 
@@ -12,7 +14,7 @@ pub struct ScopeClimber<'hir> {
 }
 
 impl<'hir> Iterator for ScopeClimber<'hir> {
-    type Item = &'hir Scope;
+    type Item = EnumeratedScope<'hir>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let scope = &self.scopes[self.current];
@@ -21,7 +23,7 @@ impl<'hir> Iterator for ScopeClimber<'hir> {
             return None;
         } else {
             self.current = parent;
-            Some(&self.scopes[self.current])
+            Some((self.current, &self.scopes[self.current]))
         }
     }
 }
