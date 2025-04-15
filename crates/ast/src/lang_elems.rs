@@ -120,6 +120,16 @@ pub fn filtered_children_with_tokens(
         .collect::<ThinVec<_>>()
 }
 
+pub fn children_with_tokens_without_unwanted(
+    node: &SyntaxNode,
+    unwanted: impl Into<SyntaxKindBitSet>,
+) -> ThinVec<NodeOrToken> {
+    let set = unwanted.into();
+    node.children_with_tokens()
+        .filter(|node_or_token| !set.contains(&node_or_token.kind()))
+        .collect::<ThinVec<_>>()
+}
+
 pub fn get_children_as<T>(node: &SyntaxNode) -> ASTResult<ThinVec<T>>
 where
     T: TryFrom<SyntaxNode> + Debug,

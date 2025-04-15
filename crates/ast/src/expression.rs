@@ -12,6 +12,7 @@ use crate::{
     mutable::Mut as ASTMut,
     operation::{Binary, Unary},
     self_ref::SelfRef as ASTSelfRef,
+    structure::StructInit as ASTStructInit,
     tensor::TensorStruct as ASTTensorStruct,
     variable::VarRef as ASTVarRef,
 };
@@ -27,6 +28,7 @@ pub enum Expr {
     Mut(ASTMut),
     Paren(Paren),
     SelfRef(ASTSelfRef),
+    StructInit(ASTStructInit),
     TensorStruct(ASTTensorStruct),
     Unary(Unary),
     VarRef(ASTVarRef),
@@ -75,6 +77,10 @@ impl TryFrom<&SyntaxNode> for Expr {
             SelfRef => {
                 let self_ref = ASTSelfRef::try_from(node)?;
                 Self::SelfRef(self_ref)
+            }
+            StructInit => {
+                let struct_init = ASTStructInit::try_from(node)?;
+                Self::StructInit(struct_init)
             }
             TensorStruct => {
                 let tensor_struct = ASTTensorStruct::try_from(node)?;

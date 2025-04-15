@@ -1,59 +1,13 @@
-use syntax::{
-    is_a_type,
-    language::{NodeOrToken, SyntaxNode},
-    syntax_kind::SyntaxKind,
-};
+use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
-    ast::ASTResult,
     errors::ASTError,
     expression::Expr,
-    lang_elems::{
-        ensure_token_kind_is, error_for_node, get_children_in, get_children_with_tokens_in_f,
-    },
-    literal::{Literal, Value},
-    types::Type,
+    lang_elems::{ensure_token_kind_is, error_for_node, get_children_in},
+    literal::Literal,
+    types::Hint,
 };
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Hint {
-    Dim(usize),
-    Type(Type),
-}
-
-impl Hint {
-    pub fn dim_hints(dim_hints_node: &SyntaxNode) -> ASTResult<ThinVec<Self>> {
-        let mut dim_hints = ThinVec::new();
-        let hint_nodes = get_children_in(dim_hints_node, SyntaxKind::DimHint);
-        let hint_nodes = hint_nodes
-            .iter()
-            .filter_map(|node| node.first_child().map(|child| Literal::try_from(&child)));
-        for dim_hint in hint_nodes {
-            let dim = match dim_hint?.0 {
-                Value::Int(dim) if dim > 0 => dim,
-                _ => {
-                    return Err(ASTError::with_err_msg(
-                        dim_hints_node.text_range().into(),
-                        "dimension must be a positive integer".to_string(),
-                    ));
-                }
-            };
-            dim_hints.push(Hint::Dim(dim as usize));
-        }
-        Ok(dim_hints)
-    }
-
-    pub fn type_hint(typehint_node: &SyntaxNode) -> ASTResult<Self> {
-        let type_node = get_children_with_tokens_in_f(typehint_node, is_a_type);
-        let type_node = type_node.first().unwrap();
-        let type_ = match type_node {
-            NodeOrToken::Node(node) => Type::try_from(node)?,
-            NodeOrToken::Token(token) => Type::try_from(token)?,
-        };
-        Ok(Self::Type(type_))
-    }
-}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TensorInit {
