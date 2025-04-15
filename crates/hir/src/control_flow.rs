@@ -1,3 +1,4 @@
+use hir_macro::with_context;
 use thin_vec::ThinVec;
 
 use ast::control_flow::{
