@@ -12,7 +12,7 @@ use crate::{
     resolution::Reference,
     scope::{ExprIdx, into_idx},
     self_ref::SelfRef,
-    structure::StructRef,
+    structure::{StructInit, StructRef},
     tensor::TensorStruct,
     unwrap_or_err,
     variable::VarRef,
@@ -32,6 +32,7 @@ pub enum Expr {
     Paren(Paren),
     SelfRef(SelfRef),
     StructRef(Reference<StructRef>),
+    StructInit(StructInit),
     Unary(Unary),
     VarRef(Reference<VarRef>),
 }
@@ -84,6 +85,9 @@ impl HIRBuilder {
             ASTExpr::Mut(mutable) => Expr::Mut(self.lower_mut(mutable)?),
             ASTExpr::Paren(paren) => Expr::Paren(self.lower_paren(paren)?),
             ASTExpr::SelfRef(self_ref) => Expr::SelfRef(self.lower_self_ref(self_ref)?),
+            ASTExpr::StructInit(struct_init) => {
+                Expr::StructInit(self.lower_struct_init(struct_init)?)
+            }
             ASTExpr::TensorStruct(tensor_struct) => {
                 Expr::TensorStruct(self.lower_tensor_struct(tensor_struct)?)
             }
