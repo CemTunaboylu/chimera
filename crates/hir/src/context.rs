@@ -2,9 +2,10 @@ use crate::scope::ScopeIdx;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageContext {
-    AsRef, // borrowing
-    AsRefMut,
-    FunctionArg,
+    Ref, // borrowing
+    RefMut,
+    Deref,
+    FnArg,
     Init,      // let x = 2;
     Moved,     // let y = x; where x is move only
     Mut,       // declared as mut
@@ -21,4 +22,10 @@ pub struct LoweringContext {
     pub usage: UsageContext,
     pub statement_idx: usize,
     pub scope_idx: ScopeIdx,
+}
+
+impl LoweringContext {
+    pub fn is_of_usage(&self, u: UsageContext) -> bool {
+        self.usage == u
+    }
 }
