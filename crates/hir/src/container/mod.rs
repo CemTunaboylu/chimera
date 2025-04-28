@@ -31,7 +31,7 @@ pub struct Strides(pub ThinVec<usize>);
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Dim {
     Static(usize),
-    Dynamic(ExprIdx, Maybe<Type>),
+    Dynamic(ExprIdx),
     Unknown,
 }
 
@@ -70,9 +70,7 @@ impl HIRBuilder {
                         let d = if let Expr::Literal(Literal(Value::Int(i))) = expr {
                             Dim::Static(*i as usize)
                         } else {
-                            let hm = HMExpr::try_from(expr)?;
-                            let t = Type::from(&hm);
-                            Dim::Dynamic(expr_idx, Maybe::Unchecked(thin_vec![t]))
+                            Dim::Dynamic(expr_idx)
                         };
                         dims.push(d);
                     } else {
@@ -84,10 +82,3 @@ impl HIRBuilder {
         }
     }
 }
-
-/*
-TODO:
-- sparsity
-- hashing
-- min/max
- */
