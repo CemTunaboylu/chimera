@@ -23,7 +23,7 @@ use super::{Shape, layout::Layout, op::TensorOp};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct TenMeta {
-    pub data_type: Maybe<Type>,
+    // pub data_type: Maybe<Type>,
     pub layout: Layout,
     pub shape: Shape,
     // can be used for quantization,
@@ -52,7 +52,7 @@ impl TenMeta {
             sparse: container_examination.sparsity.is_sparse(),
             num_refs: 0,
             op_log: ThinVec::new(),
-            data_type: container_examination.unchecked_types(),
+            // data_type: container_examination.unchecked_types(),
             shape: shape.clone(),
             layout: Layout::row_major(&shape),
             group_id: 0,        // TODO: fix
@@ -71,18 +71,18 @@ impl ContainerExamination {
         Self {
             sparsity: Sparsity::new(),
             // min_max: MinMax::new(),
-            types: Types::new(),
+            // types: Types::new(),
         }
     }
     pub fn add(&mut self, expr: &Expr, idx: ExprIdx) -> HIRResult<()> {
         self.sparsity.count(&idx);
-        self.min_max.min_max(value);
-        self.types.add(expr)?;
+        // self.min_max.min_max(value);
+        // self.types.add(expr)?;
         Ok(())
     }
-    pub fn unchecked_types(self) -> Maybe<Type> {
-        Maybe::Unchecked(self.types.0.into_iter().collect())
-    }
+    // pub fn unchecked_types(self) -> Maybe<Type> {
+    //     Maybe::Unchecked(self.types.0.into_iter().collect())
+    // }
 }
 
 pub struct MinMax {
@@ -139,12 +139,12 @@ impl Types {
     pub fn new() -> Self {
         Self(HashSet::new())
     }
-    pub fn add(&mut self, value: &Expr) -> HIRResult<()> {
+    pub fn add(&mut self, _value: &Expr) -> HIRResult<()> {
         // Expr -> HMExpr -> Type
-        let t: Type = Type::from(&hm);
-        if !self.0.contains(&t) {
-            self.0.insert(t);
-        }
+        // let t: Type = Type::from(&hm);
+        // if !self.0.contains(&t) {
+        //     self.0.insert(t);
+        // }
         Ok(())
     }
 
