@@ -103,6 +103,7 @@ impl From<TokenKind> for TokenType {
             Identifier => Self::Identifier,
             IdentifierCannotBegin => Self::Error(TokenKind::Identifier),
             KwBreak
+            | KwBuffer
             | KwConst
             | KwContinue
             | KwElif
@@ -122,9 +123,9 @@ impl From<TokenKind> for TokenType {
             | KwReturn
             | KwSelf
             | KwStruct
+            | KwTensor
             | KwTrue
             | KwType
-            | KwTensor
             | KwWhile
             | Kwself => Self::Keyword,
             LeftBrace => Self::OpeningDelimiter(RightBrace),
@@ -159,9 +160,7 @@ impl From<TokenKind> for TokenType {
             | TypeChar
             | TypeF32
             | TypeI32
-            | TypeStrSlice
-            | TypeString 
-            | TypeTensor
+            | TypeStr
             => Self::Type,
             BlockComment | LineComment => Self::Comment,
             // BlockCommentLeftStarMissing | 

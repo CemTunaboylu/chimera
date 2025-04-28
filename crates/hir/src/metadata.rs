@@ -6,13 +6,32 @@ use std::{
 use thin_vec::ThinVec;
 
 use crate::{
-    HIRResult, errors::HIRError, literal::Value, scope::ScopeIdx, tensor::TensorOp, types::Type,
+    HIRResult,
+    context::{LoweringContext, UsageContext},
+    errors::HIRError,
+    literal::Value,
+    scope::{ScopeIdx, Span},
+    typing::hindley_milner::types::Type,
 };
+
+pub type Usages = ThinVec<Usage>;
 #[derive(Clone, Debug, PartialEq)]
-pub struct BaseMeta {
+pub struct Usage {
+    pub kind: UsageContext,
+    pub span: Span,
     pub scope_idx: ScopeIdx,
-    pub _type: Type,
-    pub num_refs: usize,
+    pub stmt_idx: usize,
+}
+
+impl Usage {
+    pub fn from(l_ctx: &LoweringContext, span: Span, stmt_idx: usize) -> Self {
+        Self {
+            kind: l_ctx.usage,
+            span,
+            scope_idx: l_ctx.scope_idx,
+            stmt_idx,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -23,116 +42,47 @@ pub struct BlkMeta {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct VarMeta {
+    pub def: Usage,
+    pub of_type: Type,
+    pub usages: Usages,
+    pub is_mut: bool,
+    pub first_read_idx: Option<usize>,
+    pub first_write_idx: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct FnMeta {
+    pub def: Usage,
+    pub usages: Usages,
     pub inline_hint: bool,  // Should this function be inlined?
     pub is_pure: bool,      // Is this function free of side effects?
     pub is_recursive: bool, // Does this function call itself?
     pub is_cyclic: bool,    // Is there a call cycle? (not sure if this is useful)
-    pub num_refs: usize,    // How many times is this function called statically?
-    pub num_calls: usize,   // How many times is this function used?
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct TenMeta {
-    // can be used for quantization,
-    // TODO: get rid of Option
-    pub max: Option<Value>,
-    pub min: Option<Value>,
-    // sparsity: if more than X% is same element, tensor is
-    // considered sparse
-    pub sparse: bool,    //
-    pub num_refs: usize, // How many times is this function called statically?
-    // cache only make sense if things stay the same
-    // TODO: have a cache TensorOp -> result
-    pub op_log: ThinVec<TensorOp>, // How many times is this function used?
+pub struct StructMeta {
+    pub def: Usage,
+    pub usages: Usages,
+    pub num_fields: usize,
+    // pub is_generic: bool,
 }
 
-impl TenMeta {
-    pub fn with(sparsity: Sparsity, min_max: MinMax) -> Self {
-        let MinMax { max, min } = min_max;
-        Self {
-            max: max,
-            min: min,
-            sparse: sparsity.is_sparse(),
-            num_refs: 0,
-            op_log: ThinVec::new(),
-        }
-    }
+#[derive(Clone, Debug, PartialEq)]
+pub struct SharedMeta {
+    pub def: Usage,
+    pub usages: Usages,
+    pub espaces: bool,
+    // pub is_generic: bool,
 }
 
-pub struct MinMax {
-    max: Option<Value>,
-    min: Option<Value>,
-}
-
-impl MinMax {
-    pub fn new() -> Self {
-        Self {
-            max: None,
-            min: None,
-        }
-    }
-    pub fn min_max(&mut self, value: &Value) {
-        let v = value.clone();
-        let mx = self.max.get_or_insert(v.clone());
-        if *mx < v {
-            *mx = v;
-            return;
-        }
-        let mn = self.min.get_or_insert(v.clone());
-        if *mn > v {
-            *mn = v;
-        }
-    }
-}
-
-pub struct Sparsity(HashMap<Value, usize>, usize);
-
-impl Sparsity {
-    pub fn new() -> Self {
-        Self(HashMap::new(), 0)
-    }
-    pub fn count(&mut self, value: &Value) {
-        if self.0.contains_key(value) {
-            self.0.entry(value.clone()).and_modify(|e| *e += 1);
-        } else {
-            self.0.insert(value.clone(), 1);
-        }
-        self.1 += 1;
-    }
-    pub fn is_sparse(self) -> bool {
-        let whole = self.1;
-        let threshold = (whole as f32 * 0.7) as usize;
-        // TODO: record the most frequent
-        self.0.iter().any(|entry| *entry.1 >= threshold)
-    }
-}
-
-pub struct TypeCheck(HashSet<Type>);
-
-impl TypeCheck {
-    pub fn new() -> Self {
-        Self(HashSet::new())
-    }
-    pub fn add(&mut self, value: &Value) {
-        let t = Type::from(value);
-        if !self.0.contains(&t) {
-            self.0.insert(t);
-        }
-    }
-
-    pub fn type_check(&self) -> HIRResult<()> {
-        if self.0.len() > 1 {
-            let msg = format!("found multiple types within tensor: {:?}", self.0);
-            return Err(HIRError::with_msg(msg).into());
-        }
-        Ok(())
-    }
-    pub fn get_only_type(self) -> Type {
-        let e = self.0.iter().next();
-        e.unwrap().clone()
-    }
-}
+/*
+   ? Escape analysis pass to analyze:
+   •	Returned?
+   •	Stored into another structure?
+   •	Passed to other functions?
+*/
 
 /*
    - inline_hint is for now true for every function that is shorter than
@@ -143,10 +93,3 @@ impl TypeCheck {
    - num_refs: how many times this function is called in source code i.e. referenced
    - num_calls: increment each time this is called
 */
-
-/*
-TODO:
-- sparsity
-- hashing
-- min/max
- */

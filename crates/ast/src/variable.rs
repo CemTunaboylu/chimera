@@ -78,9 +78,9 @@ impl TryFrom<&SyntaxNode> for VarDef {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VarRef {
-    name: SmolStr,
-    span: Range<usize>,
-    type_hint: Option<Hint>,
+    pub name: SmolStr,
+    pub span: Range<usize>,
+    pub type_hint: Option<Hint>,
 }
 
 fn get_type_hint(var_ref_node: &SyntaxNode) -> Option<Hint> {

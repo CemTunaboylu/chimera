@@ -76,7 +76,8 @@ impl<'input> Parser<'input> {
         self.parse_separated_by(&idents, StructField, Comma, RBrace);
         self.expect_and_bump(RBrace);
 
-        Some(self.complete_marker_with(marker, Initializer))
+        // TODO: struct init is a literal!
+        Some(self.complete_marker_with(marker, Literal))
     }
 
     fn dont_recover_and_only_allow(

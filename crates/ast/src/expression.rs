@@ -13,13 +13,14 @@ use crate::{
     operation::{Binary, Unary},
     self_ref::SelfRef as ASTSelfRef,
     structure::StructInit as ASTStructInit,
-    tensor::TensorStruct as ASTTensorStruct,
+    types::Type,
     variable::VarRef as ASTVarRef,
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
     Block(ASTBlock),
+    Class(Type),
     ContainerRef(ASTContainerRef),
     FnCall(ASTFnCall),
     Infix(Binary),
@@ -29,7 +30,6 @@ pub enum Expr {
     Paren(Paren),
     SelfRef(ASTSelfRef),
     StructInit(ASTStructInit),
-    TensorStruct(ASTTensorStruct),
     Unary(Unary),
     VarRef(ASTVarRef),
 }
@@ -43,6 +43,10 @@ impl TryFrom<&SyntaxNode> for Expr {
             Block => {
                 let block = ASTBlock::try_from(node)?;
                 Self::Block(block)
+            }
+            TyBool | TyBuffer | TyF32 | TyI32 | TyChar | TyStr | TyTensor => {
+                let class = Type::try_from(node)?;
+                Self::Class(class)
             }
             ContainerRef => {
                 let container_ref = ASTContainerRef::try_from(node)?;
@@ -82,10 +86,6 @@ impl TryFrom<&SyntaxNode> for Expr {
                 let struct_init = ASTStructInit::try_from(node)?;
                 Self::StructInit(struct_init)
             }
-            TensorStruct => {
-                let tensor_struct = ASTTensorStruct::try_from(node)?;
-                Self::TensorStruct(tensor_struct)
-            }
             VarRef => {
                 let var_ref = ASTVarRef::try_from(node)?;
                 Self::VarRef(var_ref)
@@ -98,14 +98,15 @@ impl TryFrom<&SyntaxNode> for Expr {
                         Block,
                         ContainerRef,
                         FnCall,
-                        InfixBinOp,
                         Indexing,
+                        InfixBinOp,
                         Literal,
                         Mut,
                         ParenExpr,
                         PostfixUnaryOp,
                         PrefixUnaryOp,
                         SelfRef,
+                        StructInit,
                         VarRef,
                     ]
                     .as_ref(),
@@ -187,7 +188,9 @@ mod tests {
         paren: "(1+1)",
         self_ref_instance: "self",
         self_ref_struct: "Self",
-        tensor_struct: "Tensor<i32><3,3,3>",
+        tensor_type: "tensor<i32><batch_number(),_,r,g,b,c>",
+        tensor_class_method: "tensor<i32><batch_number(),_,r,g,b,c>::new()",
+        buffer_type: "buffer<i32><3,3,3>",
         unary: "-[[1,0,0],[0,1,0],[0,0,1]]",
         var_ref: "my_tensor_ref",
     }

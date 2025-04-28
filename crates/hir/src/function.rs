@@ -1,6 +1,4 @@
 use hir_macro::{scoped, with_context};
-use la_arena::Idx;
-use smol_str::SmolStr;
 use thin_vec::ThinVec;
 
 use ast::function::{FnArg as ASTFnArg, FnCall as ASTFnCall, FnDef as ASTFnDef};
@@ -16,7 +14,7 @@ use crate::{
     scope::{
         ExprIdx, FnDefIdx, FnSelector, NameIndexed, ScopeIdx, ScopeKind, StrIdx, placeholder_idx,
     },
-    types::Type,
+    typing::hindley_milner::types::Type,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -33,8 +31,11 @@ pub struct FnDef {
 }
 
 impl NameIndexed for FnDef {
-    fn set_name_index(&mut self, ix: Idx<SmolStr>) {
+    fn set_name_index(&mut self, ix: StrIdx) {
         self.name_index = ix;
+    }
+    fn get_name_index(&self) -> StrIdx {
+        self.name_index
     }
 }
 
@@ -64,8 +65,8 @@ impl PartialEq for FnDef {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct FnArg(ExprIdx);
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct FnArg(pub ExprIdx);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FnCall {
@@ -96,8 +97,10 @@ impl HIRBuilder {
     }
     pub fn resolve_fn_call(&self, unresolved: &Reference<FnDef>) -> HIRResult<Reference<FnDef>> {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
-        let (at, idx) = resolve::<FnDef, FnSelector>(scope_climbing_iter, unresolved)?;
-        Ok(Reference::Resolved { at, idx })
+        Ok(resolve::<FnDef, FnSelector>(
+            scope_climbing_iter,
+            unresolved,
+        )?)
     }
 
     pub fn lower_fn_params(&mut self, fn_def: &ASTFnDef) -> HIRResult<ThinVec<Param>> {
@@ -164,11 +167,13 @@ mod tests {
     use thin_vec::thin_vec;
 
     use super::*;
-    use crate::{builder::tests::ast_root_from, parameter::By, tensor::Shape};
+    use crate::{
+        builder::tests::ast_root_from, parameter::By, typing::hindley_milner::types::Maybe,
+    };
 
     #[test]
     fn fn_def() {
-        let program = "fn mat_mul(t1: &tensor<100, 90>, t2: &tensor<90, 100>) -> tensor<100,100> { t1.matmul(t2) \n}";
+        let program = "fn mat_mul(t1: &tensor<i32><_, 100, 90>, t2: &tensor<i32><_ ,90, 100>) -> tensor<i32><_,100,100> { t1.matmul(t2) \n}";
 
         let ast_root = ast_root_from(program);
         let ast_fn_def =
@@ -195,9 +200,9 @@ mod tests {
                 SmolStr::from("t1"),
                 By::Ref,
                 Type::Tensor {
-                    shape: Some(Shape(thin_vec![100, 90])),
-                    datatype: None
-                }
+                    shape: thin_vec![None, Some(100), Some(90)],
+                    data_type: Some(Maybe::Checked(Box::new(Type::I32))),
+                },
             ),
             fn_def.parameters.get(0).unwrap()
         );
@@ -206,17 +211,17 @@ mod tests {
                 SmolStr::from("t2"),
                 By::Ref,
                 Type::Tensor {
-                    shape: Some(Shape(thin_vec![90, 100])),
-                    datatype: None
-                }
+                    shape: thin_vec![None, Some(90), Some(100)],
+                    data_type: Some(Maybe::Checked(Box::new(Type::I32))),
+                },
             ),
             fn_def.parameters.get(1).unwrap()
         );
 
         assert_eq!(
             &RetType(Type::Tensor {
-                shape: Some(Shape(thin_vec![100, 100])),
-                datatype: None
+                shape: thin_vec![None, Some(100), Some(100)],
+                data_type: Some(Maybe::Checked(Box::new(Type::I32))),
             }),
             fn_def.return_type.as_ref().unwrap()
         );

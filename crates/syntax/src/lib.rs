@@ -172,7 +172,7 @@ impl Syntax {
 impl From<Token> for Syntax {
     fn from(token: Token) -> Self {
         let kind: SyntaxKind = match token.ttype {
-            TokenType::Error(_) => SyntaxKind::Errored,
+            TokenType::Error(_) => SyntaxKind::Recovered,
             // precedence is shared
             // TokenType::OperatorEq(_) => SyntaxKind::Eq,
             _ => token.kind.into(),

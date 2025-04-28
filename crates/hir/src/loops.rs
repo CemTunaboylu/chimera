@@ -11,11 +11,12 @@ use ast::loops::{In as ASTIn, Loop as ASTLoop};
 
 // TODO: do I support multiple var defs at once?
 #[derive(Clone, Debug, PartialEq)]
-pub struct Identifiers(ThinVec<SmolStr>);
+pub struct Identifiers(pub ThinVec<SmolStr>);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct In(ExprIdx);
 
+// TODO: lower loops into a single structure
 #[derive(Clone, Debug, PartialEq)]
 pub enum Loop {
     While(Condition, Block),
@@ -25,7 +26,7 @@ pub enum Loop {
 impl Loop {}
 
 impl HIRBuilder {
-    // TODO: Is it? Isn't it also ref for the elements within?
+    // TODO: Is it Read though? Isn't it also ref for the elements within?
     #[with_context(UsageContext::Read)]
     pub fn lower_in(&mut self, in_: &ASTIn) -> HIRResult<In> {
         let expr_id = self.try_lowering_expr_as_idx(in_.expr())?;

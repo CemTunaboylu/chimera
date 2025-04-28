@@ -7,18 +7,18 @@ use thin_vec::ThinVec;
 
 use crate::{ast::ASTResult, errors::ASTError, expression::Expr};
 
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Range};
 
 use SyntaxKind::*;
 const EXPR_CANDIDATES: &[SyntaxKind; 10] = &[
     Literal, Block, FnCall, Ident, InfixBinOp, KwSelf, Kwself, KwFalse, KwTrue, ParenExpr,
 ];
 
-pub fn clone_thin_vec<T: Clone>(thin_vec: &ThinVec<T>) -> ThinVec<T> {
-    thin_vec.iter().map(|e| e.clone()).collect::<ThinVec<_>>()
-}
-pub fn compare_thin_vecs<T: PartialEq>(a: &ThinVec<T>, b: &ThinVec<T>) -> bool {
-    a.len() == b.len() && a.starts_with(b.as_ref())
+pub fn err_if_empty<T>(a: &ThinVec<T>, span: Range<usize>, exp: &str) -> ASTResult<()> {
+    if a.is_empty() {
+        return Err(ASTError::with_err_msg(span, exp.to_string()));
+    }
+    Ok(())
 }
 
 pub fn unwrap_first_child_or_err(node: &SyntaxNode) -> ASTResult<SyntaxNode> {

@@ -57,6 +57,8 @@ pub enum TokenKind {
     IdentifierCannotBegin,
     #[regex("[0-9]+")]
     Integer,
+    #[token("buffer")]
+    KwBuffer,
     #[token("break")]
     KwBreak,
     #[token("const")]
@@ -105,7 +107,7 @@ pub enum TokenKind {
     KwStruct,
     // #[token("trait")]
     // KwTrait,
-    #[token("Tensor")]
+    #[token("tensor")]
     KwTensor,
     #[token("true")]
     KwTrue,
@@ -206,11 +208,7 @@ pub enum TokenKind {
     // #[token("i64")]
     // TypeI64,
     #[token("str")]
-    TypeStrSlice,
-    #[token("String")]
-    TypeString,
-    #[token("tensor")]
-    TypeTensor,
+    TypeStr,
     // #[token("u32")]
     // TypeU32,
     // #[token("u64")]

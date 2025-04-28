@@ -47,8 +47,10 @@ impl HIRBuilder {
         unresolved: &Reference<VarDef>,
     ) -> HIRResult<Reference<VarDef>> {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
-        let (at, idx) = resolve::<VarDef, VarSelector>(scope_climbing_iter, unresolved)?;
-        Ok(Reference::Resolved { at, idx })
+        Ok(resolve::<VarDef, VarSelector>(
+            scope_climbing_iter,
+            unresolved,
+        )?)
     }
 }
 

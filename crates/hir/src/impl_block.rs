@@ -7,7 +7,7 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     scope::{FnDefIdx, ScopeIdx, ScopeKind},
-    types::Type,
+    typing::hindley_milner::types::Type,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -40,7 +40,9 @@ mod tests {
     use ast::cast_node_into_type;
 
     use super::*;
-    use crate::{builder::tests::ast_root_from, resolution::Reference, scope::into_idx};
+    use crate::{
+        builder::tests::ast_root_from, scope::into_idx, typing::hindley_milner::types::Status,
+    };
 
     #[test]
     fn impl_block() {
@@ -61,7 +63,7 @@ mod tests {
         let fn_names = &scope.fn_allocator.names;
 
         assert_eq!(
-            Type::Struct(Reference::Unresolved(into_idx(0))),
+            Type::StructAsType(Status::Pending(into_idx(0))),
             impl_block.of
         );
         for (fn_def_idx, exp_fn_name) in impl_block.methods.iter().zip(method_names.iter()) {

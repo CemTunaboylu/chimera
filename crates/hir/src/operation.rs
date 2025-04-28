@@ -13,18 +13,17 @@ use ast::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Operand(ExprIdx);
+pub struct Operand(pub ExprIdx);
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BinaryOp {
     Add,
-    AndAnd,
+    Assign,
+    AssgmtWith(Box<BinaryOp>),
     BitAnd,
     BitOr,
     BoolAnd,
     BoolOr,
-    Assign,
-    AssgmtWith(Box<BinaryOp>),
     Div,
     Dot,
     EqEq,
@@ -36,7 +35,6 @@ pub enum BinaryOp {
     Mod,
     Mul,
     Namespaced,
-    No,
     NotEq,
     RShift,
     Range,
@@ -91,16 +89,32 @@ impl BinaryOp {
         };
         Ok(op)
     }
+
+    pub fn is_bit_op(&self) -> bool {
+        use BinaryOp::*;
+        matches!(self, BitAnd | BitOr | LShift | RShift | Xor)
+    }
+    pub fn is_bool_op(&self) -> bool {
+        use BinaryOp::*;
+        matches!(self, BoolAnd | BoolOr)
+    }
+    pub fn is_comparison(&self) -> bool {
+        use BinaryOp::*;
+        matches!(self, EqEq | Ge | Gt | Le | Lt | NotEq)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UnaryOp {
+    /// star
     Deref,
+    /// and
     Ref,
+    /// minus
     Neg,
+    /// excl
     Not,
     CondUnwrap,
-    No,
 }
 
 impl UnaryOp {
@@ -129,7 +143,6 @@ impl Into<UsageContext> for &UnaryOp {
             // an unwrap moves the value
             // in case of &opt? -> opt.as_ref().unwrap(), thus a move only takes the pointer
             UnaryOp::CondUnwrap => UsageContext::Moved,
-            UnaryOp::No => UsageContext::Read,
         }
     }
 }

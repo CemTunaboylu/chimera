@@ -24,7 +24,7 @@ pub enum SeparatedElement {
     KindAs(SyntaxKind, SyntaxKind),
     InSet(SyntaxKindBitSet),
     KindWithMarker(SyntaxKind, SyntaxKind),
-    OptionalKind(SyntaxKind),
+    Optional(SyntaxKindBitSet),
     RefMut(ThinVec<SeparatedElement>),
     Fn(CustomExpectationOnSyntax),
     Branched(ThinVec<SeparatedElement>, ThinVec<SeparatedElement>),
@@ -44,23 +44,34 @@ impl<'input> Parser<'input> {
         ConcreteSyntaxTree::from(sink)
     }
 
+    pub fn bump_separated_by(
+        &self,
+        elements_in_order: &ThinVec<SeparatedElement>,
+        separator: SyntaxKind,
+        unwanted: impl Into<SyntaxKindBitSet>,
+    ) {
+        let unwanted: SyntaxKindBitSet = unwanted.into();
+        while let IsNext::No = self.is_next_in_strict(unwanted) {
+            self.parse_with(&elements_in_order);
+            self.bump_if(separator);
+        }
+    }
     pub fn parse_separated_by(
         &self,
         elements_in_order: &ThinVec<SeparatedElement>,
         wrapping_kind_to_complete: SyntaxKind,
         separator: SyntaxKind,
         unwanted: impl Into<SyntaxKindBitSet>,
-    ) -> Option<()> {
+    ) {
         let unwanted: SyntaxKindBitSet = unwanted.into();
         while let IsNext::No = self.is_next_in_strict(unwanted) {
             let marker = self.start();
 
             self.parse_with(&elements_in_order);
+            self.bump_if(separator);
 
-            self.ignore_if(separator);
             self.complete_marker_with(marker, wrapping_kind_to_complete);
         }
-        Some(())
     }
 
     fn does_first_element_pass(&self, s: &SeparatedElement) -> bool {
@@ -70,7 +81,7 @@ impl<'input> Parser<'input> {
             &KindAs(syntax_kind, _) => self.is_next(syntax_kind),
             &KindWithMarker(syntax_kind, _) => self.is_next(syntax_kind),
             &Fn(f) => self.is_next_f(f),
-            OptionalKind(_) => true,
+            Optional(_) => true,
             RefMut(elements) => self.does_first_element_pass(elements.first().unwrap()),
             ParseExprWith(_) => true,
             Branched(f, _) => self.does_first_element_pass(f.first().unwrap()),
@@ -98,8 +109,8 @@ impl<'input> Parser<'input> {
                 &Fn(custom_exp_func) => {
                     self.expect_f_and_bump(custom_exp_func);
                 }
-                &OptionalKind(syntax_kind) => {
-                    if self.is_next(syntax_kind) {
+                &Optional(set) => {
+                    if self.is_next_in(set) {
                         self.bump();
                     }
                 }
@@ -152,7 +163,7 @@ impl<'input> Parser<'input> {
                     if !is_an_operator(&kind) {
                         break;
                     }
-                    if !self.context.borrow().is_allowed(kind) {
+                    if !self.is_allowed(kind) {
                         if self.is_expected(kind) {
                             break;
                         }
@@ -188,7 +199,6 @@ impl<'input> Parser<'input> {
                     break;
                 }
             }
-            // break;
         }
         Some(lhs_marker)
     }
@@ -207,22 +217,15 @@ impl<'input> Parser<'input> {
         let marker = match kind {
             Ident => self.parse_starting_with_identifier(),
             Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
-            And | Minus | Excl => self.parse_prefix_unary_operation(kind),
-            keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
+            // & (ref), ! (bool negate), - (negative), * (deref)
+            And | Excl | Minus | Star => self.parse_prefix_unary_operation(kind),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
-            typing if is_a_type(&typing) => {
-                if !self.is_allowed(typing) {
-                    self.recover_restricted(typing)?;
-                }
-                if typing == TyTensor {
-                    return self.parse_tensor_typing();
-                }
-                self.bump();
-                // should not continue with expression parsing, because
-                // a type cannot be an operand.
-                None
+            typing if is_a_type(&typing) || matches!(typing, KwBuffer | KwTensor) => {
+                self.parse_type(&syntax)
             }
+            keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
             operator if is_an_operator(&operator) => {
+                // TODO: check this one
                 println!("DIRTY WATERS : {:?}", self.peek());
                 if !self.is_expected(operator) {
                     self.recover_unmet_expectation();
@@ -238,9 +241,28 @@ impl<'input> Parser<'input> {
         marker
     }
 
+    pub fn parse_type(&self, syntax: &Syntax) -> Option<Finished> {
+        let kind = syntax.get_kind();
+        if !self.is_allowed(kind) {
+            // it returns None thus acts as an early return
+            self.recover_restricted(kind.clone())?;
+        }
+        match kind {
+            KwTensor | KwBuffer => return self.parse_container_constructs(syntax),
+            KwFn => return self.parse_function_as_type(),
+            t if is_a_type(&t) => {
+                self.bump();
+            }
+            _ => {}
+        }
+        // should not continue with expression parsing, because
+        // a type cannot be an operand.
+        None
+    }
+
     // Possible options: a variable reference, function/method call or an iterable indexing
     #[allow(unused_variables)]
-    fn parse_starting_with_identifier(&self) -> Option<Finished> {
+    pub fn parse_starting_with_identifier(&self) -> Option<Finished> {
         if self.is_expected(StructAsType) {
             self.expect_and_bump_as(Ident, StructAsType);
             return None;
@@ -272,15 +294,24 @@ impl<'input> Parser<'input> {
     fn parse_type_hint(&self) -> Finished {
         self.expect_and_bump(Colon);
         let marker = self.start();
+
         if IsNext::Yes == self.is_next_strict(Ident) {
             self.expect_and_bump_as(Ident, StructAsType);
-        } else if IsNext::Yes == self.is_next_in_strict(SyntaxKind::types().into()) {
-            self.bump();
+        // } else if IsNext::Yes == self.is_next_strict(KwFn) {
+        //     self.parse_function_as_type();
+        // } else if IsNext::Yes == self.is_next_in_strict(SyntaxKind::types().into()) {
+        } else {
+            let syntax = self
+                .peek()
+                .expect("to be able to peek")
+                .expect("an ok peeked");
+            // self.bump();
+            self.parse_type(&syntax);
         }
         self.complete_marker_with(marker, TypeHint)
     }
 
-    fn parse_literal(&self, kind: SyntaxKind) -> Option<Finished> {
+    pub fn parse_literal(&self, kind: SyntaxKind) -> Option<Finished> {
         self.expect_and_bump_with_marker(kind, Literal)
     }
 
@@ -324,6 +355,7 @@ impl<'input> Parser<'input> {
         match keyword.get_kind() {
             KwBreak => self.parse_break(),
             KwContinue => self.parse_continue(),
+            KwFn => self.parse_function_as_type(), // trying to parse it as a type
             // A variable definition is a statement, thus will be recovered
             KwIf => self.parse_conditionals(),
             KwLet => {
@@ -350,7 +382,6 @@ impl<'input> Parser<'input> {
             //     }
             // }
             // KwSelf => Some(self.bump_with_marker(SelfRef)),
-            KwTensor => self.parse_tensor_structure(),
             nope => {
                 println!("{:?} is not implemented yet", nope);
                 todo!()
@@ -388,7 +419,7 @@ impl<'input> Parser<'input> {
     }
 
     #[allow(unused_variables)] // for rollback anchor
-    fn parse_binary_operation(
+    pub fn parse_binary_operation(
         &self,
         syntax: Syntax,
         min_precedence: &Bound,

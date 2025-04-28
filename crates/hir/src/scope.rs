@@ -4,13 +4,13 @@ use smol_str::SmolStr;
 
 use crate::{
     HIRResult,
+    container::canonical::CanonicalBuffer,
     errors::HIRError,
     expression::Expr,
     function::FnDef,
     metadata::{FnMeta, StructMeta, VarMeta},
     resolution::Unresolved,
     structure::StructDef,
-    tensor::CanonicalTensor,
     variable::VarDef,
 };
 
@@ -21,7 +21,7 @@ pub type FnDefIdx = Idx<FnDef>;
 pub type ScopeIdx = Idx<Scope>;
 pub type StrIdx = Idx<SmolStr>;
 pub type StructDefIdx = Idx<StructDef>;
-pub type TensorLiteralIdx = Idx<CanonicalTensor>;
+pub type ContainerLiteralIdx = Idx<CanonicalBuffer>;
 pub type VarDefIdx = Idx<VarDef>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
@@ -43,7 +43,8 @@ fn expr_arena_with_missing() -> Arena<Expr> {
 }
 
 pub trait NameIndexed {
-    fn set_name_index(&mut self, ix: Idx<SmolStr>);
+    fn set_name_index(&mut self, ix: StrIdx);
+    fn get_name_index(&self) -> StrIdx;
 }
 
 #[derive(Debug)]
@@ -58,6 +59,7 @@ pub enum ScopeKind {
 #[derive(Debug)]
 pub struct DefAllocator<D: NameIndexed> {
     pub names: Arena<SmolStr>,
+    pub name_to_name_idx: HashMap<SmolStr, StrIdx>,
     pub definitions: Arena<D>,
     pub name_to_idx_trie: NameToIndexTrie<D>,
 }
@@ -66,6 +68,7 @@ impl<D: NameIndexed> DefAllocator<D> {
     pub fn new() -> Self {
         Self {
             names: Arena::<SmolStr>::new(),
+            name_to_name_idx: HashMap::new(),
             definitions: Arena::<D>::new(),
             name_to_idx_trie: NameToIndexTrie::<D>::new(),
         }
@@ -152,7 +155,8 @@ pub struct Scope {
     pub(crate) metadata: MetadataStore,
 
     pub(crate) strs: Arena<SmolStr>,
-    pub(crate) tensor_literals: Arena<CanonicalTensor>,
+    pub(crate) tensor_literals: Arena<CanonicalBuffer>,
+    pub(crate) buffer_literals: Arena<CanonicalBuffer>,
 
     pub(crate) to_resolve: Arena<Unresolved>,
     pub(crate) name_to_spans: PatriciaMap<Span>,
@@ -169,7 +173,8 @@ impl Scope {
         let metadata = MetadataStore::new();
 
         let strs = Arena::<SmolStr>::new();
-        let tensor_literals = Arena::<CanonicalTensor>::new();
+        let tensor_literals = Arena::<CanonicalBuffer>::new();
+        let buffer_literals = Arena::<CanonicalBuffer>::new();
 
         let to_resolve = Arena::<Unresolved>::new();
         let name_to_spans = PatriciaMap::<Span>::new();
@@ -184,16 +189,23 @@ impl Scope {
             metadata,
             strs,
             tensor_literals,
+            buffer_literals,
             to_resolve,
             name_to_spans,
         }
     }
 
-    pub fn resolve_in<E, S: Selector<E>>(&self, key: &SmolStr) -> Option<&Idx<E>>
+    pub fn resolve_in<E, S: Selector<E>>(&self, key: &SmolStr) -> Option<(StrIdx, Idx<E>)>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
     {
-        S::select_alloc(self).name_to_idx_trie.get(key)
+        let allocator = S::select_alloc(self);
+
+        allocator.name_to_idx_trie.get(key).map(|idx| {
+            let d = &allocator.definitions[*idx];
+            let name_idx = d.get_name_index();
+            (name_idx, *idx)
+        })
     }
     pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, elm: E) -> HIRResult<Idx<E>>
     where
@@ -212,7 +224,10 @@ impl Scope {
     pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
         self.strs.alloc(string)
     }
-    pub fn allocate_tensor_literal(&mut self, tensor_literal: CanonicalTensor) -> TensorLiteralIdx {
+    pub fn allocate_tensor_literal(
+        &mut self,
+        tensor_literal: CanonicalBuffer,
+    ) -> ContainerLiteralIdx {
         self.tensor_literals.alloc(tensor_literal)
     }
 }

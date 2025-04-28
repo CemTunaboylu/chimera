@@ -5,6 +5,7 @@ use syntax::language::{SyntaxNode, SyntaxToken};
 use std::fmt::Debug;
 
 pub mod ast;
+pub mod container;
 pub mod container_ref;
 pub mod control_flow;
 pub mod delimited;
@@ -24,7 +25,6 @@ pub mod self_ref;
 pub mod semi;
 pub mod statement;
 pub mod structure;
-pub mod tensor;
 pub mod types;
 pub mod variable;
 

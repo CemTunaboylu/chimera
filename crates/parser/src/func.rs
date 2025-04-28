@@ -56,6 +56,44 @@ impl<'input> Parser<'input> {
         Some(self.complete_marker_with(marker, SyntaxKind::FnDef))
     }
 
+    #[allow(unused_variables)]
+    pub fn parse_function_as_type(&self) -> Option<Finished> {
+        let marker = self.start();
+        self.expect_and_bump(KwFn);
+        {
+            let rollback_after_drop = self.roll_back_context_after_drop();
+            self.dont_recover_in_ctx(LParen);
+            self.expect_and_bump(Ident);
+        }
+        self.expect_and_bump(LParen);
+        if !self.is_next(RParen) {
+            let rollback_after_drop = self.roll_back_context_after_drop();
+            self.dont_recover_in_ctx(RParen);
+            self.expect_in_ctx(FnDef);
+            self.parse_comma_separated_types_until(|syntax: Syntax| !syntax.is_of_kind(RParen));
+        }
+
+        self.expect_and_bump(RParen);
+
+        if self.is_next(RArrow) {
+            let ret_type_marker = self.start();
+            let rollback_after_drop = self.roll_back_context_after_drop();
+            self.expect_and_bump(RArrow);
+            self.allow_only_in_ctx(SyntaxKind::types().as_ref());
+            self.allow_in_ctx([And, Mut].as_ref());
+            self.expect_in_ctx(StructAsType);
+
+            if self.is_next(And) {
+                self.parse_prefix_unary_operation(And);
+            } else {
+                self.parse_left_hand_side();
+            }
+            self.complete_marker_with(ret_type_marker, RetType);
+        }
+
+        Some(self.complete_marker_with(marker, SyntaxKind::TyFn))
+    }
+
     // the identifier is already bumped at this point because we ended up here
     // from parsing an identifier and saw a LParen as well.
     #[allow(unused_variables)]
@@ -75,6 +113,27 @@ impl<'input> Parser<'input> {
         ctx.allow([And, Colon, Comma, Ident, KwMut, RParen].as_ref());
         ctx.allow(SyntaxKind::types().as_ref());
         rollback_when_dropped
+    }
+
+    #[allow(unused_variables)]
+    pub fn parse_comma_separated_types_until(&self, until_false: fn(Syntax) -> bool) {
+        let rollback_when_dropped = self.impose_comma_sep_typed_decl_restrictions();
+        use SeparatedElement::*;
+
+        let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
+        let types_set: SyntaxKindBitSet = SyntaxKind::types().into();
+        let arg_elements = thin_vec![ref_mut_with(Branched(
+            thin_vec![KindAs(Ident, StructAsType)],
+            // thin_vec![InSet(types_set)],
+            thin_vec![ParseExprWith(starting_precedence())],
+        ))];
+
+        while let Some(Ok(peeked)) = self.peek() {
+            if !until_false(peeked.clone()) {
+                break;
+            }
+            self.parse_arg(&arg_elements);
+        }
     }
 
     #[allow(unused_variables)]
@@ -156,16 +215,13 @@ impl<'input> Parser<'input> {
     }
 
     #[allow(unused_variables)]
-    pub fn parse_comma_separated_arguments_until(
-        &self,
-        unwanted: impl Into<SyntaxKindBitSet>,
-    ) -> Option<()> {
+    pub fn parse_comma_separated_arguments_until(&self, unwanted: impl Into<SyntaxKindBitSet>) {
         let rollback_when_dropped = self.impose_comma_sep_args_restrictions();
         use SeparatedElement::*;
         let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
         let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];
 
-        self.parse_separated_by(&can_be, FnArg, Comma, unwanted)
+        self.parse_separated_by(&can_be, FnArg, Comma, unwanted);
     }
 }
 
@@ -253,6 +309,34 @@ mod tests {
                 Block@21..23
                   LBrace@21..22 "{"
                   RBrace@22..23 "}""#]],
+    ),
+    function_def_with_fn_parameter: ("fn apply(f:fn(tensor)->tensor) {}",
+        expect![[r#"
+            Root@0..33
+              FnDef@0..33
+                KwFn@0..2 "fn"
+                Whitespace@2..3 " "
+                Ident@3..8 "apply"
+                LParen@8..9 "("
+                ParamDecl@9..29
+                  Ident@9..10 "f"
+                  Colon@10..11 ":"
+                  TyFn@11..29
+                    KwFn@11..13 "fn"
+                    LParen@13..14 "("
+                    ParamDecl@14..20
+                      TensorType@14..20
+                        TyTensor@14..20 "tensor"
+                    RParen@20..21 ")"
+                    RetType@21..29
+                      RArrow@21..23 "->"
+                      TensorType@23..29
+                        TyTensor@23..29 "tensor"
+                RParen@29..30 ")"
+                Whitespace@30..31 " "
+                Block@31..33
+                  LBrace@31..32 "{"
+                  RBrace@32..33 "}""#]],
     ),
 
     function_def_with_multiple_parameters: ("fn empty(first:i32, second:char, third: Structure) {}",

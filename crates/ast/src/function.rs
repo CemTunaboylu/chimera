@@ -24,7 +24,7 @@ impl RetType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FnDef {
     name: SmolStr,
     parameters: ThinVec<Param>,
@@ -32,32 +32,8 @@ pub struct FnDef {
     body: ASTBlock,
 }
 
-impl Clone for FnDef {
-    fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            parameters: self
-                .parameters
-                .iter()
-                .map(|param| param.clone())
-                .collect::<ThinVec<_>>(),
-            return_type: self.return_type.clone(),
-            body: self.body.clone(),
-        }
-    }
-}
-
-impl PartialEq for FnDef {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-            && self.parameters.starts_with(other.parameters.as_ref())
-            && self.return_type == other.return_type
-            && self.body == other.body
-    }
-}
-
 impl FnDef {
-    fn get_return_type_from(fn_def_node: &SyntaxNode) -> Option<RetType> {
+    pub fn get_return_type_from(fn_def_node: &SyntaxNode) -> Option<RetType> {
         Some(RetType(first_child_of_kind(
             fn_def_node,
             SyntaxKind::RetType,
@@ -135,8 +111,8 @@ impl TryFrom<&SyntaxNode> for FnArg {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct FnCall {
-    name: SmolStr,
-    arguments: ThinVec<FnArg>,
+    pub name: SmolStr,
+    pub arguments: ThinVec<FnArg>,
 }
 
 impl FnCall {

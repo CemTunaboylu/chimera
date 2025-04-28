@@ -10,7 +10,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Condition(ExprIdx);
+pub struct Condition(pub ExprIdx);
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Conditional {
@@ -20,7 +20,7 @@ pub enum Conditional {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct ControlFlow(ThinVec<Conditional>);
+pub struct ControlFlow(pub ThinVec<Conditional>);
 
 impl HIRBuilder {
     #[with_context(UsageContext::Read)]

@@ -19,8 +19,8 @@ impl TryFrom<&SyntaxNode> for Impl {
     type Error = ASTError;
 
     fn try_from(impl_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let ident_token = get_token_of_errs(impl_node, SyntaxKind::Ident)?;
-        let of = Type::Struct(ident_token.text().to_smolstr());
+        let impl_type = get_token_of_errs(impl_node, SyntaxKind::StructAsType)?;
+        let of = Type::Struct(impl_type.text().to_smolstr());
 
         let mut methods = thin_vec![];
         for fn_def in get_children_in(impl_node, SyntaxKind::FnDef) {

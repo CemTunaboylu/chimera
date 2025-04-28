@@ -12,21 +12,11 @@ use crate::{
     lang_elems::{get_children_as, get_token_with},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PreComputed {
     exprs: ThinVec<Expr>,
     node: SyntaxNode,
     op: Option<SyntaxKind>,
-}
-
-impl Clone for PreComputed {
-    fn clone(&self) -> Self {
-        Self {
-            exprs: self.exprs.iter().map(|e| e.clone()).collect::<ThinVec<_>>(),
-            node: self.node.clone(),
-            op: self.op.clone(),
-        }
-    }
 }
 
 impl PreComputed {
@@ -136,7 +126,7 @@ pub(crate) mod test {
         ast::Root,
         ast_root_from,
         literal::{Literal, Value},
-        types::{Hint, Type},
+        types::Type,
         variable::VarRef,
     };
 
@@ -288,7 +278,7 @@ pub(crate) mod test {
 
     #[test]
     fn tensor_struct_construction() {
-        let program = "Tensor<3,3,3><f32>::new()";
+        let program = "tensor<3,3,3><f32>::new()";
         let ast_root = ast_root_from(program);
         let infix_bin_op = new_bin_from(&ast_root);
 
@@ -296,19 +286,21 @@ pub(crate) mod test {
         assert_eq!(SyntaxKind::ColonColon, op);
 
         let tensor = infix_bin_op.lhs().unwrap();
-        assert!(matches!(tensor, Expr::TensorStruct(_)));
+        assert!(matches!(tensor, Expr::Class(_)));
 
-        if let Expr::TensorStruct(tensor_struct) = tensor {
+        let exp_shape = ThinVec::from([
+            Some(Expr::Literal(Literal(Value::Int(3)))),
+            Some(Expr::Literal(Literal(Value::Int(3)))),
+            Some(Expr::Literal(Literal(Value::Int(3)))),
+        ]);
+
+        if let Expr::Class(tensor) = tensor {
             assert_eq!(
-                &Hint::Type(Type::Float32),
-                tensor_struct.type_hint.as_ref().unwrap()
-            );
-            assert!(tensor_struct.init.is_none());
-            assert!(
-                tensor_struct
-                    .dims
-                    .iter()
-                    .all(|hint| matches!(hint, Hint::Dim(3)))
+                &Type::Tensor {
+                    ty: Some(Box::new(Type::Float32)),
+                    shape: ThinVec::from(exp_shape)
+                },
+                tensor
             );
         }
 

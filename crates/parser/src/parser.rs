@@ -81,6 +81,12 @@ impl<'input> Parser<'input> {
         anchor
     }
 
+    pub fn forbid_all(&self) -> RollingBackAnchor {
+        let anchor = self.roll_back_context_after_drop();
+        self.context.borrow().forbid_all();
+        anchor
+    }
+
     pub fn impose_restrictions_on_context(&self, syntax: Syntax) -> RollingBackAnchor {
         let rollback_when_dropped = self.roll_back_context_after_drop();
 
@@ -122,6 +128,10 @@ impl<'input> Parser<'input> {
 
     pub fn dont_recover_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
         self.context.borrow().disallow_recovery_of(e);
+    }
+
+    pub fn allow_all_in_ctx(&self) {
+        self.context.borrow().allow_all();
     }
 
     pub fn allow_only_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
@@ -242,6 +252,16 @@ impl<'input> Parser<'input> {
         self.recover();
     }
 
+    // expect_and_bump injects the syntax kind to expectations before acting
+    pub fn expect_in_set_and_bump(&self, set: SyntaxKindBitSet) {
+        self.expect_in_ctx(set);
+        if IsNext::Yes == self.is_next_in_strict(set) {
+            self.bump();
+            return;
+        }
+        self.recover();
+    }
+
     pub fn expect_and_bump_as(&self, expected_kind: SyntaxKind, kind: SyntaxKind) {
         self.expect_in_ctx(expected_kind);
         if IsNext::Yes == self.is_next_strict(expected_kind) {
@@ -298,6 +318,11 @@ impl<'input> Parser<'input> {
             self.push_event(Event::AddSyntax { syntax: syntax });
         }
         Some(())
+    }
+    pub fn bump_if(&self, kind: SyntaxKind) {
+        if self.is_next(kind) {
+            self.bump();
+        }
     }
 
     pub fn ignore_if(&self, kind: SyntaxKind) {

@@ -14,7 +14,7 @@ impl<'input> Parser<'input> {
         self.expect_and_bump(KwImpl);
         {
             let rollback_when_dropped = self.impose_restrictions_for_identifier();
-            self.expect_and_bump(Ident);
+            self.expect_and_bump_as(Ident, StructAsType);
         }
         {
             let rollback_when_dropped = self.impose_restrictions_for_lbrace();

@@ -1,6 +1,8 @@
 use smol_str::SmolStr;
 
-use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, types::Type};
+use crate::{
+    HIRResult, builder::HIRBuilder, context::UsageContext, typing::hindley_milner::types::Type,
+};
 use ast::parameter::{By as ASTBy, Param as ASTParam, ParamType as ASTParamType};
 
 #[derive(Clone, Debug, PartialEq)]

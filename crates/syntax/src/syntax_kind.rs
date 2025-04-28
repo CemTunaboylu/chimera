@@ -6,7 +6,6 @@ use thin_vec::{ThinVec, thin_vec};
 pub enum SyntaxKind {
     // recovering
     Recovered,
-    Errored,
     // required for CST
     Root,
     // token-tree roots for n-ary operators
@@ -14,13 +13,12 @@ pub enum SyntaxKind {
     PrefixUnaryOp,
     PostfixUnaryOp,
     // token-tree roots for expressions/sub-expressions
+    BufferLit,
     CharLit,
     DimHints,
-    DimHint,
     DimValue,
     FnCall,
     In,
-    Initializer,
     ImplBlock,
     Jump,
     Literal,
@@ -33,15 +31,12 @@ pub enum SyntaxKind {
     Semi,
     StrLit,
     StructField,
-    StructFields,
+    StructFields, // unnecessary
     StructInit,
     StructRef,
     StructAsType,
-    TensorInit,
-    TensorLit,
-    TensorStruct,
-    TensorType,
     TypeHint,
+    TensorLit,
     VarRef,
     // token-tree roots for statements
     Block,
@@ -53,6 +48,7 @@ pub enum SyntaxKind {
     FnDef,
     ForIdent,
     ForLoop,
+    Generic,
     Indexing,
     StructDef,
     VarDef,
@@ -75,6 +71,7 @@ pub enum SyntaxKind {
     Ident,
     Int,
     KwBreak,
+    KwBuffer,
     KwConst,
     KwContinue,
     KwElif,
@@ -103,7 +100,7 @@ pub enum SyntaxKind {
     LParen,
     LShift,
     LShiftEq,
-    // TOOD: arr[<expr>] -> [<expr>] is actually a 'composite' postfix operator
+    // arr[<expr>] -> [<expr>] is actually a 'composite' postfix operator
     LBrack,
     Lt,
     Le,
@@ -130,11 +127,12 @@ pub enum SyntaxKind {
     Star,
     StarEq,
     TyBool,
+    TyBuffer,
     TyChar,
     TyF32,
+    TyFn, // this is a composite type i.e. a node not a token
     TyI32,
     TyStr,
-    TyStrSlc,
     TyTensor,
     Under,
     Whitespace,
@@ -170,25 +168,29 @@ impl SyntaxKind {
         use SyntaxKind::*;
         matches!(self, RBrace | RParen | RBrack)
     }
+    // TODO: a closure is a literal value?
     pub fn is_literal_value(&self) -> bool {
         use SyntaxKind::*;
         matches!(
             self,
-            CharLit | Float | Int | KwFalse | KwTrue | StrLit | TensorLit
+            BufferLit | CharLit | Float | Int | KwFalse | KwTrue | StrLit
         )
     }
 
     pub fn types() -> ThinVec<SyntaxKind> {
         use SyntaxKind::*;
         thin_vec![
+            KwBuffer, // allows parsing buffer<dim><type> as a type
+            KwFn,     // allows parsing function declaration as a type
+            KwTensor, // allows parsing tensor<dim><type> as a type
             StructAsType,
-            TensorType,
             TyBool,
+            TyBuffer,
             TyChar,
             TyF32,
+            TyFn,
             TyI32,
             TyStr,
-            TyStrSlc,
             TyTensor,
         ]
     }
@@ -196,15 +198,19 @@ impl SyntaxKind {
     pub fn can_be_parameter() -> ThinVec<SyntaxKind> {
         use SyntaxKind::*;
         thin_vec![
+            Ident,
+            KwBuffer, // allows parsing buffer<dim><type> as a type
+            KwFn,     // allows parsing function declaration as a type
+            KwTensor, // allows parsing tensor<dim><type> as a type
             SelfRef,
             StructAsType,
-            TensorType,
             TyBool,
+            TyBuffer,
             TyChar,
             TyF32,
+            TyFn,
             TyI32,
             TyStr,
-            TyStrSlc,
             TyTensor,
         ]
     }
@@ -285,6 +291,7 @@ impl From<TokenKind> for SyntaxKind {
             GreaterThanOrEq => Self::Ge,
             Identifier => Self::Ident,
             Integer => Self::Int,
+            KwBuffer => Self::KwBuffer,
             KwBreak => Self::KwBreak,
             KwConst => Self::KwConst,
             KwContinue => Self::KwContinue,
@@ -347,9 +354,7 @@ impl From<TokenKind> for SyntaxKind {
             TypeChar => Self::TyChar,
             TypeF32 => Self::TyF32,
             TypeI32 => Self::TyI32,
-            TypeStrSlice => Self::TyStrSlc,
-            TypeString => Self::TyStr,
-            TypeTensor => Self::TyTensor,
+            TypeStr => Self::TyStr,
             Underscore => Self::Under,
             Xor => Self::Xor,
             _ => {

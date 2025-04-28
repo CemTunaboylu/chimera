@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use la_arena::{Arena, Idx};
+use la_arena::Arena;
 use smol_str::SmolStr;
 
 use ast::{
@@ -20,7 +20,7 @@ use crate::{
         ExprIdx, NameIndexed, NameToIndexTrie, ScopeIdx, StrIdx, StructDefIdx, StructSelector,
         placeholder_idx,
     },
-    types::Type,
+    typing::hindley_milner::types::Type,
 };
 
 #[derive(Clone, Debug)]
@@ -31,8 +31,11 @@ pub struct StructDef {
     pub scope_idx: ScopeIdx,
 }
 impl NameIndexed for StructDef {
-    fn set_name_index(&mut self, ix: Idx<SmolStr>) {
+    fn set_name_index(&mut self, ix: StrIdx) {
         self.name_index = ix;
+    }
+    fn get_name_index(&self) -> StrIdx {
+        self.name_index
     }
 }
 
@@ -114,8 +117,10 @@ impl HIRBuilder {
         unresolved: &Reference<StructDef>,
     ) -> HIRResult<Reference<StructDef>> {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
-        let (at, idx) = resolve::<StructDef, StructSelector>(scope_climbing_iter, unresolved)?;
-        Ok(Reference::Resolved { at, idx })
+        Ok(resolve::<StructDef, StructSelector>(
+            scope_climbing_iter,
+            unresolved,
+        )?)
     }
 
     pub fn lower_struct_init(&mut self, struct_init: &ASTStructInit) -> HIRResult<StructInit> {
@@ -154,7 +159,7 @@ mod tests {
     #[test]
     fn struct_def() {
         let field_names = ["x", "y", "item"];
-        let field_types = [Type::Integer32, Type::Integer32];
+        let field_types = [Type::I32, Type::I32];
         let program = "struct Tester { x: i32, y: i32, item: Item }";
         let ast_root = ast_root_from(program);
         let ast_struct_def = cast_node_into_type::<ASTStructDef>(

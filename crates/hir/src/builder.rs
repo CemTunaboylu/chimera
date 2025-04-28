@@ -9,12 +9,13 @@ use ast::{ast::Root as ASTRoot, statement::Stmt as ASTStmt};
 
 use crate::{
     HIRResult,
+    container::canonical::CanonicalBuffer,
     context::{LoweringContext, UsageContext},
     scope::{
-        NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span, StrIdx, TensorLiteralIdx, into_idx,
+        ContainerLiteralIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span, StrIdx,
+        into_idx,
     },
     statement::Stmt,
-    tensor::CanonicalTensor,
 };
 
 // HIR is the high-level intermediate representation that is built on top of the AST
@@ -96,7 +97,10 @@ impl HIRBuilder {
         let current_scope = self.get_current_scope_mut();
         current_scope.allocate_string(string)
     }
-    pub fn allocate_tensor_literal(&mut self, tensor_literal: CanonicalTensor) -> TensorLiteralIdx {
+    pub fn allocate_tensor_literal(
+        &mut self,
+        tensor_literal: CanonicalBuffer,
+    ) -> ContainerLiteralIdx {
         let current_scope = self.get_current_scope_mut();
         current_scope.allocate_tensor_literal(tensor_literal)
     }

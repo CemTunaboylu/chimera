@@ -4,7 +4,7 @@ use hir_macro::with_context;
 use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ExprIdx};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Mut(ExprIdx);
+pub struct Mut(pub ExprIdx);
 
 impl HIRBuilder {
     #[with_context(UsageContext::Mut)]

@@ -29,7 +29,7 @@ impl<'input> Parser<'input> {
                     if self.is_expected(ContainerRef) {
                         self.parse_container_indexing();
                     } else {
-                        self.parse_tensor_literal();
+                        self.parse_buffer_literal();
                     }
                     return None;
                 }

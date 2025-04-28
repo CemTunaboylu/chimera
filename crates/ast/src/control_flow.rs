@@ -98,7 +98,11 @@ impl TryFrom<&SyntaxNode> for ControlFlow {
     fn try_from(control_flow_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let conditional_nodes =
             get_children_in_errs(control_flow_node, [SyntaxKind::Conditional].as_ref())?;
-        let first_conditional_if = conditional_nodes.first().unwrap();
+        let first_conditional_if = conditional_nodes.first().ok_or(ASTError::new(
+            control_flow_node.text_range().into(),
+            "if statement",
+            &conditional_nodes,
+        ))?;
         _ = get_token_of_errs(first_conditional_if, SyntaxKind::KwIf)?;
         let mut conditionals: ThinVec<Conditional> =
             ThinVec::with_capacity(conditional_nodes.len());

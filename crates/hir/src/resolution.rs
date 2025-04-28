@@ -1,7 +1,7 @@
 use crate::{
     climbing::{EnumeratedScope, climb},
     delimited::Indexing,
-    scope::{NameIndexed, Selector, Span},
+    scope::{NameIndexed, Selector, Span, StrIdx},
     unwrap_or_err,
 };
 use la_arena::{Arena, Idx};
@@ -32,6 +32,10 @@ pub struct ResolutionError {
 }
 
 impl ResolutionError {
+    pub fn unresolved(unresolved: impl Debug) -> Self {
+        let msg = format!("{:?} is unresolved", unresolved);
+        ResolutionError { msg }
+    }
     pub fn already_resolved(cannot_resolve: impl Debug) -> Self {
         let msg = format!(
             "cannot resolve {:?}, it is already resolved",
@@ -97,41 +101,33 @@ fn span_check(
 pub fn resolve<'caller, E, S: Selector<E>>(
     mut scopes: impl Iterator<Item = EnumeratedScope<'caller>>,
     unresolved_ref: &Reference<E>,
-) -> ResolutionResult<(ScopeIdx, Idx<E>)>
+) -> ResolutionResult<Reference<E>>
 where
     E: Clone + Debug + PartialEq + NameIndexed,
 {
     let current_scope = scopes.next();
-    let mut enumerated_scope = unwrap_or_err(
-        current_scope.as_ref(),
-        format!("cannot find scope for {:?}", unresolved_ref).as_str(),
-    )?
-    .clone();
-
-    let (key, resolution_type) = {
+    let (key, resolution_type, baggage) = {
+        let enumerated_scope = unwrap_or_err(
+            current_scope.as_ref(),
+            format!("cannot find scope for {:?}", unresolved_ref).as_str(),
+        )?
+        .clone();
         let idx = unresolved_ref.get_unresolved_index()?;
         let unresolved = &enumerated_scope.1.to_resolve[idx];
-        (&unresolved.name, &unresolved.for_type)
+        (&unresolved.name, &unresolved.for_type, &unresolved.baggage)
     };
+
     let mut guesstimates = ThinVec::new();
-    loop {
-        let (scope_idx, scope) = enumerated_scope;
-        if let Some(idx) = scope.resolve_in::<E, S>(key) {
-            _ = span_check(scope, key, resolution_type)?;
-            return Ok((scope_idx, *idx));
-        } else {
-            guesstimates.push(guess(&S::select_alloc(scope).name_to_idx_trie, key));
-        }
-        if let Some(new) = scopes.next() {
-            enumerated_scope = new;
-        } else {
-            break;
-        };
-    }
     for (scope_idx, scope) in scopes {
-        if let Some(idx) = scope.resolve_in::<E, S>(key) {
+        if let Some((name_idx, obj_idx)) = scope.resolve_in::<E, S>(key) {
             _ = span_check(scope, key, resolution_type)?;
-            return Ok((scope_idx, *idx));
+            let resolved = Reference::<E>::Resolved {
+                at: scope_idx,
+                baggage: baggage.clone(),
+                name_idx,
+                obj_idx,
+            };
+            return Ok(resolved);
         } else {
             guesstimates.push(guess(&S::select_alloc(scope).name_to_idx_trie, key));
         }
@@ -139,7 +135,7 @@ where
     return Err(ResolutionError::new_with_guestimate(key, guesstimates).into());
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Baggage {
     None,
     Arg(ThinVec<FnArg>),
@@ -173,7 +169,12 @@ impl Unresolved {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Reference<R> {
     Unresolved(Idx<Unresolved>),
-    Resolved { at: ScopeIdx, idx: Idx<R> },
+    Resolved {
+        at: ScopeIdx,
+        baggage: Baggage,
+        name_idx: Idx<SmolStr>,
+        obj_idx: Idx<R>,
+    },
 }
 
 impl<R: Debug> Reference<R> {
@@ -181,6 +182,17 @@ impl<R: Debug> Reference<R> {
         match self {
             Reference::Resolved { .. } => Err(ResolutionError::already_resolved(self).into()),
             Reference::Unresolved(idx) => Ok(*idx),
+        }
+    }
+    pub fn get_obj_index(&self) -> ResolutionResult<Idx<R>> {
+        match self {
+            Reference::Resolved {
+                at: _,
+                baggage: _,
+                name_idx: _,
+                obj_idx,
+            } => Ok(*obj_idx),
+            Reference::Unresolved(_) => Err(ResolutionError::unresolved(self).into()),
         }
     }
 }

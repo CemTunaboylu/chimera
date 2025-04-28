@@ -2,36 +2,37 @@ use std::{fmt::Debug, ops::Range, str::FromStr};
 
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
-    language::{SyntaxElement, SyntaxNode, SyntaxToken},
+    language::{NodeOrToken, SyntaxElement, SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
-use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
     ast::ASTResult,
+    container::{BufferTree, try_container_tree_from},
     errors::ASTError,
-    lang_elems::{get_children_in, unwrap_first_child_or_err},
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Bool(bool),
+    Buffer(BufferTree),
     Char(char),
     Float(f32),
+    // Fn
     Int(i32),
     Str(SmolStr),
-    Tensor(TensorTree),
+    // Struct
+    Tensor(BufferTree),
 }
 
 impl Value {
-    pub fn get_tensor_tree(&self) -> Option<&TensorTree> {
-        if self.is_primitive() {
-            return None;
-        }
-        match self {
-            Self::Tensor(tree) => Some(tree),
-            _ => todo!(),
-        }
+    pub fn get_buffer_tree(&self) -> Option<&BufferTree> {
+        let tree = match self {
+            Self::Buffer(tree) => tree,
+            Self::Tensor(tree) => tree,
+            _ => return None,
+        };
+        Some(tree)
     }
     pub fn is_primitive(&self) -> bool {
         matches!(
@@ -39,59 +40,6 @@ impl Value {
             Self::Bool(_) | Self::Char(_) | Self::Float(_) | Self::Int(_)
         )
     }
-}
-#[derive(Clone, Debug, PartialEq)]
-pub struct TensorShape(pub ThinVec<usize>);
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum TensorTree {
-    Node(TensorShape, ThinVec<TensorTree>),
-    Leaf(ThinVec<Value>),
-}
-
-impl TensorTree {
-    pub fn shape(&self) -> TensorShape {
-        match self {
-            TensorTree::Node(tensor_shape, _) => tensor_shape.clone(),
-            TensorTree::Leaf(thin_vec) => TensorShape(thin_vec![thin_vec.len()]),
-        }
-    }
-    pub fn sub_tree(&self) -> ThinVec<TensorTree> {
-        match self {
-            TensorTree::Node(_, tensor_tree) => tensor_tree.clone(),
-            TensorTree::Leaf(_) => thin_vec![],
-        }
-    }
-
-    pub fn values(&self) -> Option<&ThinVec<Value>> {
-        match self {
-            TensorTree::Node(_, _) => None,
-            TensorTree::Leaf(value_tree) => Some(value_tree),
-        }
-    }
-}
-
-fn bottom_up_tensor_tree_from(tensor_literal_node: &SyntaxNode) -> ASTResult<TensorTree> {
-    let dim_values = get_children_in(tensor_literal_node, SyntaxKind::DimValue);
-    let mut values = ThinVec::new();
-    let mut sub_trees = ThinVec::new();
-    let mut shape = thin_vec![dim_values.len()];
-    for dim_value in dim_values {
-        let dim_literal = unwrap_first_child_or_err(&dim_value)?;
-        match Literal::try_from(&dim_literal)?.value() {
-            Value::Tensor(tensor_tree) => {
-                sub_trees.push(tensor_tree);
-            }
-            value => {
-                values.push(value);
-            }
-        }
-    }
-    if sub_trees.is_empty() {
-        return Ok(TensorTree::Leaf(values));
-    }
-    shape.extend(sub_trees.first().unwrap().shape().0);
-    Ok(TensorTree::Node(TensorShape(shape), sub_trees))
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -103,7 +51,7 @@ impl Literal {
     }
 }
 
-fn parse_into<S: FromStr>(mut s: &str, range: Range<usize>) -> ASTResult<S>
+pub fn parse_into<S: FromStr>(mut s: &str, range: Range<usize>) -> ASTResult<S>
 where
     <S as FromStr>::Err: Debug,
 {
@@ -170,18 +118,37 @@ impl TryFrom<&SyntaxNode> for Literal {
 
     fn try_from(literal_node: &SyntaxNode) -> Result<Self, Self::Error> {
         if let Some(child) = literal_node.first_child() {
-            if child.kind() == SyntaxKind::TensorLit {
-                let tensor_tree = bottom_up_tensor_tree_from(&child)?;
+            if child.kind() == SyntaxKind::BufferLit {
+                let buffer_tree = try_container_tree_from(&child)?;
+                return Ok(Self(Value::Buffer(buffer_tree)));
+            } else if child.kind() == SyntaxKind::TensorLit {
+                let tensor_tree = try_container_tree_from(&child)?;
                 return Ok(Self(Value::Tensor(tensor_tree)));
             }
         }
-        let value_containing_token = literal_node
+        if let Some(value_containing_token) = literal_node
             .children_with_tokens()
             .filter(|syntax_node| syntax_node.kind().is_literal_value())
             .find_map(SyntaxElement::into_token)
-            .unwrap();
+        {
+            Literal::try_from(&value_containing_token)
+        } else {
+            return Err(ASTError::with_err_msg(
+                literal_node.text_range().into(),
+                "literal node should have a value".to_string(),
+            ));
+        }
+    }
+}
 
-        Literal::try_from(&value_containing_token)
+impl TryFrom<&NodeOrToken> for Literal {
+    type Error = ASTError;
+
+    fn try_from(node_or_token: &NodeOrToken) -> Result<Self, Self::Error> {
+        match node_or_token {
+            NodeOrToken::Node(node) => Self::try_from(node),
+            NodeOrToken::Token(token) => Self::try_from(token),
+        }
     }
 }
 #[cfg(test)]
@@ -209,9 +176,10 @@ mod tests {
         valid_i32: "9",
         valid_string: "\"String\"",
         // valid_str_slice: "&\"slice\"",
-        valid_tensor: "[]",
-        tensor_2d_literal: "[[1,0,0],[0,1,0],[0,0,1]]",
-        tensor_3d_literal: "[[[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,1]] ]",
+        valid_buffer: "[]",
+        buffer_2d_literal: "[[1,0,0],[0,1,0],[0,0,1]]",
+        buffer_3d_literal: "[[[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,1]] ]",
+        valid_tensor: "tensor[value(); [x,y,z]]",
     }
 
     #[test]

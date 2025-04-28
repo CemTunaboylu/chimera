@@ -8,33 +8,23 @@ use crate::{
     builder::HIRBuilder,
     context::UsageContext,
     errors::HIRError,
+    expression::Expr,
     scope::{ExprIdx, ScopeIdx, ScopeKind},
     statement::Stmt,
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Paren(ExprIdx);
+pub struct Paren(pub ExprIdx);
 
-impl Paren {
-    pub fn expr(&self) -> ExprIdx {
-        self.0
-    }
-}
 // TODO: needs metadata as well
 #[derive(Clone, Debug, PartialEq)]
 pub struct Block {
-    scope_idx: ScopeIdx,
-    is_returning: bool,
-    statements: ThinVec<Stmt>,
+    pub scope_idx: ScopeIdx,
+    pub returns: ThinVec<usize>,
+    pub statements: ThinVec<Stmt>,
 }
 
-impl Block {
-    pub fn statements(&self) -> &ThinVec<Stmt> {
-        &self.statements
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Indexing(pub(crate) ExprIdx);
 
 impl HIRBuilder {
@@ -46,14 +36,23 @@ impl HIRBuilder {
     pub fn lower_block(&mut self, block: &ASTBlock) -> HIRResult<Block> {
         let statements = block.statements();
         let mut lowered_statements = ThinVec::with_capacity(statements.len());
+        let mut returns = ThinVec::new();
         for stmt in statements {
             let low_stmt = self.lower_statement(&stmt)?;
+            match low_stmt {
+                Stmt::Return(_) => {
+                    returns.push(lowered_statements.len());
+                }
+                Stmt::Expr(idx) if !matches!(self.get_expr(idx), Expr::Missing) => {
+                    returns.push(lowered_statements.len());
+                }
+                _ => {}
+            }
             lowered_statements.push(low_stmt);
         }
-        let is_returning = matches!(block, ASTBlock::Returning(_));
         Ok(Block {
             scope_idx: self.current_scope_cursor,
-            is_returning,
+            returns,
             statements: lowered_statements,
         })
     }

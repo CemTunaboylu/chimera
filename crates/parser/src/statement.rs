@@ -24,7 +24,7 @@ impl<'input> Parser<'input> {
             Ok(syntax) if syntax.is_of_kind(KwStruct) => self.parse_struct_definition(),
             Ok(syntax) if syntax.is_of_kind(KwWhile) => self.parse_while_loop(),
             // An expression produces a result (result of evalution), but if there is a ; at the end,
-            // it becomes a statemet, thus check that here and wrap it with Semi
+            // it becomes a statement, thus check that here and wrap it with Semi
             _ => self.parse_expression_until_binding_power(starting_precedence()),
         };
         if self.is_next(Semi) {
@@ -46,6 +46,7 @@ impl<'input> Parser<'input> {
         ctx.forbid_all();
         let non_assignments: SyntaxKindBitSet = non_assigning_operators();
         ctx.allow(non_assignments);
+        ctx.allow(SyntaxKind::can_be_parameter());
         ctx.allow(SyntaxKind::opening_delimiters());
         ctx.allow([Eq, Ident, Semi, VarDef, VarRef, SelfRef, StructInit].as_ref());
         rollback_when_dropped
@@ -168,6 +169,34 @@ mod tests {
                       Whitespace@21..22 " "
                       VarRef@22..25
                         Ident@22..25 "bar""#]]),
+        fn_type_hinted_var_def:    ("let foo : fn(i32)->i32 = bar",
+            expect![[r#"
+                Root@0..28
+                  VarDef@0..28
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..28
+                      VarRef@4..22
+                        Ident@4..7 "foo"
+                        Whitespace@7..8 " "
+                        Colon@8..9 ":"
+                        TypeHint@9..22
+                          Whitespace@9..10 " "
+                          TyFn@10..22
+                            KwFn@10..12 "fn"
+                            LParen@12..13 "("
+                            ParamDecl@13..16
+                              TyI32@13..16 "i32"
+                            RParen@16..17 ")"
+                            RetType@17..22
+                              RArrow@17..19 "->"
+                              TyI32@19..22 "i32"
+                      Whitespace@22..23 " "
+                      Eq@23..24 "="
+                      Whitespace@24..25 " "
+                      VarRef@25..28
+                        Ident@25..28 "bar""#]]),
+
         mut_moving_var_def:    ("let mut foo : i32 = bar",
             expect![[r#"
                 Root@0..23

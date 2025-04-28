@@ -15,8 +15,15 @@ impl<'input> Parser<'input> {
         })
     }
 
+    // an unmet expectation is meaningful at the first incident, after that it stops being an expectation
+    fn take_expectations(&self) -> ThinVec<SyntaxKind> {
+        let expectations = self.context.borrow().get_expectations();
+        self.context.borrow().del_expectation(expectations);
+        expectations.into()
+    }
+
     pub fn recover_from_err(&self, err: Report) {
-        let kinds: ThinVec<SyntaxKind> = self.context.borrow().get_expectations().into();
+        let kinds: ThinVec<SyntaxKind> = self.take_expectations();
         self.push_event(Event::Error {
             err: ParseError::new(
                 self.lexer.borrow().span().clone(),
@@ -40,7 +47,7 @@ impl<'input> Parser<'input> {
 
     pub fn recover_unmet_expectation(&self) {
         let got = self.peek();
-        let kinds: ThinVec<SyntaxKind> = self.context.borrow().get_expectations().into();
+        let kinds: ThinVec<SyntaxKind> = self.take_expectations();
         self.push_event(Event::Error {
             err: ParseError::new(self.lexer.borrow_mut().span().clone(), kinds, got),
         });
@@ -57,7 +64,7 @@ impl<'input> Parser<'input> {
             let kinds: ThinVec<SyntaxKind> = if !ctx.is_allowed(kind) {
                 ctx.get_allowed().into()
             } else {
-                ctx.get_expectations().into()
+                self.take_expectations()
             };
             kinds
         } else {

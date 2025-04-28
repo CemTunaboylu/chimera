@@ -6,8 +6,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        clone_thin_vec, compare_thin_vecs, ensure_node_kind_is, error_for_node, get_children_as,
-        get_children_in, get_single_children_as_expr,
+        ensure_node_kind_is, error_for_node, get_children_as, get_children_in,
+        get_single_children_as_expr,
     },
     statement::Stmt,
 };
@@ -21,40 +21,10 @@ impl Paren {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Block {
     Semi(ThinVec<Stmt>),
     Returning(ThinVec<Stmt>),
-}
-
-impl Clone for Block {
-    fn clone(&self) -> Self {
-        match self {
-            Block::Semi(thin_vec) => {
-                let inside = clone_thin_vec(thin_vec);
-                Self::Semi(inside)
-            }
-            Block::Returning(thin_vec) => {
-                let inside = clone_thin_vec(thin_vec);
-                Self::Returning(inside)
-            }
-        }
-    }
-}
-
-impl PartialEq for Block {
-    fn eq(&self, other: &Self) -> bool {
-        let (lhs, rhs) = match (self, other) {
-            (Block::Semi(thin_vec_self), Block::Semi(thin_vec_other)) => {
-                (thin_vec_self, thin_vec_other)
-            }
-            (Block::Returning(thin_vec_self), Block::Returning(thin_vec_other)) => {
-                (thin_vec_self, thin_vec_other)
-            }
-            _ => return false,
-        };
-        compare_thin_vecs(rhs, lhs)
-    }
 }
 
 impl TryFrom<&SyntaxNode> for Block {

@@ -3,6 +3,8 @@ use ast::expression::Expr as ASTExpr;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    climbing::climb,
+    container::tensor::Tensor,
     container_ref::ContainerRef,
     delimited::{Block, Indexing, Paren},
     function::FnCall,
@@ -13,14 +15,13 @@ use crate::{
     scope::{ExprIdx, into_idx},
     self_ref::SelfRef,
     structure::{StructInit, StructRef},
-    tensor::TensorStruct,
+    typing::hindley_milner::types::Type,
     unwrap_or_err,
     variable::VarRef,
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Expr {
-    TensorStruct(TensorStruct),
     Block(Block),
     ContainerRef(Reference<ContainerRef>),
     FnCall(Reference<FnCall>),
@@ -40,7 +41,6 @@ pub enum Expr {
 pub const MISSING: u32 = 0;
 
 impl HIRBuilder {
-    // TODO: Do I need to get in builder?
     pub fn get_expr(&self, idx: ExprIdx) -> &Expr {
         // TODO: try to find by 'climbing' the branch of scopes
         let climber = climb(self.current_scope_cursor, &self.scopes);
@@ -53,6 +53,27 @@ impl HIRBuilder {
             break;
         }
         expr
+    }
+    pub fn infer_type_from_expr(&self, idx: ExprIdx) -> Type {
+        match self.get_expr(idx) {
+            // TODO: if returning, infer the type from them
+            Expr::Block(block) => todo!(),
+            // TODO: not resolved yet, thus should be taken care of separately after the resolution pass
+            Expr::ContainerRef(reference) => todo!(),
+            // TODO: not resolved yet, thus should be taken care of separately after the resolution pass
+            Expr::FnCall(reference) => todo!(),
+            Expr::Indexing(indexing) => self.infer_type_from_expr(indexing.0),
+            Expr::Infix(binary_infix) => todo!(),
+            Expr::Literal(literal) => todo!(),
+            Expr::Missing => todo!(),
+            Expr::Mut(_) => todo!(),
+            Expr::Paren(paren) => todo!(),
+            Expr::SelfRef(self_ref) => todo!(),
+            Expr::StructRef(reference) => todo!(),
+            Expr::StructInit(struct_init) => todo!(),
+            Expr::Unary(unary) => todo!(),
+            Expr::VarRef(reference) => todo!(),
+        }
     }
     pub fn try_lowering_expr_as_idx(&mut self, ast_expr: Option<ASTExpr>) -> HIRResult<ExprIdx> {
         let expr = unwrap_or_err(ast_expr.as_ref(), "expression")?;
@@ -88,15 +109,17 @@ impl HIRBuilder {
             ASTExpr::StructInit(struct_init) => {
                 Expr::StructInit(self.lower_struct_init(struct_init)?)
             }
-            ASTExpr::TensorStruct(tensor_struct) => {
-                Expr::TensorStruct(self.lower_tensor_struct(tensor_struct)?)
-            }
+            // TODO: container init
+            // ASTExpr::TensorInit(tensor_struct) => {
+            //     Expr::TensorInit(self.lower_tensor_init(tensor_struct)?)
+            // }
             ASTExpr::Unary(unary) => Expr::Unary(self.lower_unary_operation(unary)?),
             ASTExpr::VarRef(var_ref) => {
                 let unresolved = self.lower_var_ref(var_ref)?;
                 let idx = self.allocate_for_resolution(unresolved);
                 Expr::VarRef(Reference::Unresolved(idx))
             }
+            _ => todo!(),
         };
         Ok(self.as_expr_idx(expr))
     }

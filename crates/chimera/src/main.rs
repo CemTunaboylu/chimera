@@ -1,4 +1,4 @@
-use hir::hir::lower;
+use hir::builder::lower;
 use miette::{Context, IntoDiagnostic, Report, Result as MietteResult};
 use parser::{cst::ConcreteSyntaxTree, parser::Parser as ChimeraParser};
 
@@ -85,6 +85,8 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
                 AstStmt::ControlFlow(_) => todo!(),
                 AstStmt::Loop(_) => todo!(),
                 AstStmt::Return(_) => todo!(),
+                AstStmt::Impl(_) => todo!(),
+                AstStmt::StructDef(struct_def) => todo!(),
             })
             // match expr {
             //     Expr::VarRef(var_ref) => Some(var_ref.name()),
