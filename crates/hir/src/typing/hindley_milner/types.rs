@@ -23,6 +23,7 @@ pub enum Status {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Maybe<T: Hash + Eq> {
+    None,
     Checked(Box<T>),
     Unchecked(ThinVec<T>),
 }
@@ -54,7 +55,8 @@ pub enum Type {
     },
     Tensor {
         shape: ThinVec<Option<usize>>,
-        data_type: Option<Maybe<Type>>,
+        // TODO: during lowering, it will have it's own type, Maybe should be fixed
+        data_type: Maybe<Type>,
     },
     Tuple(ThinVec<Type>),
     Var(TypeVarId), // type variable

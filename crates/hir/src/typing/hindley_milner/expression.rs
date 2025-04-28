@@ -73,8 +73,8 @@ pub enum HMExpr {
         fields: ThinVec<(TypeKey, HMExpr)>,
     },
     Tensor {
-        // TODO: revisit this, can put option logic in Maybe as Maybe::Unchecked(thin_vec![])
-        data_type: Option<Maybe<Type>>,
+        // TODO: revisit this
+        data_type: Maybe<Type>,
         shape: ThinVec<Option<usize>>,
     },
     Tuple(ThinVec<HMExpr>),

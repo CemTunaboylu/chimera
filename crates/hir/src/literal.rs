@@ -28,7 +28,7 @@ pub enum Value {
     Tensor {
         idx: ContainerLiteralIdx,
         shape: ThinVec<Option<usize>>,
-        data_type: Option<Maybe<Type>>,
+        data_type: Maybe<Type>,
     },
 }
 

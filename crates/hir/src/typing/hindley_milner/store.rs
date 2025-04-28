@@ -1,4 +1,4 @@
-use thin_vec::ThinVec;
+use thin_vec::{ThinVec, thin_vec};
 
 use std::fmt::Debug;
 
@@ -29,13 +29,7 @@ fn shape_validation_for<T: Debug + PartialEq>(
         return Ok(());
     }
     Err(TypeInferenceError::UnificationFailure(
-        format!(
-            "{:?} shapes do not match : {:?} vs {:?}",
-            on_type,
-            s1.as_ref(),
-            s2.as_ref()
-        )
-        .into(),
+        format!("{:} shapes do not match : {:?} vs {:?}", on_type, s1, s2).into(),
     ))
 }
 
@@ -75,6 +69,7 @@ impl TypeStore {
             Maybe::Unchecked(ts) => {
                 Maybe::Unchecked(ts.iter().map(|t| self.resolve(t)).collect::<ThinVec<_>>())
             }
+            _ => Maybe::Unchecked(thin_vec![Type::Var(self.new_var_type())]),
         }
     }
 
@@ -106,7 +101,7 @@ impl TypeStore {
             },
             Type::Tensor { shape, data_type } => Type::Tensor {
                 shape: shape.clone(),
-                data_type: data_type.as_ref().map(|m| self.resolve_maybe(&*m)),
+                data_type: self.resolve_maybe(data_type),
             },
 
             t => t.clone(),
@@ -129,7 +124,16 @@ impl TypeStore {
             }
             (Maybe::Checked(_), Maybe::Unchecked(_)) | (Maybe::Unchecked(_), Maybe::Checked(_)) => {
                 return Err(TypeInferenceError::UnificationFailure(
-                    format!("{:?} types do not match : {:?} vs {:?}", on_type, d1, d2).into(),
+                    format!("{:} types do not match : {:?} vs {:?}", on_type, d1, d2).into(),
+                ));
+            }
+            (Maybe::None, _) | (_, Maybe::None) => {
+                return Err(TypeInferenceError::UnificationFailure(
+                    format!(
+                        "{:?} types do not match : {:?} vs {:?}, one of the types is None",
+                        on_type, d1, d2
+                    )
+                    .into(),
                 ));
             }
         }
@@ -232,12 +236,13 @@ impl TypeStore {
             ) => {
                 let for_type = "Tensor";
                 _ = shape_validation_for(s1, s2, for_type)?;
-                if let (Some(d1), Some(d2)) = (d1, d2) {
-                    self.data_type_validation_for(d1, d2, for_type)
-                } else {
-                    Err(TypeInferenceError::UnificationFailure(
-                        format!("Tensor types do not match : {:?} vs {:?}", d1, d2).into(),
-                    ))
+                match (d1, d2) {
+                    (Maybe::None, _) | (_, Maybe::None) => {
+                        Err(TypeInferenceError::UnificationFailure(
+                            format!("Tensor types do not match : {:?} vs {:?}", d1, d2).into(),
+                        ))
+                    }
+                    (m1, m2) => self.data_type_validation_for(m1, m2, for_type),
                 }
             }
             _ => Err(TypeInferenceError::UnificationFailure(

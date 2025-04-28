@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, str::FromStr};
 
 use crate::{
     metadata::VarMeta,
@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    expression::{Conditional, HMExpr}, scheme::{generalize, instantiate, Scheme}, statement::HMStmt, store::{TypeStore, TypeVarId}, types::{unit_type, Type}
+    expression::{Conditional, HMExpr}, scheme::{generalize, instantiate, Scheme}, statement::HMStmt, store::{TypeStore, TypeVarId}, types::{unit_type, Maybe, Type}
 };
 
 use la_arena::{Arena, Idx};
@@ -154,7 +154,11 @@ fn infer_expr_base(
         HMExpr::F32 => Ok(Type::F32),
         HMExpr::I32 => Ok(Type::I32),
         HMExpr::Str => Ok(Type::Str),
-        _ => unimplemented!(),
+        // _ => unimplemented!(),
+        t => {
+            println!("got {:?}", t);
+            unimplemented!()
+        },
     }
 }
 
@@ -296,6 +300,24 @@ pub fn infer_expr(
 
             Ok(return_type)
         },
+        HMExpr::Buffer{ data_type, shape } => {
+            let inferred_type = match  data_type {
+                    Maybe::Checked(t) => &**t,
+                    Maybe::Unchecked(unresolved_types) => {
+                        if unresolved_types.is_empty() {
+                            &Type::Var(store.new_var_type())
+                        } else {
+                            let t = unresolved_types.first().unwrap();
+                            for u in &unresolved_types[1..] {
+                                _ = store.unify(&t, u)?;
+                            }
+                            &store.resolve(&t)
+                        }
+                    },
+                    Maybe::None => return Err(TypeInferenceError::Expected(SmolStr::from_str("buffers must have their type declared").unwrap())),
+            };
+            Ok(Type::Buffer{ shape: shape.clone(), data_type: Maybe::Checked(Box::new(inferred_type.clone())) })
+        }
         HMExpr::FnCall { fn_to_call, args } => {
             let t_fun = infer_stmt(fn_to_call, ctx, store)?;
             let mut arg_types = ThinVec::<Type>::with_capacity(args.len());
@@ -348,6 +370,24 @@ pub fn infer_expr(
                     "`Self` used outside of an impl or struct scope".into(),
                 ))
             }
+        }
+        HMExpr::Tensor { data_type, shape } => {
+            let inferred_type = match  data_type {
+                    Maybe::Checked(t) => &**t,
+                    Maybe::Unchecked(unresolved_types) => {
+                        if unresolved_types.is_empty() {
+                            &Type::Var(store.new_var_type())
+                        } else {
+                            let t = unresolved_types.first().unwrap();
+                            for u in &unresolved_types[1..] {
+                                _ = store.unify(&t, u)?;
+                            }
+                            &store.resolve(&t)
+                        }
+                    },
+                    Maybe::None => &Type::Var(store.new_var_type()),
+            };
+            Ok(Type::Tensor{ shape: shape.clone(), data_type: Maybe::Checked(Box::new(inferred_type.clone())) })
         }
         HMExpr::Tuple(exprs) => {
             let mut inferred_types = ThinVec::with_capacity(exprs.len());
@@ -844,14 +884,15 @@ mod tests {
                     key: get_idx_for("Point"),
                     fields: thin_vec![
                         (get_idx_for("x"), HMExpr::I32),
-                        (get_idx_for("y"), HMExpr::I32)
+                        (get_idx_for("y"), HMExpr::I32),
+                        (get_idx_for("is_walkable"),HMExpr::Bool),
                         ],
                 })),
                 body: Box::new(HMStmt::Expr(HMExpr::Var(get_idx_for("p")))),
             },
             Type::Struct{
                 key: get_idx_for("Point"),
-                fields: thin_vec![Type::I32, Type::I32]
+                fields: thin_vec![Type::I32, Type::I32, Type::Bool]
                 },
         ),
         /*
@@ -866,7 +907,8 @@ mod tests {
                     key: get_idx_for("Point"),
                     fields: thin_vec![
                         (get_idx_for("x"), HMExpr::I32),
-                        (get_idx_for("y"), HMExpr::I32)
+                        (get_idx_for("y"), HMExpr::I32),
+                        (get_idx_for("is_walkable"),HMExpr::Bool),
                         ],
                 })),
                 body: Box::new(
@@ -1127,12 +1169,12 @@ mod tests {
         let mut store = TypeStore::new();
         let mut ctx = TypeContext::new();
 
-        let a = HMExpr::Tensor{data_type: Some(Maybe::Checked(Box::new(Type::I32))), shape:thin_vec![Some(3)]};
-        let b = HMExpr::Tensor{data_type: Some(Maybe::Checked(Box::new(Type::I32))), shape:thin_vec![Some(2)]};
+        let a = HMExpr::Tensor{data_type: Maybe::Checked(Box::new(Type::I32)), shape:thin_vec![Some(3)]};
+        let b = HMExpr::Tensor{data_type: Maybe::Checked(Box::new(Type::I32)), shape:thin_vec![Some(2)]};
 
         let ty_a = infer_expr(&a, &mut ctx, &mut store).unwrap();
         let ty_b = infer_expr(&b, &mut ctx, &mut store).unwrap();
-        let exp_err_msg = "Tensor shapes do not match : [3] vs [2]";
+        let exp_err_msg = "Tensor shapes do not match : [Some(3)] vs [Some(2)]";
         assert_err_msg(store.unify(&ty_a, &ty_b), exp_err_msg);
     }
 

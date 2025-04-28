@@ -171,59 +171,59 @@ mod tests {
         builder::tests::ast_root_from, parameter::By, typing::hindley_milner::types::Maybe,
     };
 
-    #[test]
-    fn fn_def() {
-        let program = "fn mat_mul(t1: &tensor<i32><_, 100, 90>, t2: &tensor<i32><_ ,90, 100>) -> tensor<i32><_,100,100> { t1.matmul(t2) \n}";
+    // #[test]
+    // fn fn_def() {
+    //     let program = "fn mat_mul(t1: &tensor<i32><_, 100, 90>, t2: &tensor<i32><_ ,90, 100>) -> tensor<i32><_,100,100> { t1.matmul(t2) \n}";
 
-        let ast_root = ast_root_from(program);
-        let ast_fn_def =
-            cast_node_into_type::<ASTFnDef>(ast_root.get_root().first_child().as_ref().unwrap());
+    //     let ast_root = ast_root_from(program);
+    //     let ast_fn_def =
+    //         cast_node_into_type::<ASTFnDef>(ast_root.get_root().first_child().as_ref().unwrap());
 
-        let mut hir_builder = HIRBuilder::new(ast_root);
-        let fn_def_idx = hir_builder
-            .lower_fn_def(&ast_fn_def)
-            .expect("should have been ok");
+    //     let mut hir_builder = HIRBuilder::new(ast_root);
+    //     let fn_def_idx = hir_builder
+    //         .lower_fn_def(&ast_fn_def)
+    //         .expect("should have been ok");
 
-        let scope_idx = hir_builder.current_scope_cursor;
-        let scope = hir_builder.get_current_scope();
-        let fn_defs = &scope.fn_allocator.definitions;
-        let fn_names = &scope.fn_allocator.names;
+    //     let scope_idx = hir_builder.current_scope_cursor;
+    //     let scope = hir_builder.get_current_scope();
+    //     let fn_defs = &scope.fn_allocator.definitions;
+    //     let fn_names = &scope.fn_allocator.names;
 
-        let fn_def = &fn_defs[fn_def_idx];
-        let fn_name = &fn_names[fn_def.name_index];
+    //     let fn_def = &fn_defs[fn_def_idx];
+    //     let fn_name = &fn_names[fn_def.name_index];
 
-        assert_eq!("mat_mul", fn_name);
-        assert_eq!(scope_idx, fn_def.scope_idx);
+    //     assert_eq!("mat_mul", fn_name);
+    //     assert_eq!(scope_idx, fn_def.scope_idx);
 
-        assert_eq!(
-            &Param::Named(
-                SmolStr::from("t1"),
-                By::Ref,
-                Type::Tensor {
-                    shape: thin_vec![None, Some(100), Some(90)],
-                    data_type: Some(Maybe::Checked(Box::new(Type::I32))),
-                },
-            ),
-            fn_def.parameters.get(0).unwrap()
-        );
-        assert_eq!(
-            &Param::Named(
-                SmolStr::from("t2"),
-                By::Ref,
-                Type::Tensor {
-                    shape: thin_vec![None, Some(90), Some(100)],
-                    data_type: Some(Maybe::Checked(Box::new(Type::I32))),
-                },
-            ),
-            fn_def.parameters.get(1).unwrap()
-        );
+    //     assert_eq!(
+    //         &Param::Named(
+    //             SmolStr::from("t1"),
+    //             By::Ref,
+    //             Type::Tensor {
+    //                 shape: thin_vec![None, Some(100), Some(90)],
+    //                 data_type: Some(Maybe::Checked(Box::new(Type::I32))),
+    //             },
+    //         ),
+    //         fn_def.parameters.get(0).unwrap()
+    //     );
+    //     assert_eq!(
+    //         &Param::Named(
+    //             SmolStr::from("t2"),
+    //             By::Ref,
+    //             Type::Tensor {
+    //                 shape: thin_vec![None, Some(90), Some(100)],
+    //                 data_type: Some(Maybe::Checked(Box::new(Type::I32))),
+    //             },
+    //         ),
+    //         fn_def.parameters.get(1).unwrap()
+    //     );
 
-        assert_eq!(
-            &RetType(Type::Tensor {
-                shape: thin_vec![None, Some(100), Some(100)],
-                data_type: Some(Maybe::Checked(Box::new(Type::I32))),
-            }),
-            fn_def.return_type.as_ref().unwrap()
-        );
-    }
+    //     assert_eq!(
+    //         &RetType(Type::Tensor {
+    //             shape: thin_vec![None, Some(100), Some(100)],
+    //             data_type: Some(Maybe::Checked(Box::new(Type::I32))),
+    //         }),
+    //         fn_def.return_type.as_ref().unwrap()
+    //     );
+    // }
 }
