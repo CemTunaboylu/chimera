@@ -73,6 +73,19 @@ pub fn expect_non_baggage(b: &Baggage, type_key: TypeKey) -> HIRResult<()> {
     }
 }
 
+pub fn clone_from_iter_with_err<Any: Clone, Post>(
+    tv: impl Iterator<Item = Any>,
+    len: usize,
+    payload: fn(a: Any) -> HIRResult<Post>,
+) -> HIRResult<ThinVec<Post>> {
+    let mut clone: ThinVec<Post> = ThinVec::with_capacity(len);
+    for c in tv {
+        let put = payload(c)?;
+        clone.push(put);
+    }
+    Ok(clone)
+}
+
 pub fn clone_with_err<Any: Clone, Post>(
     tv: &[Any],
     hir: &HIRBuilder,

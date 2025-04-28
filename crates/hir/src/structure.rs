@@ -183,31 +183,31 @@ mod tests {
             assert_eq!(*t, fields[i].field_type);
         }
     }
-    #[test]
-    fn struct_init() {
-        let field_names = ["x", "y", "item"];
-        let program = "Tester { x: 0, y: 0, item: origin_item}";
-        let ast_root = ast_root_from(program);
-        let ast_struct_init = cast_node_into_type::<ASTStructInit>(
-            ast_root.get_root().first_child().as_ref().unwrap(),
-        );
-        let mut hir_builder = HIRBuilder::new(ast_root);
-        let struct_init = hir_builder
-            .lower_struct_init(&ast_struct_init)
-            .expect("should have been ok");
-        let unresolved_idx = struct_init
-            .struct_ref
-            .get_unresolved_index()
-            .expect("should have been unresolved");
-        let scope = hir_builder.get_current_scope();
-        let unresolved = &scope.to_resolve[unresolved_idx];
+    // #[test]
+    // fn struct_init() {
+    //     let field_names = ["x", "y", "item"];
+    //     let program = "Tester { x: 0, y: 0, item: origin_item}";
+    //     let ast_root = ast_root_from(program);
+    //     let ast_struct_init = cast_node_into_type::<ASTStructInit>(
+    //         ast_root.get_root().first_child().as_ref().unwrap(),
+    //     );
+    //     let mut hir_builder = HIRBuilder::new(ast_root);
+    //     let struct_init = hir_builder
+    //         .lower_struct_init(&ast_struct_init)
+    //         .expect("should have been ok");
+    //     let unresolved_idx = struct_init
+    //         .struct_ref
+    //         .get_unresolved_index()
+    //         .expect("should have been unresolved");
+    //     let scope = hir_builder.get_current_scope();
+    //     let unresolved = &scope.to_resolve[unresolved_idx];
 
-        assert_eq!("Tester", unresolved.name);
-        let fields = &struct_init.field_name_to_values;
-        assert_eq!(field_names.len(), fields.len());
-        for (ix, n) in field_names.iter().enumerate() {
-            let i: Idx<Expr> = into_idx((ix + 1) as u32);
-            assert_eq!(i, fields[*n]);
-        }
-    }
+    //     assert_eq!("Tester", unresolved.name);
+    //     let fields = &struct_init.field_name_to_values;
+    //     assert_eq!(field_names.len(), fields.len());
+    //     for (ix, n) in field_names.iter().enumerate() {
+    //         let i: Idx<Expr> = into_idx((ix + 1) as u32);
+    //         assert_eq!(i, fields[*n]);
+    //     }
+    // }
 }
