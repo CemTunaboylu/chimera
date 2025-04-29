@@ -325,13 +325,13 @@ mod tests {
                     KwFn@11..13 "fn"
                     LParen@13..14 "("
                     ParamDecl@14..20
-                      TensorType@14..20
-                        TyTensor@14..20 "tensor"
+                      TyTensor@14..20
+                        KwTensor@14..20 "tensor"
                     RParen@20..21 ")"
                     RetType@21..29
                       RArrow@21..23 "->"
-                      TensorType@23..29
-                        TyTensor@23..29 "tensor"
+                      TyTensor@23..29
+                        KwTensor@23..29 "tensor"
                 RParen@29..30 ")"
                 Whitespace@30..31 " "
                 Block@31..33
@@ -453,21 +453,21 @@ mod tests {
                       ParamDecl@7..15
                         Ident@7..8 "a"
                         Colon@8..9 ":"
-                        TensorType@9..15
-                          TyTensor@9..15 "tensor"
+                        TyTensor@9..15
+                          KwTensor@9..15 "tensor"
                       Whitespace@15..16 " "
                       ParamDecl@16..24
                         Ident@16..17 "b"
                         Colon@17..18 ":"
-                        TensorType@18..24
-                          TyTensor@18..24 "tensor"
+                        TyTensor@18..24
+                          KwTensor@18..24 "tensor"
                       RParen@24..25 ")"
                       Whitespace@25..26 " "
                       RetType@26..35
                         RArrow@26..28 "->"
                         Whitespace@28..29 " "
-                        TensorType@29..35
-                          TyTensor@29..35 "tensor"
+                        TyTensor@29..35
+                          KwTensor@29..35 "tensor"
                       Block@35..50
                         LBrace@35..36 "{"
                         Whitespace@36..37 " "
@@ -622,37 +622,39 @@ mod tests {
 
     function_call_with_ref_parameters: ("meet(&me, &him, &her)",
         expect![[r#"
-            Root@0..19
-              FnCall@0..19
+            Root@0..21
+              FnCall@0..21
                 Ident@0..4 "meet"
                 LParen@4..5 "("
-                FnArg@5..8
+                FnArg@5..9
                   PrefixUnaryOp@5..8
                     And@5..6 "&"
                     VarRef@6..8
                       Ident@6..8 "me"
-                Whitespace@8..9 " "
-                FnArg@9..13
-                  PrefixUnaryOp@9..13
-                    And@9..10 "&"
-                    VarRef@10..13
-                      Ident@10..13 "him"
-                Whitespace@13..14 " "
-                FnArg@14..18
-                  PrefixUnaryOp@14..18
-                    And@14..15 "&"
-                    VarRef@15..18
-                      Ident@15..18 "her"
-                RParen@18..19 ")""#]],
+                  Comma@8..9 ","
+                Whitespace@9..10 " "
+                FnArg@10..15
+                  PrefixUnaryOp@10..14
+                    And@10..11 "&"
+                    VarRef@11..14
+                      Ident@11..14 "him"
+                  Comma@14..15 ","
+                Whitespace@15..16 " "
+                FnArg@16..20
+                  PrefixUnaryOp@16..20
+                    And@16..17 "&"
+                    VarRef@17..20
+                      Ident@17..20 "her"
+                RParen@20..21 ")""#]],
     ),
 
     function_call_with_ref_mut_parameters: ("bond(&mut me, &mut him, &mut her)",
         expect![[r#"
-            Root@0..31
-              FnCall@0..31
+            Root@0..33
+              FnCall@0..33
                 Ident@0..4 "bond"
                 LParen@4..5 "("
-                FnArg@5..12
+                FnArg@5..13
                   PrefixUnaryOp@5..12
                     And@5..6 "&"
                     Mut@6..12
@@ -660,25 +662,27 @@ mod tests {
                       Whitespace@9..10 " "
                       VarRef@10..12
                         Ident@10..12 "me"
-                Whitespace@12..13 " "
-                FnArg@13..21
-                  PrefixUnaryOp@13..21
-                    And@13..14 "&"
-                    Mut@14..21
-                      KwMut@14..17 "mut"
-                      Whitespace@17..18 " "
-                      VarRef@18..21
-                        Ident@18..21 "him"
-                Whitespace@21..22 " "
-                FnArg@22..30
-                  PrefixUnaryOp@22..30
-                    And@22..23 "&"
-                    Mut@23..30
-                      KwMut@23..26 "mut"
-                      Whitespace@26..27 " "
-                      VarRef@27..30
-                        Ident@27..30 "her"
-                RParen@30..31 ")""#]],
+                  Comma@12..13 ","
+                Whitespace@13..14 " "
+                FnArg@14..23
+                  PrefixUnaryOp@14..22
+                    And@14..15 "&"
+                    Mut@15..22
+                      KwMut@15..18 "mut"
+                      Whitespace@18..19 " "
+                      VarRef@19..22
+                        Ident@19..22 "him"
+                  Comma@22..23 ","
+                Whitespace@23..24 " "
+                FnArg@24..32
+                  PrefixUnaryOp@24..32
+                    And@24..25 "&"
+                    Mut@25..32
+                      KwMut@25..28 "mut"
+                      Whitespace@28..29 " "
+                      VarRef@29..32
+                        Ident@29..32 "her"
+                RParen@32..33 ")""#]],
     ),
 
     function_call_with_complex_parameters: ("am_i_happy(me.expectations().as_tensor() - reality.variable_tensor )",

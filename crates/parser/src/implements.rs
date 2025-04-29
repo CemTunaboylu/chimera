@@ -85,7 +85,7 @@ mod tests {
                      ImplBlock@0..84
                        KwImpl@0..4 "impl"
                        Whitespace@4..5 " "
-                       Ident@5..10 "Point"
+                       StructAsType@5..10 "Point"
                        Whitespace@10..11 " "
                        LBrace@11..12 "{"
                        Whitespace@12..13 " "
