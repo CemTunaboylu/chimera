@@ -4,7 +4,6 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     climbing::climb,
-    container::tensor::Tensor,
     container_ref::ContainerRef,
     delimited::{Block, Indexing, Paren},
     function::FnCall,
@@ -14,7 +13,7 @@ use crate::{
     resolution::Reference,
     scope::{ExprIdx, into_idx},
     self_ref::SelfRef,
-    structure::{StructInit, StructRef},
+    structure::StructRef,
     typing::hindley_milner::types::Type,
     unwrap_or_err,
     variable::VarRef,
@@ -33,7 +32,6 @@ pub enum Expr {
     Paren(Paren),
     SelfRef(SelfRef),
     StructRef(Reference<StructRef>),
-    StructInit(StructInit),
     Unary(Unary),
     VarRef(Reference<VarRef>),
 }
@@ -70,7 +68,6 @@ impl HIRBuilder {
             Expr::Paren(paren) => todo!(),
             Expr::SelfRef(self_ref) => todo!(),
             Expr::StructRef(reference) => todo!(),
-            Expr::StructInit(struct_init) => todo!(),
             Expr::Unary(unary) => todo!(),
             Expr::VarRef(reference) => todo!(),
         }
@@ -106,13 +103,6 @@ impl HIRBuilder {
             ASTExpr::Mut(mutable) => Expr::Mut(self.lower_mut(mutable)?),
             ASTExpr::Paren(paren) => Expr::Paren(self.lower_paren(paren)?),
             ASTExpr::SelfRef(self_ref) => Expr::SelfRef(self.lower_self_ref(self_ref)?),
-            ASTExpr::StructInit(struct_init) => {
-                Expr::StructInit(self.lower_struct_init(struct_init)?)
-            }
-            // TODO: container init
-            // ASTExpr::TensorInit(tensor_struct) => {
-            //     Expr::TensorInit(self.lower_tensor_init(tensor_struct)?)
-            // }
             ASTExpr::Unary(unary) => Expr::Unary(self.lower_unary_operation(unary)?),
             ASTExpr::VarRef(var_ref) => {
                 let unresolved = self.lower_var_ref(var_ref)?;

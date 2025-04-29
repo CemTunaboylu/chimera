@@ -37,7 +37,7 @@ impl<'input> Parser<'input> {
         let context = ParserContext::new();
         context.disallow_recovery_of([KwLet].as_ref());
         context.forbid_only([RParen, RBrace, RBrack].as_ref());
-        context.allow(StructInit);
+        context.allow(StructLit);
 
         Self {
             lexer: RefCell::new(Lexer::new(program)),

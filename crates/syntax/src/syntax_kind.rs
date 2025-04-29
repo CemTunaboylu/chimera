@@ -31,8 +31,7 @@ pub enum SyntaxKind {
     Semi,
     StrLit,
     StructField,
-    StructFields, // unnecessary
-    StructInit,
+    StructLit,
     StructRef,
     StructAsType,
     TypeHint,

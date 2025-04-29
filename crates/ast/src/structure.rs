@@ -60,10 +60,8 @@ impl TryFrom<&SyntaxNode> for StructDef {
         let name = get_token_of_errs(struct_def_node, SyntaxKind::Ident)?
             .text()
             .to_smolstr();
-        let struct_fields_node =
-            first_child_of_kind_errs(struct_def_node, SyntaxKind::StructFields)?;
         let mut fields = thin_vec![];
-        for field in get_children_in(&struct_fields_node, SyntaxKind::StructField) {
+        for field in get_children_in(&struct_def_node, SyntaxKind::StructField) {
             let ast_field = StructField::try_from(&field)?;
             fields.push(ast_field);
         }
@@ -71,7 +69,7 @@ impl TryFrom<&SyntaxNode> for StructDef {
     }
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct StructInit {
+pub struct StructLiteral {
     pub name: SmolStr,
     pub fields: ThinVec<StructFieldInit>,
 }
@@ -88,7 +86,7 @@ impl TryFrom<&SyntaxNode> for StructFieldInit {
     fn try_from(field_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let field_name_and_value = children_with_tokens_without_unwanted(
             field_node,
-            [SyntaxKind::Whitespace, SyntaxKind::Colon].as_ref(),
+            [SyntaxKind::Whitespace, SyntaxKind::Colon, SyntaxKind::Comma].as_ref(),
         );
         if field_name_and_value.len() != 2 {
             return Err(ASTError::with_err_msg(
@@ -108,17 +106,15 @@ impl TryFrom<&SyntaxNode> for StructFieldInit {
     }
 }
 
-impl TryFrom<&SyntaxNode> for StructInit {
+impl TryFrom<&SyntaxNode> for StructLiteral {
     type Error = ASTError;
 
-    fn try_from(struct_init_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let name = get_token_of_errs(struct_init_node, SyntaxKind::Ident)?
+    fn try_from(struct_lit_node: &SyntaxNode) -> Result<Self, Self::Error> {
+        let name = get_token_of_errs(struct_lit_node, SyntaxKind::Ident)?
             .text()
             .to_smolstr();
-        // TODO: FIX ME
-        let struct_init_node = first_child_of_kind_errs(struct_init_node, SyntaxKind::Literal)?;
         let mut fields = thin_vec![];
-        for field in get_children_in(&struct_init_node, SyntaxKind::StructField) {
+        for field in get_children_in(&struct_lit_node, SyntaxKind::StructField) {
             let field_init = StructFieldInit::try_from(&field)?;
             fields.push(field_init);
         }
@@ -156,17 +152,18 @@ mod tests {
             assert_eq!(*t, fields[ix].field_type);
         }
     }
-    // #[test]
-    // fn struct_init() {
-    //     let field_names = ["coordinates", "item"];
-    //     let program = "Tester{ coordinates: origin_tensor, item: origin_item}";
-    //     let ast_root = ast_root_from(program);
-    //     let struct_init =
-    //         cast_node_into_type::<StructInit>(ast_root.get_root().first_child().as_ref().unwrap());
-    //     assert_eq!("Tester", struct_init.name);
-    //     let fields = struct_init.fields;
-    //     for (exp_name, got_name) in field_names.iter().zip(fields.iter()) {
-    //         assert_eq!(*exp_name, got_name.name);
-    //     }
-    // }
+    #[test]
+    fn struct_init() {
+        let field_names = ["coordinates", "item"];
+        let program = "Tester{ coordinates: origin_tensor, item: origin_item}";
+        let ast_root = ast_root_from(program);
+        let struct_literal = cast_node_into_type::<StructLiteral>(
+            ast_root.get_root().first_child().as_ref().unwrap(),
+        );
+        assert_eq!("Tester", struct_literal.name);
+        let fields = struct_literal.fields;
+        for (exp_name, got_name) in field_names.iter().zip(fields.iter()) {
+            assert_eq!(*exp_name, got_name.name);
+        }
+    }
 }

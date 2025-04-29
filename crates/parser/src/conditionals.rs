@@ -51,7 +51,7 @@ impl<'input> Parser<'input> {
         let rollback_after_drop = self.roll_back_context_after_drop();
         let ctx = self.context.borrow();
         ctx.allow([KwTrue, KwFalse, LParen].as_ref());
-        ctx.forbid([StructInit, LBrace].as_ref());
+        ctx.forbid([StructLit, LBrace].as_ref());
         ctx.disallow_recovery_of([LBrace, KwElif, KwElse].as_ref());
         rollback_after_drop
     }

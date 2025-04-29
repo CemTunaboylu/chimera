@@ -30,7 +30,7 @@ impl<'input> Parser<'input> {
         let rollback_when_dropped = self.roll_back_context_after_drop();
         let ctx = self.context.borrow();
         ctx.allow([KwTrue, KwFalse, LParen].as_ref());
-        ctx.forbid([LBrace, StructInit].as_ref());
+        ctx.forbid([LBrace, StructLit].as_ref());
         ctx.disallow_recovery_of([LBrace].as_ref());
         rollback_when_dropped
     }
@@ -42,7 +42,7 @@ impl<'input> Parser<'input> {
 
         let rollback_when_dropped = self.roll_back_context_after_drop();
         let ctx = self.context.borrow();
-        ctx.forbid(StructInit);
+        ctx.forbid(StructLit);
 
         self.parse_loop_identifiers();
         {

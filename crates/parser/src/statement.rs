@@ -48,7 +48,7 @@ impl<'input> Parser<'input> {
         ctx.allow(non_assignments);
         ctx.allow(SyntaxKind::can_be_parameter());
         ctx.allow(SyntaxKind::opening_delimiters());
-        ctx.allow([Eq, Ident, Semi, VarDef, VarRef, SelfRef, StructInit].as_ref());
+        ctx.allow([Eq, Ident, Semi, VarDef, VarRef, SelfRef, StructLit].as_ref());
         rollback_when_dropped
     }
 

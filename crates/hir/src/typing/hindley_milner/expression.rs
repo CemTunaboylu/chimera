@@ -175,7 +175,8 @@ impl HIRBuilder {
                 _ = expect_non_baggage(&baggage, type_key)?;
                 Ok(HMExpr::StructAsType(type_key))
             }
-            Expr::StructInit(struct_init) => todo!(), // TODO: will be modified as a literal, delete this after its finished
+            // TODO: will be modified as a literal, delete this after its finished
+            // Expr::StructInit(struct_init) => todo!(),
             Expr::Unary(unary) => {
                 let hm = Box::new(self.try_into_hm_expr(self.get_expr(unary.operand().0))?);
                 let op = unary.op().clone();

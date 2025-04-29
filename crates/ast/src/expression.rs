@@ -12,7 +12,6 @@ use crate::{
     mutable::Mut as ASTMut,
     operation::{Binary, Unary},
     self_ref::SelfRef as ASTSelfRef,
-    structure::StructInit as ASTStructInit,
     types::Type,
     variable::VarRef as ASTVarRef,
 };
@@ -29,7 +28,6 @@ pub enum Expr {
     Mut(ASTMut),
     Paren(Paren),
     SelfRef(ASTSelfRef),
-    StructInit(ASTStructInit),
     Unary(Unary),
     VarRef(ASTVarRef),
 }
@@ -61,7 +59,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                 Self::Infix(infix)
             }
             Indexing => Self::Indexing(ASTIndexing(node.clone())),
-            Literal => {
+            Literal | StructLit => {
                 let literal = ASTLiteral::try_from(node)?;
                 Self::Literal(literal)
             }
@@ -81,10 +79,6 @@ impl TryFrom<&SyntaxNode> for Expr {
             SelfRef => {
                 let self_ref = ASTSelfRef::try_from(node)?;
                 Self::SelfRef(self_ref)
-            }
-            StructInit => {
-                let struct_init = ASTStructInit::try_from(node)?;
-                Self::StructInit(struct_init)
             }
             VarRef => {
                 let var_ref = ASTVarRef::try_from(node)?;
@@ -106,7 +100,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                         PostfixUnaryOp,
                         PrefixUnaryOp,
                         SelfRef,
-                        StructInit,
+                        StructLit,
                         VarRef,
                     ]
                     .as_ref(),

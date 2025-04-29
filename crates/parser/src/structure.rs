@@ -40,9 +40,7 @@ impl<'input> Parser<'input> {
     }
 
     #[allow(unused_variables)]
-    pub fn parse_fields(&self) -> Option<Finished> {
-        let marker = self.start();
-
+    pub fn parse_fields(&self) {
         use SeparatedElement::*;
         let idents = thin_vec![
             Kind(Ident),
@@ -54,14 +52,10 @@ impl<'input> Parser<'input> {
             ),
         ];
         self.parse_separated_by(&idents, StructField, Comma, RBrace);
-
-        Some(self.complete_marker_with(marker, StructFields))
     }
 
     #[allow(unused_variables)]
-    pub fn parse_struct_init_block(&self) -> Option<Finished> {
-        let marker = self.start();
-
+    pub fn parse_struct_init_block(&self) {
         self.expect_and_bump(LBrace);
 
         let rollback_when_dropped = self.roll_back_context_after_drop();
@@ -75,9 +69,6 @@ impl<'input> Parser<'input> {
         ];
         self.parse_separated_by(&idents, StructField, Comma, RBrace);
         self.expect_and_bump(RBrace);
-
-        // TODO: struct init is a literal!
-        Some(self.complete_marker_with(marker, Literal))
     }
 
     fn dont_recover_and_only_allow(
@@ -108,75 +99,77 @@ mod tests {
 
         basic_struct: ("struct Point { x: i32, y: i32, item: Item }",
             expect![[r#"
-                Root@0..41
-                  StructDef@0..41
+                Root@0..43
+                  StructDef@0..43
                     KwStruct@0..6 "struct"
                     Whitespace@6..7 " "
                     Ident@7..12 "Point"
                     Whitespace@12..13 " "
                     LBrace@13..14 "{"
-                    StructFields@14..40
-                      Whitespace@14..15 " "
-                      StructField@15..21
-                        Ident@15..16 "x"
-                        Colon@16..17 ":"
-                        Whitespace@17..18 " "
-                        TyI32@18..21 "i32"
-                      Whitespace@21..22 " "
-                      StructField@22..28
-                        Ident@22..23 "y"
-                        Colon@23..24 ":"
-                        Whitespace@24..25 " "
-                        TyI32@25..28 "i32"
-                      Whitespace@28..29 " "
-                      StructField@29..40
-                        Ident@29..33 "item"
-                        Colon@33..34 ":"
-                        Whitespace@34..35 " "
-                        StructAsType@35..39 "Item"
-                        Whitespace@39..40 " "
-                    RBrace@40..41 "}""#]],
+                    Whitespace@14..15 " "
+                    StructField@15..22
+                      Ident@15..16 "x"
+                      Colon@16..17 ":"
+                      Whitespace@17..18 " "
+                      TyI32@18..21 "i32"
+                      Comma@21..22 ","
+                    Whitespace@22..23 " "
+                    StructField@23..30
+                      Ident@23..24 "y"
+                      Colon@24..25 ":"
+                      Whitespace@25..26 " "
+                      TyI32@26..29 "i32"
+                      Comma@29..30 ","
+                    Whitespace@30..31 " "
+                    StructField@31..42
+                      Ident@31..35 "item"
+                      Colon@35..36 ":"
+                      Whitespace@36..37 " "
+                      StructAsType@37..41 "Item"
+                      Whitespace@41..42 " "
+                    RBrace@42..43 "}""#]],
         ),
         struct_init: ("let origin = Point{ x: 0, y: 0, item: origin_item };",
             expect![[r#"
-                Root@0..50
-                  VarDef@0..50
+                Root@0..52
+                  VarDef@0..52
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    InfixBinOp@4..49
+                    InfixBinOp@4..51
                       VarRef@4..11
                         Ident@4..10 "origin"
                         Whitespace@10..11 " "
                       Eq@11..12 "="
                       Whitespace@12..13 " "
-                      StructInit@13..49
+                      StructLit@13..51
                         Ident@13..18 "Point"
-                        Initializer@18..49
-                          LBrace@18..19 "{"
-                          Whitespace@19..20 " "
-                          StructField@20..24
-                            Ident@20..21 "x"
-                            Colon@21..22 ":"
-                            Whitespace@22..23 " "
-                            Literal@23..24
-                              Int@23..24 "0"
-                          Whitespace@24..25 " "
-                          StructField@25..29
-                            Ident@25..26 "y"
-                            Colon@26..27 ":"
-                            Whitespace@27..28 " "
-                            Literal@28..29
-                              Int@28..29 "0"
-                          Whitespace@29..30 " "
-                          StructField@30..48
-                            Ident@30..34 "item"
-                            Colon@34..35 ":"
-                            Whitespace@35..36 " "
-                            VarRef@36..48
-                              Ident@36..47 "origin_item"
-                              Whitespace@47..48 " "
-                          RBrace@48..49 "}"
-                    Semi@49..50 ";""#]],
+                        LBrace@18..19 "{"
+                        Whitespace@19..20 " "
+                        StructField@20..25
+                          Ident@20..21 "x"
+                          Colon@21..22 ":"
+                          Whitespace@22..23 " "
+                          Literal@23..24
+                            Int@23..24 "0"
+                          Comma@24..25 ","
+                        Whitespace@25..26 " "
+                        StructField@26..31
+                          Ident@26..27 "y"
+                          Colon@27..28 ":"
+                          Whitespace@28..29 " "
+                          Literal@29..30
+                            Int@29..30 "0"
+                          Comma@30..31 ","
+                        Whitespace@31..32 " "
+                        StructField@32..50
+                          Ident@32..36 "item"
+                          Colon@36..37 ":"
+                          Whitespace@37..38 " "
+                          VarRef@38..50
+                            Ident@38..49 "origin_item"
+                            Whitespace@49..50 " "
+                        RBrace@50..51 "}"
+                    Semi@51..52 ";""#]],
         ),
     }
 }

@@ -10,6 +10,7 @@ use crate::{
     ast::ASTResult,
     container::{BufferTree, try_container_tree_from},
     errors::ASTError,
+    structure::StructLiteral,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -21,7 +22,7 @@ pub enum Value {
     // Fn
     Int(i32),
     Str(SmolStr),
-    // Struct
+    Struct(StructLiteral),
     Tensor(BufferTree),
 }
 
@@ -117,6 +118,10 @@ impl TryFrom<&SyntaxNode> for Literal {
     type Error = ASTError;
 
     fn try_from(literal_node: &SyntaxNode) -> Result<Self, Self::Error> {
+        if literal_node.kind() == SyntaxKind::StructLit {
+            let struct_literal = StructLiteral::try_from(literal_node)?;
+            return Ok(Self(Value::Struct(struct_literal)));
+        }
         if let Some(child) = literal_node.first_child() {
             if child.kind() == SyntaxKind::BufferLit {
                 let buffer_tree = try_container_tree_from(&child)?;

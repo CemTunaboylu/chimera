@@ -277,10 +277,10 @@ impl<'input> Parser<'input> {
             self.expect_in_ctx(ContainerRef);
             self.parse_container_indexing();
             self.complete_marker_with(marker, ContainerRef)
-        } else if self.is_next(LBrace) && self.is_allowed(StructInit) {
+        } else if self.is_next(LBrace) && self.is_allowed(StructLit) {
             // self.expect_in_ctx(StructInit);
             self.parse_struct_init_block();
-            self.complete_marker_with(marker, StructInit)
+            self.complete_marker_with(marker, StructLit)
         } else if self.is_next(Colon) {
             self.parse_type_hint();
             self.complete_marker_with(marker, VarRef)

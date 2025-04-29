@@ -42,6 +42,7 @@ impl From<&ASTValue> for Value {
             ASTValue::Int(i) => Value::Int(*i),
             ASTValue::Str(_) => unreachable!(),
             ASTValue::Tensor(_) => unreachable!(),
+            ASTValue::Struct(struct_literal) => todo!(),
         }
     }
 }
