@@ -29,33 +29,32 @@ pub enum TokenType {
 }
 
 impl TokenType {
-    pub fn operators() -> ThinVec<TokenKind>{
+    pub fn operators() -> ThinVec<TokenKind> {
         use TokenKind::*;
         thin_vec![
-            And
-            ,AndAnd
-            ,Colon
-            ,Dot
-            ,Eq
-            ,EqEq
-            ,Exclamation
-            ,GreaterThan
-            ,GreaterThanOrEq
-            ,LessThan
-            ,LessThanOrEq
-            ,Minus
-            ,Percent
-            ,ColonColon
-            ,Or
-            ,OrOr
-            ,Plus
-            ,QuestionMark
-            ,Slash
-            ,Star
-            ,Underscore 
-            ,Xor
-            ]
-
+            And,
+            AndAnd,
+            Colon,
+            Dot,
+            Eq,
+            EqEq,
+            Exclamation,
+            GreaterThan,
+            GreaterThanOrEq,
+            LessThan,
+            LessThanOrEq,
+            Minus,
+            Percent,
+            ColonColon,
+            Or,
+            OrOr,
+            Plus,
+            QuestionMark,
+            Slash,
+            Star,
+            Underscore,
+            Xor
+        ]
     }
 }
 
@@ -97,7 +96,7 @@ impl From<TokenKind> for TokenType {
             | QuestionMark
             | Slash
             | Star
-            | Underscore 
+            | Underscore
             | Xor
             => Self::Operator,
             Identifier => Self::Identifier,

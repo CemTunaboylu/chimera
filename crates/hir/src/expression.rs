@@ -40,7 +40,6 @@ pub const MISSING: u32 = 0;
 
 impl HIRBuilder {
     pub fn get_expr(&self, idx: ExprIdx) -> &Expr {
-        // TODO: try to find by 'climbing' the branch of scopes
         let climber = climb(self.current_scope_cursor, &self.scopes);
         let mut expr = &Expr::Missing;
         for (_, scope) in climber {
