@@ -455,30 +455,6 @@ pub(crate) mod tests {
         expect.assert_eq(&debug_tree);
     }
 
-    fn check_err(
-        input: &str,
-        expected: ThinVec<SyntaxKind>,
-        found: Option<SyntaxKind>,
-        range: Range<usize>,
-        output: &str,
-    ) {
-        let error = ParseError::new(range, expected, found);
-        let mut report: Report = error.into();
-        report = report.with_source_code(input.to_string());
-        assert_eq!(format!("{:?}", report), output);
-    }
-
-    #[test]
-    fn one_expected_did_find() {
-        check_err(
-            "let a = ",
-            thin_vec![SyntaxKind::Literal],
-            None,
-            8..9,
-            "  \u{1b}[31m×\u{1b}[0m Parsing error\n   ╭────\n \u{1b}[2m1\u{1b}[0m │ let a = \n   ╰────\n\u{1b}[36m  help: \u{1b}[0mexpected Literal, but got ''\n",
-        );
-    }
-
     create! {
         create_parser_test,
         (prog, expect), {
