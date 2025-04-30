@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use super::{
     inference::{TypeInferenceError, TypeInferenceResult},
-    types::{Maybe, Type},
+    types::{Maybe, Status, Type},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
@@ -33,20 +33,13 @@ fn shape_validation_for<T: Debug + PartialEq>(
     ))
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct TypeStore {
     terms: ThinVec<TypeTerm>,
     parents: ThinVec<TypeVarId>,
 }
 
 impl TypeStore {
-    pub fn new() -> Self {
-        Self {
-            terms: ThinVec::new(),
-            parents: ThinVec::new(),
-        }
-    }
-
     pub fn new_var_type(&mut self) -> TypeVarId {
         let id = TypeVarId(self.terms.len());
         self.terms.push(TypeTerm::Unbound);
@@ -65,7 +58,7 @@ impl TypeStore {
 
     fn resolve_maybe(&mut self, m: &Maybe<Type>) -> Maybe<Type> {
         match m {
-            Maybe::Checked(t) => Maybe::Checked(Box::new(self.resolve(&*t))),
+            Maybe::Checked(t) => Maybe::Checked(Box::new(self.resolve(t))),
             Maybe::Unchecked(ts) => {
                 Maybe::Unchecked(ts.iter().map(|t| self.resolve(t)).collect::<ThinVec<_>>())
             }
@@ -77,7 +70,7 @@ impl TypeStore {
         match ty {
             Type::Buffer { shape, data_type } => Type::Buffer {
                 shape: shape.clone(),
-                data_type: self.resolve_maybe(&*data_type),
+                data_type: self.resolve_maybe(data_type),
             },
             Type::Var(v) => {
                 let root = self.find(*v);
@@ -115,7 +108,7 @@ impl TypeStore {
         on_type: &str,
     ) -> TypeInferenceResult<()> {
         match (d1, d2) {
-            (Maybe::Checked(c1), Maybe::Checked(c2)) => self.unify(&*c1, &*c2),
+            (Maybe::Checked(c1), Maybe::Checked(c2)) => self.unify(c1, c2),
             (Maybe::Unchecked(dd1), Maybe::Unchecked(dd2)) => {
                 for (d1, d2) in dd1.iter().zip(dd2.iter()) {
                     self.unify(d1, d2)?;
@@ -123,22 +116,63 @@ impl TypeStore {
                 Ok(())
             }
             (Maybe::Checked(_), Maybe::Unchecked(_)) | (Maybe::Unchecked(_), Maybe::Checked(_)) => {
-                return Err(TypeInferenceError::UnificationFailure(
+                Err(TypeInferenceError::UnificationFailure(
                     format!("{:} types do not match : {:?} vs {:?}", on_type, d1, d2).into(),
-                ));
+                ))
             }
-            (Maybe::None, _) | (_, Maybe::None) => {
-                return Err(TypeInferenceError::UnificationFailure(
-                    format!(
-                        "{:?} types do not match : {:?} vs {:?}, one of the types is None",
-                        on_type, d1, d2
-                    )
-                    .into(),
-                ));
-            }
+            (Maybe::None, _) | (_, Maybe::None) => Err(TypeInferenceError::UnificationFailure(
+                format!(
+                    "{:?} types do not match : {:?} vs {:?}, one of the types is None",
+                    on_type, d1, d2
+                )
+                .into(),
+            )),
         }
     }
+    /// Prevents forming infinite types like T = fn(T) -> Int by checking
+    /// If variable `v` appears inside type `may_contain_v`.
+    /// If we encounter a type variable during traversal, and it resolves to the
+    /// same variable we're currently checking (`vt`), it means the type would
+    /// recursively include itself — which would create an infinite type.
+    /// For example, trying to unify T = (T -> Int) must fail.
+    /// Direct self-unification (T = T) is fine; this only catches recursive cases
+    /// because the first call to the recursion is called on a composite type.
+    fn occurs_in_type(&mut self, v: TypeVarId, may_contain_v: &Type) -> bool {
+        let vt = self.find(v);
 
+        match self.resolve(may_contain_v) {
+            Type::Var(i) => self.find(i) == vt,
+            Type::Buffer {
+                shape: _,
+                data_type,
+            } => match self.resolve_maybe(&data_type) {
+                Maybe::None => false,
+                Maybe::Checked(t) => self.occurs_in_type(vt, &t),
+                Maybe::Unchecked(thin_vec) => thin_vec.iter().any(|t| self.occurs_in_type(vt, t)),
+            },
+            Type::FnSig { param_types, .. } => {
+                param_types.iter().any(|t| self.occurs_in_type(vt, t))
+            }
+            Type::Ref { of, .. } => self.occurs_in_type(v, &of),
+            // FIXME: needs a deferred check because idx is on caller, cannot reach it
+            Type::StructAsType(status) => match status {
+                Status::Pending(_) => false,
+                Status::Resolved(_) => false,
+            },
+            Type::Struct { fields, .. } => fields.iter().any(|t| self.occurs_in_type(vt, t)),
+            Type::Tensor { data_type, .. } => match self.resolve_maybe(&data_type) {
+                Maybe::None => false,
+                Maybe::Checked(t) => self.occurs_in_type(vt, &t),
+                Maybe::Unchecked(thin_vec) => thin_vec.iter().any(|t| self.occurs_in_type(vt, t)),
+            },
+            Type::Tuple(thin_vec) => thin_vec.iter().any(|t| self.occurs_in_type(vt, t)),
+            _ => false,
+        }
+    }
+    /// Attempts to make two types equal by finding a substitution.
+    /// Also checks for occurence (a = a -> b is invalid)
+    /// note: infinite types are by ensuring unification of a
+    /// variable with a type that contains itself is prevented
     pub fn unify(&mut self, t1: &Type, t2: &Type) -> TypeInferenceResult<()> {
         match (t1, t2) {
             (Type::Var(v1), Type::Var(v2)) => {
@@ -162,8 +196,15 @@ impl TypeStore {
                 let root = self.find(*v);
                 match &self.terms[root.0].clone() {
                     TypeTerm::Unbound => {
-                        self.terms[root.0] = TypeTerm::Bound(t.clone());
-                        Ok(())
+                        if self.occurs_in_type(root, t) {
+                            Err(TypeInferenceError::InfiniteType {
+                                contained: root,
+                                contains: t.clone(),
+                            })
+                        } else {
+                            self.terms[root.0] = TypeTerm::Bound(t.clone());
+                            Ok(())
+                        }
                     }
                     TypeTerm::Bound(existing) => self.unify(existing, t),
                 }
@@ -221,7 +262,7 @@ impl TypeStore {
                 },
             ) => {
                 let for_type = "Buffer";
-                _ = shape_validation_for(s1, s2, for_type)?;
+                shape_validation_for(s1, s2, for_type)?;
                 self.data_type_validation_for(d1, d2, for_type)
             }
             (
@@ -235,7 +276,7 @@ impl TypeStore {
                 },
             ) => {
                 let for_type = "Tensor";
-                _ = shape_validation_for(s1, s2, for_type)?;
+                shape_validation_for(s1, s2, for_type)?;
                 match (d1, d2) {
                     (Maybe::None, _) | (_, Maybe::None) => {
                         Err(TypeInferenceError::UnificationFailure(

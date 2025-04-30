@@ -13,7 +13,7 @@ use super::{
 use la_arena::{Arena, Idx};
 use miette::Diagnostic;
 use smol_str::SmolStr;
-use thin_vec::{ThinVec, thin_vec};
+use thin_vec::ThinVec;
 use thiserror::Error;
 
 #[derive(Clone, Diagnostic, Debug, PartialEq, Error)]
@@ -23,12 +23,17 @@ use thiserror::Error;
 pub enum TypeInferenceError {
     ArityMismatch(#[help] SmolStr),
     AttemptedShadowing(#[help] SmolStr),
-    DerefNonRef(#[help] SmolStr),
     // "Cannot access field or method `{}` on non-struct type: {:?}",
-    Expected(#[help] SmolStr),
     CannotAccessFieldOrMethod {
         non_struct: Type,
         attr_key: TypeKey,
+    },
+    DerefNonRef(#[help] SmolStr),
+    Expected(#[help] SmolStr),
+    //  "Infinite type detected: variable T occurs inside (T -> Int)"
+    InfiniteType{
+        contained: TypeVarId,
+        contains: Type,
     },
     ResolutionFailure(#[help] SmolStr),
     UnificationFailure(#[help] SmolStr),
@@ -40,6 +45,7 @@ pub enum TypeInferenceError {
         attr_key: TypeKey,
     },
 }
+// TODO: method to form the help message form TypeInferenceError
 
 pub type TypeInferenceResult<I> = Result<I, TypeInferenceError>;
 
@@ -49,7 +55,7 @@ pub type TypeIdx = Idx<Type>;
 pub type DoubleKeyedTypeMap = HashMap<(TypeKey, TypeKey), Type>;
 pub type KeyToTypeBinding = HashMap<TypeKey, Type>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TypeContext {
     pub self_stack: ThinVec<TypeVarId>,
 
@@ -67,20 +73,6 @@ pub struct TypeContext {
     pub bindings: KeyToTypeBinding,
 }
 impl TypeContext {
-    pub fn new() -> Self {
-        Self {
-            self_stack: thin_vec![],
-
-            key_to_id: HashMap::new(),
-            types: Arena::new(),
-
-            struct_field_types: HashMap::new(),
-            struct_method_types: HashMap::new(),
-            generalized_types: HashMap::new(),
-            bindings: HashMap::new(),
-        }
-    }
-
     pub fn insert_type_with_key(&mut self, key: TypeKey, ty: Type ) -> TypeInferenceResult<()> {
         if let Some(idx) = self.key_to_id.get(&key) {
             let already_in = &self.types[*idx];
@@ -126,7 +118,7 @@ impl TypeContext {
             .get(&(struct_key, attr_key))
             .or_else(|| {
                 self.struct_method_types
-                    .get(&(struct_key.clone(), attr_key.clone()))
+                    .get(&(struct_key,attr_key))
             })
             .cloned()
             .ok_or_else(|| TypeInferenceError::UnknownFieldOrMethod {
@@ -164,15 +156,15 @@ fn infer_expr_base(
 
 pub fn infer_bin_expr(
     op: &BinaryOp,
-    lhs: &Box<HMExpr>,
-    rhs: &Box<HMExpr>,
+    lhs: &HMExpr,
+    rhs: &HMExpr,
     ctx: &mut TypeContext,
     store: &mut TypeStore,
 ) -> TypeInferenceResult<Type> {
     if *op == BinaryOp::Dot {
         let base_type = infer_expr(lhs, ctx, store)?;
-        let attr_key = if let HMExpr::Var(f) = &**rhs {
-            f.clone()
+        let attr_key = if let HMExpr::Var(f) = *rhs {
+            f
         } else {
             return Err(TypeInferenceError::Expected(
                 "Expected field or method name on RHS of dot expression".into(),
@@ -223,11 +215,11 @@ pub fn infer_bin_expr(
 }
 fn infer_unary_expr(
     op: &UnaryOp,
-    operand: &Box<HMExpr>,
+    operand: &HMExpr,
     ctx: &mut TypeContext,
     store: &mut TypeStore,
 ) -> TypeInferenceResult<Type> {
-    let is_mut = matches!(**operand, HMExpr::Mut(_));
+    let is_mut = matches!(*operand, HMExpr::Mut(_));
     // note: a mutable expression has its type reduced to its inner type
     let operand_type = infer_expr(operand, ctx, store)?;
     let result_ty = match op {
@@ -284,7 +276,7 @@ pub fn infer_expr(
         HMExpr::Block{ returns, statements } => {
             let unit_type = unit_type();
             let mut return_type = unit_type.clone();
-            let mut returning_indices : HashSet::<usize> = HashSet::from_iter(returns.iter().map(|u| *u));
+            let mut returning_indices : HashSet::<usize> = HashSet::from_iter(returns.iter().copied());
             
             for (ix, stmt) in statements.iter().enumerate() {
                 let inferred =  infer_stmt(stmt, ctx, store)?;
@@ -309,9 +301,9 @@ pub fn infer_expr(
                         } else {
                             let t = unresolved_types.first().unwrap();
                             for u in &unresolved_types[1..] {
-                                _ = store.unify(&t, u)?;
+                                store.unify(t, u)?;
                             }
-                            &store.resolve(&t)
+                            &store.resolve(t)
                         }
                     },
                     Maybe::None => return Err(TypeInferenceError::Expected(SmolStr::from_str("buffers must have their type declared").unwrap())),
@@ -380,9 +372,9 @@ pub fn infer_expr(
                         } else {
                             let t = unresolved_types.first().unwrap();
                             for u in &unresolved_types[1..] {
-                                _ = store.unify(&t, u)?;
+                                store.unify(t, u)?;
                             }
-                            &store.resolve(&t)
+                            &store.resolve(t)
                         }
                     },
                     Maybe::None => &Type::Var(store.new_var_type()),
@@ -428,158 +420,159 @@ pub fn infer_stmt(
                 branches: branches_with_condition_and_blocks,
                 else_block,
             } => {
-                let mut blk_ret_type = None::<Type>;
+            let mut blk_ret_type = None::<Type>;
 
-                for Conditional { condition, body } in branches_with_condition_and_blocks {
-                    let inferred_cond_type = infer_expr(condition, ctx, store)?;
-                    store.unify(&inferred_cond_type, &Type::Bool)?;
+            for Conditional { condition, body } in branches_with_condition_and_blocks {
+                let inferred_cond_type = infer_expr(condition, ctx, store)?;
+                store.unify(&inferred_cond_type, &Type::Bool)?;
 
-                    let inferred_ret_type = infer_expr(body, ctx, store)?;
-                    if let Some(ret_type_of_blk) = &blk_ret_type {
-                        store.unify(&inferred_ret_type, ret_type_of_blk)?;
-                    } else {
-                        blk_ret_type = Some(inferred_ret_type);
-                    }
-                }
-                // at this point since even a non-returning block assigns to block_type (with unit type ()),
-                // it should not be None anymore, thus we should unwrap it
-                let blk_ret_type = blk_ret_type.expect("a return type for conditional block");
-
-                let inferred_ret_ty_for_else = if let Some(else_blk) = else_block {
-                    infer_expr(else_blk, ctx, store)?
+                let inferred_ret_type = infer_expr(body, ctx, store)?;
+                if let Some(ret_type_of_blk) = &blk_ret_type {
+                    store.unify(&inferred_ret_type, ret_type_of_blk)?;
                 } else {
-                    unit_type()
-                };
-                store.unify(&inferred_ret_ty_for_else, &blk_ret_type)?;
-
-                Ok(blk_ret_type)
+                    blk_ret_type = Some(inferred_ret_type);
+                }
             }
+            // at this point since even a non-returning block assigns to block_type (with unit type ()),
+            // it should not be None anymore, thus we should unwrap it
+            let blk_ret_type = blk_ret_type.expect("a return type for conditional block");
+
+            let inferred_ret_ty_for_else = if let Some(else_blk) = else_block {
+                infer_expr(else_blk, ctx, store)?
+            } else {
+                unit_type()
+            };
+            store.unify(&inferred_ret_ty_for_else, &blk_ret_type)?;
+
+            Ok(blk_ret_type)
+        }
         HMStmt::FnDef {
                 key,
                 parameters,
                 body,
                 return_type,
             } => {
-                let param_types = parameters
-                    .iter()
-                    .map(|(p_name, ty)| {
-                        ctx.bindings.insert(p_name.clone(), ty.clone());
-                        ty.clone()
-                    })
-                    .collect::<ThinVec<_>>();
-
-                // allow recursion
-                let fresh = Type::Var(store.new_var_type());
-                ctx.generalized_types
-                    .insert(*key, Scheme::monomorphic(&fresh));
-
-                // then infer the body, unify the result with `fresh`
-                if let Some(ret_ty) = return_type {
-                    let body_type = infer_stmt(body, ctx, store)?;
-                    store.unify(ret_ty, &body_type)?;
-                }
-                let fn_sig_type = Type::FnSig {
-                    param_types,
-                    return_type: Box::new(return_type.clone().unwrap_or(unit_type())),
-                };
-                let scheme = generalize(&fn_sig_type, &ctx.bindings, store);
-                ctx.generalized_types.insert(key.clone(), scheme);
-                parameters.iter().for_each(|(p_name, _)| {
-                    ctx.bindings.remove(p_name);
-                });
-                // unify the fresh with the function signature, i.e. allowing recursion of this function
-                store.unify(&fresh, &fn_sig_type)?;
-
-                // TODO: this may not be necessary
-                Ok(fn_sig_type)
-            }
-        HMStmt::Lambda { params, body } => {
-                let param_types = params
-                    .iter()
-                    .map(|param_name| {
-                        let param_var_id = store.new_var_type();
-                        let param_type_as_var = Type::Var(param_var_id);
-                        ctx.bindings
-                            .insert(param_name.clone(), param_type_as_var.clone());
-                        param_type_as_var
-                    })
-                    .collect::<ThinVec<_>>();
-                let ret_ty = infer_stmt(body, ctx, store)?;
-                params.iter().for_each(|param_name| {
-                    ctx.bindings.remove(param_name);
-                });
-                Ok(Type::FnSig {
-                    param_types,
-                    return_type: Box::new(ret_ty),
+            let param_types = parameters
+                .iter()
+                .map(|(p_name, ty)| {
+                    ctx.bindings.insert(*p_name, ty.clone());
+                    ty.clone()
                 })
+                .collect::<ThinVec<_>>();
+
+            // allow recursion
+            let fresh = Type::Var(store.new_var_type());
+            ctx.generalized_types
+                .insert(*key, Scheme::monomorphic(&fresh));
+
+            // then infer the body, unify the result with `fresh`
+            if let Some(ret_ty) = return_type {
+                let body_type = infer_stmt(body, ctx, store)?;
+                store.unify(ret_ty, &body_type)?;
             }
+            let fn_sig_type = Type::FnSig {
+                param_types,
+                return_type: Box::new(return_type.clone().unwrap_or(unit_type())),
+            };
+            let scheme = generalize(&fn_sig_type, &ctx.bindings, store);
+            ctx.generalized_types.insert(*key, scheme);
+            parameters.iter().for_each(|(p_name, _)| {
+                ctx.bindings.remove(p_name);
+            });
+            // unify the fresh with the function signature, i.e. allowing recursion of this function
+            store.unify(&fresh, &fn_sig_type)?;
+
+            // TODO: this may not be necessary
+            Ok(fn_sig_type)
+        }
+        HMStmt::Lambda { params, body } => {
+            let param_types = params
+                .iter()
+                .map(|param_name| {
+                    let param_var_id = store.new_var_type();
+                    let param_type_as_var = Type::Var(param_var_id);
+                    ctx.bindings
+                        .insert(*param_name, param_type_as_var.clone());
+                    param_type_as_var
+                })
+                .collect::<ThinVec<_>>();
+            let ret_ty = infer_stmt(body, ctx, store)?;
+            params.iter().for_each(|param_name| {
+                ctx.bindings.remove(param_name);
+            });
+            Ok(Type::FnSig {
+                param_types,
+                return_type: Box::new(ret_ty),
+            })
+        }
         HMStmt::Let {
                 key: name,
                 val,
                 body,
             } => {
-                if let HMStmt::Lambda { params: _, body: _ } = &**val {
-                    // pre-binding to support recursion
-                    let fresh_type = Type::Var(store.new_var_type());
-                    ctx.bindings.insert(name.clone(), fresh_type.clone());
-                }
-
-                let val_type = infer_stmt(val, ctx, store)?;
-
-                // temporarily remove before generalization over itself
-                let backup = ctx.bindings.remove(name);
-
-                let scheme = generalize(&val_type, &ctx.bindings, store);
-
-                ctx.generalized_types.insert(name.clone(), scheme);
-
-                if let Some(fresh_type) = &backup {
-                    ctx.bindings.insert(name.clone(), fresh_type.clone());
-                }
-
-                let result_type = infer_stmt(body, ctx, store)?;
-
-                if let Some(fresh_type) = &backup {
-                    let fresh_type_resolved = match store.resolve(fresh_type) {
-                        Type::FnSig {
-                            param_types: _,
-                            return_type,
-                        } => *return_type,
-                        rest => rest,
-                    };
-                    store.unify(&fresh_type_resolved, &result_type)?;
-                }
-
-                ctx.bindings.remove(name);
-
-                Ok(result_type)
+            if let HMStmt::Lambda { params: _, body: _ } = &**val {
+                // pre-binding to support recursion
+                let fresh_type = Type::Var(store.new_var_type());
+                ctx.bindings.insert(*name, fresh_type.clone());
             }
-        HMStmt::StructDef { key , fields } => {
-                // Also enables ordered without the keys init
-                let struct_type_fields = fields
-                    .iter()
-                    .map(|(field_name, field_type)| {
-                        ctx.struct_field_types
-                            .insert((*key, field_name.clone()), field_type.clone());
-                        field_type.clone()
-                    })
-                    .collect::<ThinVec<_>>();
 
-                let t = Type::Struct {
-                    key: *key ,
-                    fields: struct_type_fields,
+            let val_type = infer_stmt(val, ctx, store)?;
+
+            // temporarily remove before generalization over itself
+            let backup = ctx.bindings.remove(name);
+
+            let scheme = generalize(&val_type, &ctx.bindings, store);
+
+            ctx.generalized_types.insert(*name, scheme);
+
+            if let Some(fresh_type) = &backup {
+                ctx.bindings.insert(*name, fresh_type.clone());
+            }
+
+            let result_type = infer_stmt(body, ctx, store)?;
+
+            if let Some(fresh_type) = &backup {
+                let fresh_type_resolved = match store.resolve(fresh_type) {
+                    Type::FnSig {
+                        param_types: _,
+                        return_type,
+                    } => *return_type,
+                    rest => rest,
                 };
-                ctx.insert_type_with_key(*key, t.clone())?;
-                Ok(t)
+                store.unify(&fresh_type_resolved, &result_type)?;
             }
+
+            ctx.bindings.remove(name);
+
+            Ok(result_type)
+        }
+        HMStmt::StructDef { key , fields } => {
+            // Also enables ordered without the keys init
+            let struct_type_fields = fields
+                .iter()
+                .map(|(field_name, field_type)| {
+                    ctx.struct_field_types
+                        .insert((*key, *field_name), field_type.clone());
+                    field_type.clone()
+                })
+                .collect::<ThinVec<_>>();
+
+            let t = Type::Struct {
+                key: *key ,
+                fields: struct_type_fields,
+            };
+            ctx.insert_type_with_key(*key, t.clone())?;
+            Ok(t)
+        }
         HMStmt::Jump(hmexpr) => todo!(),
-                    HMStmt::Loop(_) => todo!(),
-                }
+        HMStmt::Loop(_) => todo!(),
+        }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use thin_vec::thin_vec;
     use crate::scope::into_idx;
 
     use super::super::types::Maybe;
@@ -743,8 +736,8 @@ mod tests {
     create! {
         hindley_miller_test,
         (stmt, expected_inferred_type), {
-            let mut store = TypeStore::new();
-            let mut ctx = TypeContext::new();
+            let mut store = TypeStore::default();
+            let mut ctx = TypeContext::default();
 
             // to make the tests for StructInits work, we define the Struct that they will
             // initialize by inferring its type
@@ -1166,8 +1159,8 @@ mod tests {
             (unification should fail due to shape mismatch)
         */
 
-        let mut store = TypeStore::new();
-        let mut ctx = TypeContext::new();
+        let mut store = TypeStore::default();
+        let mut ctx = TypeContext::default();
 
         let a = HMExpr::Tensor{data_type: Maybe::Checked(Box::new(Type::I32)), shape:thin_vec![Some(3)]};
         let b = HMExpr::Tensor{data_type: Maybe::Checked(Box::new(Type::I32)), shape:thin_vec![Some(2)]};
@@ -1185,8 +1178,8 @@ mod tests {
                 type((1, true)) == type(1, true, false))
         */
 
-        let mut store = TypeStore::new();
-        let mut ctx = TypeContext::new();
+        let mut store = TypeStore::default();
+        let mut ctx = TypeContext::default();
 
         let a = HMExpr::Tuple(thin_vec![HMExpr::I32, HMExpr::Bool]);
         let b = HMExpr::Tuple(thin_vec![HMExpr::I32, HMExpr::Bool, HMExpr::Bool]);
@@ -1204,8 +1197,8 @@ mod tests {
         1(true)
         */
 
-        let mut store = TypeStore::new();
-        let mut ctx = TypeContext::new();
+        let mut store = TypeStore::default();
+        let mut ctx = TypeContext::default();
 
         let expr = HMExpr::FnCall {
             fn_to_call: Box::new(HMStmt::Expr(HMExpr::I32)),
@@ -1224,8 +1217,8 @@ mod tests {
             foo
         */
 
-        let mut store = TypeStore::new();
-        let mut ctx = TypeContext::new();
+        let mut store = TypeStore::default();
+        let mut ctx = TypeContext::default();
 
         let expr = HMExpr::Var(get_idx_for("foo"));
         let result = infer_expr(&expr, &mut ctx, &mut store);
@@ -1240,8 +1233,8 @@ mod tests {
             loopback(1)
         */
 
-        let mut store = TypeStore::new();
-        let mut ctx = TypeContext::new();
+        let mut store = TypeStore::default();
+        let mut ctx = TypeContext::default();
 
         let stmt= HMStmt::Let {
             key: get_idx_for("loopback"),
@@ -1271,8 +1264,8 @@ mod tests {
                 self_apply(fn(x: i32) -> i32 { x + 1 })
         */
 
-        let mut store = TypeStore::new();
-        let mut ctx = TypeContext::new();
+        let mut store = TypeStore::default();
+        let mut ctx = TypeContext::default();
 
         let fn_def = HMStmt::FnDef {
             key: get_idx_for("self_apply"),
@@ -1316,8 +1309,8 @@ mod tests {
         /* Chimera equivalent:
             if true { 1 } else { true }
         */
-        let mut store = TypeStore::new();
-        let mut ctx = TypeContext::new();
+        let mut store = TypeStore::default();
+        let mut ctx = TypeContext::default();
 
         let stmt= HMStmt::ControlFlow {
             branches: thin_vec![Conditional {
@@ -1336,13 +1329,94 @@ mod tests {
         /* Chimera equivalent:
             let p = Undefined{}
         */
-        let mut store = TypeStore::new();
-        let mut ctx = TypeContext::new();
+        let mut store = TypeStore::default();
+        let mut ctx = TypeContext::default();
 
         let expr = HMExpr::StructInit { key: get_idx_for("Undefined"), fields: thin_vec![] } ;
 
         let result = infer_expr(&expr, &mut ctx, &mut store);
         let exp_err_msg = "There is no declared type with key 'Idx::<SmolStr>(16)'";
         assert_err_msg(result, exp_err_msg);
+    }
+    #[test]
+    fn test_cannot_unify_var_with_itself_in_function() {
+        /* 
+            t1: T
+            t2: f(T) -> i32   
+            
+            note: t2 is a function that takes t1 itself, 
+            if not handled, will cause infinite recursion
+        */
+        let mut store = TypeStore::default();
+
+        let t = Type::Var(store.new_var_type());
+        let func_type = Type::FnSig {
+            param_types: thin_vec![t.clone()],
+            return_type: Box::new(Type::I32),
+        };
+
+        let result = store.unify(&t, &func_type);
+        let exp_err = TypeInferenceError::InfiniteType { 
+            contained: TypeVarId(0), 
+            contains: Type::FnSig { 
+                param_types: thin_vec![Type::Var(TypeVarId(0))], return_type: Box::new(Type::I32) } };
+        assert_eq!(result.unwrap_err(), exp_err);
+    }
+    #[test]
+    fn unify_var_with_itself_in_tuple() {
+        /* 
+            t1: T
+            t2: (T,..)    
+            
+            note: t2 is a tuple that takes t1 itself, 
+            if not handled, will cause infinite recursion
+        */
+        let mut store = TypeStore::default();
+
+        let t = Type::Var(store.new_var_type());
+        let tuple_type = Type::Tuple(thin_vec![t.clone(), Type::I32]);
+
+        let result = store.unify(&t, &tuple_type);
+        let exp_err = TypeInferenceError::InfiniteType { 
+            contained: TypeVarId(0), 
+            contains: Type::Tuple(thin_vec![Type::Var(TypeVarId(0)), Type::I32])
+        };
+
+        assert_eq!(result.unwrap_err(), exp_err);
+    }
+
+#[test]
+    fn unify_var_with_itself_in_tensor() {
+        /* 
+            t1: T
+            t2: (T,..)    
+            
+            note: t2 is a tuple that takes t1 itself, 
+            if not handled, will cause infinite recursion
+        */
+        let mut store = TypeStore::default();
+
+        let t = Type::Var(store.new_var_type());
+        let tensor_type = Type::Tensor {
+            shape: thin_vec![Some(3)],
+            data_type: Maybe::Checked(Box::new(t.clone())),
+        };
+
+        let result = store.unify(&t, &tensor_type);
+        let exp_err = TypeInferenceError::InfiniteType { 
+            contained: TypeVarId(0), 
+            contains: Type::Tensor{shape: thin_vec![Some(3)], data_type:Maybe::Checked(Box::new(Type::Var(TypeVarId(0))))}
+        };
+        assert_eq!(result.unwrap_err(), exp_err);
+    }
+
+#[test]
+fn unify_with_self() {
+    let mut store = TypeStore::default();
+
+    let t = Type::Var(store.new_var_type());
+    let result = store.unify(&t, &t);
+
+    assert!(result.is_ok(), "Expected unifying with self to pass!");
     }
 }

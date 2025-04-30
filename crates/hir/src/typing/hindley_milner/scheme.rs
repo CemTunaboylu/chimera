@@ -75,13 +75,13 @@ fn instantiate_type(ty: &Type, subst: &HashMap<TypeVarId, Type>) -> Type {
             Type::Tuple(items.iter().map(|t| instantiate_type(t, subst)).collect())
         }
         Type::Struct { key: name, fields } => Type::Struct {
-            key: name.clone(),
+            key: *name,
             fields: fields.iter().map(|t| instantiate_type(t, subst)).collect(),
         },
         Type::Tensor { shape, data_type } => {
             let dt = match data_type {
                 Maybe::Checked(t) => {
-                    let t = instantiate_type(&*t, subst);
+                    let t = instantiate_type(t, subst);
                     Maybe::Checked(Box::new(t))
                 }
                 Maybe::Unchecked(thin_vec) => Maybe::Unchecked(
@@ -101,7 +101,7 @@ fn instantiate_type(ty: &Type, subst: &HashMap<TypeVarId, Type>) -> Type {
         Type::Buffer { shape, data_type } => {
             let dt = match data_type {
                 Maybe::Checked(t) => {
-                    let t = instantiate_type(&*t, subst);
+                    let t = instantiate_type(t, subst);
                     Maybe::Checked(Box::new(t))
                 }
                 Maybe::Unchecked(thin_vec) => Maybe::Unchecked(

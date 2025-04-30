@@ -103,6 +103,8 @@ pub fn type_of_param(base: Type, is_ref: bool, is_mut: bool) -> Type {
 }
 
 // TODO: what else should I be able to free like this?
+/// Finds all unbound type variables in a type.
+/// Used when generalizing a type after inference.
 pub fn free_type_vars(ty: &Type) -> HashSet<TypeVarId> {
     match ty {
         Type::Var(v) => [*v].into_iter().collect(),
@@ -110,17 +112,12 @@ pub fn free_type_vars(ty: &Type) -> HashSet<TypeVarId> {
             param_types,
             return_type, // if it does not return anything, it will return unit ()
         } => {
-            let mut s: HashSet<TypeVarId> = param_types
-                .iter()
-                .flat_map(|pt| free_type_vars(pt))
-                .collect();
-            s.extend(free_type_vars(&return_type));
+            let mut s: HashSet<TypeVarId> = param_types.iter().flat_map(free_type_vars).collect();
+            s.extend(free_type_vars(return_type));
             s
         }
         Type::SelfRef(v) => [*v].into_iter().collect(),
-        Type::Struct { key: _, fields } => {
-            fields.iter().flat_map(|pt| free_type_vars(pt)).collect()
-        }
+        Type::Struct { key: _, fields } => fields.iter().flat_map(free_type_vars).collect(),
         Type::Tuple(types) => types.iter().flat_map(free_type_vars).collect(),
         _ => HashSet::new(),
     }

@@ -13,7 +13,7 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) enum Loop {
+pub enum Loop {
     For {
         identifiers: ThinVec<HMExpr>,
         looping_on: HMExpr,
@@ -110,7 +110,7 @@ impl HIRBuilder {
             }
             Stmt::Expr(idx) => {
                 let expr = self.get_expr(*idx);
-                self.try_into_hm_expr(expr).map(|e| HMStmt::Expr(e))
+                self.try_into_hm_expr(expr).map(HMStmt::Expr)
             }
             Stmt::FnDef(idx) => todo!(), // TODO: does not have getter yet
             Stmt::Impl(_) => todo!(),

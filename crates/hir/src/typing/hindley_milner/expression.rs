@@ -121,7 +121,7 @@ impl HIRBuilder {
                     let expr = hir.get_expr(ix.0);
                     hir.try_into_hm_expr(expr)
                 };
-                let indexing = clone_with_err(arr_indexing.as_slice(), &self, to_hm)?;
+                let indexing = clone_with_err(arr_indexing.as_slice(), self, to_hm)?;
                 Ok(HMExpr::ContainerRef {
                     reference: type_key,
                     indexing,
@@ -136,10 +136,9 @@ impl HIRBuilder {
 
                 let to_hm = |fn_arg: &FnArg, hir: &HIRBuilder| {
                     let expr = hir.get_expr(fn_arg.0);
-                    hir.try_into_hm_expr(expr)
-                        .map(|hm_expr| HMStmt::Expr(hm_expr))
+                    hir.try_into_hm_expr(expr).map(HMStmt::Expr)
                 };
-                let args = clone_with_err(baggages.as_slice(), &self, to_hm)?;
+                let args = clone_with_err(baggages.as_slice(), self, to_hm)?;
                 Ok(HMExpr::FnCall {
                     fn_to_call: Box::new(HMStmt::Expr(HMExpr::Var(type_key))),
                     args,
@@ -160,7 +159,7 @@ impl HIRBuilder {
                 Ok(HMExpr::BinaryOp { op, lhs, rhs })
             }
             Expr::Literal(literal) => HMExpr::try_from(&literal.0).map_err(|e| e.into()),
-            Expr::Missing => Err(HIRError::with_msg(format!("Missing expression")).into()),
+            Expr::Missing => Err(HIRError::with_msg("Missing expression").into()),
             Expr::Mut(inner) => {
                 let inner_as_hm_expr = self.try_into_hm_expr(self.get_expr(inner.0))?;
                 Ok(HMExpr::Mut(Box::new(inner_as_hm_expr)))
@@ -172,19 +171,19 @@ impl HIRBuilder {
             },
             Expr::StructRef(reference) => {
                 let (type_key, baggage) = get_resolved_materials(reference)?;
-                _ = expect_non_baggage(&baggage, type_key)?;
+                expect_non_baggage(&baggage, type_key)?;
                 Ok(HMExpr::StructAsType(type_key))
             }
             // TODO: will be modified as a literal, delete this after its finished
             // Expr::StructInit(struct_init) => todo!(),
             Expr::Unary(unary) => {
                 let hm = Box::new(self.try_into_hm_expr(self.get_expr(unary.operand().0))?);
-                let op = unary.op().clone();
+                let op = *unary.op();
                 Ok(HMExpr::Unary(op, hm))
             }
             Expr::VarRef(reference) => {
                 let (type_key, baggage) = get_resolved_materials(reference)?;
-                _ = expect_non_baggage(&baggage, type_key)?;
+                expect_non_baggage(&baggage, type_key)?;
                 Ok(HMExpr::Var(type_key))
             }
         }
