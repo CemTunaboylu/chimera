@@ -58,7 +58,21 @@ where
 {
     for strip in ["'", "\""] {
         if s.starts_with(strip) {
-            s = s.strip_prefix(strip).unwrap().strip_suffix(strip).unwrap();
+            if let Some(stripped) = s.strip_prefix(strip) {
+                if let Some(stripped) = stripped.strip_suffix(strip) {
+                    s = stripped;
+                } else {
+                    return Err(ASTError::with_err_msg(
+                        range,
+                        format!("Missing closing quote for string: {:?}", s),
+                    ));
+                }
+            } else {
+                return Err(ASTError::with_err_msg(
+                    range,
+                    format!("Missing opening quote for string: {:?}", s),
+                ));
+            }
         }
     }
     let result = s.parse();
