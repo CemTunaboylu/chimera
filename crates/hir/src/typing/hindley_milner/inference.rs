@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use crate::{
     metadata::VarMeta,
@@ -7,7 +10,11 @@ use crate::{
 };
 
 use super::{
-    expression::{Conditional, HMExpr}, scheme::{generalize, instantiate, Scheme}, statement::HMStmt, store::{TypeStore, TypeVarId}, types::{unit_type, Maybe, Type}
+    expression::{Conditional, HMExpr},
+    scheme::{Scheme, generalize, instantiate},
+    statement::HMStmt,
+    store::{TypeStore, TypeVarId},
+    types::{Maybe, Type, unit_type},
 };
 
 use la_arena::{Arena, Idx};
@@ -31,7 +38,7 @@ pub enum TypeInferenceError {
     DerefNonRef(#[help] SmolStr),
     Expected(#[help] SmolStr),
     //  "Infinite type detected: variable T occurs inside (T -> Int)"
-    InfiniteType{
+    InfiniteType {
         contained: TypeVarId,
         contains: Type,
     },
@@ -61,8 +68,8 @@ pub struct TypeContext {
 
     // note: when a StructAsType is declared as a type, it is just an identifier.
     // after we resolve that, we will end up with a StrIdx, which is the position
-    // in the arena of the name of the struct. Thus when type checking, we need to 
-    // be able to reach the Type with the StrIdx. 
+    // in the arena of the name of the struct. Thus when type checking, we need to
+    // be able to reach the Type with the StrIdx.
     pub key_to_id: HashMap<TypeKey, TypeIdx>,
     pub types: Arena<Type>,
 
@@ -73,10 +80,16 @@ pub struct TypeContext {
     pub bindings: KeyToTypeBinding,
 }
 impl TypeContext {
-    pub fn insert_type_with_key(&mut self, key: TypeKey, ty: Type ) -> TypeInferenceResult<()> {
+    pub fn insert_type_with_key(&mut self, key: TypeKey, ty: Type) -> TypeInferenceResult<()> {
         if let Some(idx) = self.key_to_id.get(&key) {
             let already_in = &self.types[*idx];
-            Err(TypeInferenceError::AttemptedShadowing(format!("There is already a declared type '{:?}' for '{:?}'", already_in, idx).into()))
+            Err(TypeInferenceError::AttemptedShadowing(
+                format!(
+                    "There is already a declared type '{:?}' for '{:?}'",
+                    already_in, idx
+                )
+                .into(),
+            ))
         } else {
             let idx = self.types.alloc(ty);
             self.key_to_id.insert(key, idx);
@@ -84,12 +97,14 @@ impl TypeContext {
         }
     }
 
-    pub fn get_type_with_key(&mut self, key: &TypeKey) -> TypeInferenceResult<Type>{
+    pub fn get_type_with_key(&mut self, key: &TypeKey) -> TypeInferenceResult<Type> {
         if let Some(idx) = self.key_to_id.get(key) {
             let t = &self.types[*idx];
             Ok(t.clone())
         } else {
-            Err(TypeInferenceError::ResolutionFailure(format!("There is no declared type with key '{:?}'", key).into()))
+            Err(TypeInferenceError::ResolutionFailure(
+                format!("There is no declared type with key '{:?}'", key).into(),
+            ))
         }
     }
 
@@ -116,10 +131,7 @@ impl TypeContext {
     ) -> TypeInferenceResult<Type> {
         self.struct_field_types
             .get(&(struct_key, attr_key))
-            .or_else(|| {
-                self.struct_method_types
-                    .get(&(struct_key,attr_key))
-            })
+            .or_else(|| self.struct_method_types.get(&(struct_key, attr_key)))
             .cloned()
             .ok_or_else(|| TypeInferenceError::UnknownFieldOrMethod {
                 struct_key,
@@ -150,7 +162,7 @@ fn infer_expr_base(
         t => {
             println!("got {:?}", t);
             unimplemented!()
-        },
+        }
     }
 }
 
@@ -229,37 +241,37 @@ fn infer_unary_expr(
         },
         UnaryOp::Deref => {
             let result_ty = Type::Var(store.new_var_type());
-            store.unify(
-                &operand_type,
-                &Type::Ref {
-                    of: Box::new(result_ty.clone()),
-                    is_mut: false, // Note: conservative for now, only can deref if immutable reference  
-                },
-            ).or(Err(
-                TypeInferenceError::DerefNonRef(
-                    format!("cannot dereference non-reference type '{:?}'", operand_type).into()
+            store
+                .unify(
+                    &operand_type,
+                    &Type::Ref {
+                        of: Box::new(result_ty.clone()),
+                        is_mut: false, // Note: conservative for now, only can deref if immutable reference
+                    },
                 )
-            ))?;
+                .or(Err(TypeInferenceError::DerefNonRef(
+                    format!("cannot dereference non-reference type '{:?}'", operand_type).into(),
+                )))?;
             result_ty
         }
         UnaryOp::Neg => {
             // negative expects either f32 or i32
             store
                 .unify(&operand_type, &Type::I32)
-                .or_else(|_| 
+                .or_else(|_|
                     store.unify(&operand_type, &Type::F32)
                     .or(Err(
-                        TypeInferenceError::UnificationFailure( 
+                        TypeInferenceError::UnificationFailure(
                             format!("Negation expects either '{:?}' or '{:?}', but got '{:?}' which cannot be unified with expected types", Type::F32, Type::I32, operand_type).into()
                             ))
                         ))?;
             operand_type
         }
         UnaryOp::Not => {
-            // not expects bool 
+            // not expects bool
             store.unify(&operand_type, &Type::Bool)?;
             operand_type
-        },
+        }
         UnaryOp::CondUnwrap => todo!(),
     };
     Ok(store.resolve(&result_ty))
@@ -273,42 +285,52 @@ pub fn infer_expr(
 ) -> TypeInferenceResult<Type> {
     match expr {
         HMExpr::BinaryOp { op, lhs, rhs } => infer_bin_expr(op, lhs, rhs, ctx, store),
-        HMExpr::Block{ returns, statements } => {
+        HMExpr::Block {
+            returns,
+            statements,
+        } => {
             let unit_type = unit_type();
             let mut return_type = unit_type.clone();
-            let mut returning_indices : HashSet::<usize> = HashSet::from_iter(returns.iter().copied());
-            
+            let mut returning_indices: HashSet<usize> = HashSet::from_iter(returns.iter().copied());
+
             for (ix, stmt) in statements.iter().enumerate() {
-                let inferred =  infer_stmt(stmt, ctx, store)?;
+                let inferred = infer_stmt(stmt, ctx, store)?;
                 if !returning_indices.remove(&ix) {
                     continue;
-                } 
+                }
                 if return_type == unit_type {
-                    return_type = inferred; 
+                    return_type = inferred;
                 } else {
                     store.unify(&inferred, &return_type)?;
                 }
             }
 
             Ok(return_type)
-        },
-        HMExpr::Buffer{ data_type, shape } => {
-            let inferred_type = match  data_type {
-                    Maybe::Checked(t) => &**t,
-                    Maybe::Unchecked(unresolved_types) => {
-                        if unresolved_types.is_empty() {
-                            &Type::Var(store.new_var_type())
-                        } else {
-                            let t = unresolved_types.first().unwrap();
-                            for u in &unresolved_types[1..] {
-                                store.unify(t, u)?;
-                            }
-                            &store.resolve(t)
+        }
+        HMExpr::Buffer { data_type, shape } => {
+            let inferred_type = match data_type {
+                Maybe::Checked(t) => &**t,
+                Maybe::Unchecked(unresolved_types) => {
+                    if unresolved_types.is_empty() {
+                        &Type::Var(store.new_var_type())
+                    } else {
+                        let t = unresolved_types.first().unwrap();
+                        for u in &unresolved_types[1..] {
+                            store.unify(t, u)?;
                         }
-                    },
-                    Maybe::None => return Err(TypeInferenceError::Expected(SmolStr::from_str("buffers must have their type declared").unwrap())),
+                        &store.resolve(t)
+                    }
+                }
+                Maybe::None => {
+                    return Err(TypeInferenceError::Expected(
+                        SmolStr::from_str("buffers must have their type declared").unwrap(),
+                    ));
+                }
             };
-            Ok(Type::Buffer{ shape: shape.clone(), data_type: Maybe::Checked(Box::new(inferred_type.clone())) })
+            Ok(Type::Buffer {
+                shape: shape.clone(),
+                data_type: Maybe::Checked(Box::new(inferred_type.clone())),
+            })
         }
         HMExpr::FnCall { fn_to_call, args } => {
             let t_fun = infer_stmt(fn_to_call, ctx, store)?;
@@ -327,10 +349,8 @@ pub fn infer_expr(
             )?;
             Ok(store.resolve(&t_ret))
         }
-        HMExpr::Mut(inner) => {
-            infer_expr(inner, ctx, store)
-        }
-        // note: before the type checking, HIR elements that are not unresolved 
+        HMExpr::Mut(inner) => infer_expr(inner, ctx, store),
+        // note: before the type checking, HIR elements that are not unresolved
         // will be resolved first, thus it is assumed to be of Status::Resolved(_) type
         HMExpr::StructAsType(key) => {
             let ty = ctx.get_type_with_key(key)?;
@@ -350,7 +370,7 @@ pub fn infer_expr(
                 key: *key,
                 fields: struct_type_fields,
             };
-            // ensure that such a struct is defined 
+            // ensure that such a struct is defined
             store.unify(&struct_def, &ty)?;
             Ok(ty)
         }
@@ -364,22 +384,25 @@ pub fn infer_expr(
             }
         }
         HMExpr::Tensor { data_type, shape } => {
-            let inferred_type = match  data_type {
-                    Maybe::Checked(t) => &**t,
-                    Maybe::Unchecked(unresolved_types) => {
-                        if unresolved_types.is_empty() {
-                            &Type::Var(store.new_var_type())
-                        } else {
-                            let t = unresolved_types.first().unwrap();
-                            for u in &unresolved_types[1..] {
-                                store.unify(t, u)?;
-                            }
-                            &store.resolve(t)
+            let inferred_type = match data_type {
+                Maybe::Checked(t) => &**t,
+                Maybe::Unchecked(unresolved_types) => {
+                    if unresolved_types.is_empty() {
+                        &Type::Var(store.new_var_type())
+                    } else {
+                        let t = unresolved_types.first().unwrap();
+                        for u in &unresolved_types[1..] {
+                            store.unify(t, u)?;
                         }
-                    },
-                    Maybe::None => &Type::Var(store.new_var_type()),
+                        &store.resolve(t)
+                    }
+                }
+                Maybe::None => &Type::Var(store.new_var_type()),
             };
-            Ok(Type::Tensor{ shape: shape.clone(), data_type: Maybe::Checked(Box::new(inferred_type.clone())) })
+            Ok(Type::Tensor {
+                shape: shape.clone(),
+                data_type: Maybe::Checked(Box::new(inferred_type.clone())),
+            })
         }
         HMExpr::Tuple(exprs) => {
             let mut inferred_types = ThinVec::with_capacity(exprs.len());
@@ -398,9 +421,7 @@ pub fn infer_expr(
                 Err(TypeInferenceError::Unbound(*name))
             }
         }
-        HMExpr::Unary(op, operand) => {
-            infer_unary_expr(op, operand, ctx, store)
-        }
+        HMExpr::Unary(op, operand) => infer_unary_expr(op, operand, ctx, store),
         base => infer_expr_base(base, ctx, store),
     }
 }
@@ -413,13 +434,13 @@ pub fn infer_stmt(
 ) -> TypeInferenceResult<Type> {
     match stmt {
         HMStmt::Expr(expr) => {
-                        let inferred = infer_expr(expr, ctx, store)?;
-                        Ok(inferred)
-            }
+            let inferred = infer_expr(expr, ctx, store)?;
+            Ok(inferred)
+        }
         HMStmt::ControlFlow {
-                branches: branches_with_condition_and_blocks,
-                else_block,
-            } => {
+            branches: branches_with_condition_and_blocks,
+            else_block,
+        } => {
             let mut blk_ret_type = None::<Type>;
 
             for Conditional { condition, body } in branches_with_condition_and_blocks {
@@ -447,11 +468,11 @@ pub fn infer_stmt(
             Ok(blk_ret_type)
         }
         HMStmt::FnDef {
-                key,
-                parameters,
-                body,
-                return_type,
-            } => {
+            key,
+            parameters,
+            body,
+            return_type,
+        } => {
             let param_types = parameters
                 .iter()
                 .map(|(p_name, ty)| {
@@ -491,8 +512,7 @@ pub fn infer_stmt(
                 .map(|param_name| {
                     let param_var_id = store.new_var_type();
                     let param_type_as_var = Type::Var(param_var_id);
-                    ctx.bindings
-                        .insert(*param_name, param_type_as_var.clone());
+                    ctx.bindings.insert(*param_name, param_type_as_var.clone());
                     param_type_as_var
                 })
                 .collect::<ThinVec<_>>();
@@ -506,10 +526,10 @@ pub fn infer_stmt(
             })
         }
         HMStmt::Let {
-                key: name,
-                val,
-                body,
-            } => {
+            key: name,
+            val,
+            body,
+        } => {
             if let HMStmt::Lambda { params: _, body: _ } = &**val {
                 // pre-binding to support recursion
                 let fresh_type = Type::Var(store.new_var_type());
@@ -546,7 +566,7 @@ pub fn infer_stmt(
 
             Ok(result_type)
         }
-        HMStmt::StructDef { key , fields } => {
+        HMStmt::StructDef { key, fields } => {
             // Also enables ordered without the keys init
             let struct_type_fields = fields
                 .iter()
@@ -558,7 +578,7 @@ pub fn infer_stmt(
                 .collect::<ThinVec<_>>();
 
             let t = Type::Struct {
-                key: *key ,
+                key: *key,
                 fields: struct_type_fields,
             };
             ctx.insert_type_with_key(*key, t.clone())?;
@@ -566,14 +586,14 @@ pub fn infer_stmt(
         }
         HMStmt::Jump(hmexpr) => todo!(),
         HMStmt::Loop(_) => todo!(),
-        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use thin_vec::thin_vec;
     use crate::scope::into_idx;
+    use thin_vec::thin_vec;
 
     use super::super::types::Maybe;
 
@@ -612,7 +632,7 @@ mod tests {
                 body: Box::new(HMStmt::Lambda {
                     params: thin_vec![get_idx_for("n")],
                     // simplified placeholder
-                    body: Box::new(HMStmt::Expr(HMExpr::Var(get_idx_for("n")))), 
+                    body: Box::new(HMStmt::Expr(HMExpr::Var(get_idx_for("n")))),
                 }),
             }),
         };
@@ -624,7 +644,7 @@ mod tests {
                 body: Box::new(HMStmt::Lambda {
                     params: thin_vec![get_idx_for("n")],
                     // simplified placeholder
-                    body: Box::new(HMStmt::Expr(HMExpr::Var(get_idx_for("n")))), 
+                    body: Box::new(HMStmt::Expr(HMExpr::Var(get_idx_for("n")))),
                 }),
             }),
         };
@@ -662,7 +682,7 @@ mod tests {
         }
     }
 
-    fn real_world_addition_pipeline_expr() -> HMStmt{
+    fn real_world_addition_pipeline_expr() -> HMStmt {
         // simulated structure without actual operator support
         let add = HMStmt::Lambda {
             params: thin_vec![get_idx_for("x")],
@@ -670,7 +690,7 @@ mod tests {
                 params: thin_vec![get_idx_for("y")],
                 body: Box::new(
                     // placeholder for x + y
-                    HMStmt::Expr(HMExpr::Var(get_idx_for("x")) )
+                    HMStmt::Expr(HMExpr::Var(get_idx_for("x"))),
                 ),
             }),
         };
@@ -708,7 +728,7 @@ mod tests {
                 params: thin_vec![get_idx_for("y")],
                 body: Box::new(
                     // simulate x + y as just x for typing
-                    HMStmt::Expr(HMExpr::Var(get_idx_for("y"))), 
+                    HMStmt::Expr(HMExpr::Var(get_idx_for("y"))),
                 ),
             }),
         };
@@ -722,7 +742,7 @@ mod tests {
         }
     }
 
-    fn point_struct_def() -> HMStmt{
+    fn point_struct_def() -> HMStmt {
         HMStmt::StructDef {
             key: get_idx_for("Point"),
             fields: thin_vec![
@@ -907,8 +927,8 @@ mod tests {
                 body: Box::new(
                     HMStmt::Expr(
                         HMExpr::BinaryOp{
-                            lhs : Box::new(HMExpr::Var(get_idx_for("p"))), 
-                            op: BinaryOp::Dot, 
+                            lhs : Box::new(HMExpr::Var(get_idx_for("p"))),
+                            op: BinaryOp::Dot,
                             rhs : Box::new(HMExpr::Var(get_idx_for("x"))),
                             }),
                     )
@@ -921,8 +941,8 @@ mod tests {
         */
         struct_as_type_and_dot: (
             &HMStmt::Expr(HMExpr::BinaryOp{
-                lhs : Box::new(HMExpr::StructAsType(get_idx_for("Point"))), 
-                op: BinaryOp::Dot, 
+                lhs : Box::new(HMExpr::StructAsType(get_idx_for("Point"))),
+                op: BinaryOp::Dot,
                 rhs : Box::new(HMExpr::Var(get_idx_for("x"))),
             }),
             Type::I32,
@@ -944,7 +964,7 @@ mod tests {
             },
             Type::Buffer{
                 shape: thin_vec![1,2,3],
-                data_type: Maybe::Checked(Box::new(Type::I32)), 
+                data_type: Maybe::Checked(Box::new(Type::I32)),
             }
         ),
 
@@ -1074,7 +1094,7 @@ mod tests {
             {
                 let x = 1;
                 x
-            } 
+            }
         */
         block_with_final_expr: (
             &HMStmt::Expr(
@@ -1095,7 +1115,7 @@ mod tests {
             {
                 1;
                 true;
-            } 
+            }
         */
         block_with_semi_as_last: (
             &HMStmt::Expr(
@@ -1115,7 +1135,7 @@ mod tests {
                 if false { 1 }
                 else if false { 2 }
                 else { 3 }
-            } 
+            }
          */
         block_with_conditional_returns: (
             &HMStmt::Expr(
@@ -1129,7 +1149,7 @@ mod tests {
                         else_block: Some(Box::new(HMExpr::Block {
                             statements: thin_vec![HMStmt::Expr(HMExpr::I32)],
                             returns: thin_vec![0],
-                            })), 
+                            })),
                     }
                 ],
                 returns: thin_vec![0],
@@ -1162,8 +1182,14 @@ mod tests {
         let mut store = TypeStore::default();
         let mut ctx = TypeContext::default();
 
-        let a = HMExpr::Tensor{data_type: Maybe::Checked(Box::new(Type::I32)), shape:thin_vec![Some(3)]};
-        let b = HMExpr::Tensor{data_type: Maybe::Checked(Box::new(Type::I32)), shape:thin_vec![Some(2)]};
+        let a = HMExpr::Tensor {
+            data_type: Maybe::Checked(Box::new(Type::I32)),
+            shape: thin_vec![Some(3)],
+        };
+        let b = HMExpr::Tensor {
+            data_type: Maybe::Checked(Box::new(Type::I32)),
+            shape: thin_vec![Some(2)],
+        };
 
         let ty_a = infer_expr(&a, &mut ctx, &mut store).unwrap();
         let ty_b = infer_expr(&b, &mut ctx, &mut store).unwrap();
@@ -1236,7 +1262,7 @@ mod tests {
         let mut store = TypeStore::default();
         let mut ctx = TypeContext::default();
 
-        let stmt= HMStmt::Let {
+        let stmt = HMStmt::Let {
             key: get_idx_for("loopback"),
             val: Box::new(HMStmt::Lambda {
                 params: thin_vec![get_idx_for("x")],
@@ -1291,13 +1317,11 @@ mod tests {
                 key: get_idx_for("add1"),
                 parameters: thin_vec![(get_idx_for("x"), Type::I32)],
                 return_type: Some(Type::I32),
-                body: Box::new(HMStmt::Expr(
-                    HMExpr::BinaryOp {
+                body: Box::new(HMStmt::Expr(HMExpr::BinaryOp {
                     op: BinaryOp::Add,
                     lhs: Box::new(HMExpr::Var(get_idx_for("x"))),
                     rhs: Box::new(HMExpr::I32),
-                    }),
-                )
+                }),)
             }],
         };
 
@@ -1312,7 +1336,7 @@ mod tests {
         let mut store = TypeStore::default();
         let mut ctx = TypeContext::default();
 
-        let stmt= HMStmt::ControlFlow {
+        let stmt = HMStmt::ControlFlow {
             branches: thin_vec![Conditional {
                 condition: HMExpr::Bool,
                 body: HMExpr::I32
@@ -1332,7 +1356,10 @@ mod tests {
         let mut store = TypeStore::default();
         let mut ctx = TypeContext::default();
 
-        let expr = HMExpr::StructInit { key: get_idx_for("Undefined"), fields: thin_vec![] } ;
+        let expr = HMExpr::StructInit {
+            key: get_idx_for("Undefined"),
+            fields: thin_vec![],
+        };
 
         let result = infer_expr(&expr, &mut ctx, &mut store);
         let exp_err_msg = "There is no declared type with key 'Idx::<SmolStr>(16)'";
@@ -1340,11 +1367,11 @@ mod tests {
     }
     #[test]
     fn test_cannot_unify_var_with_itself_in_function() {
-        /* 
+        /*
             t1: T
-            t2: f(T) -> i32   
-            
-            note: t2 is a function that takes t1 itself, 
+            t2: f(T) -> i32
+
+            note: t2 is a function that takes t1 itself,
             if not handled, will cause infinite recursion
         */
         let mut store = TypeStore::default();
@@ -1356,19 +1383,22 @@ mod tests {
         };
 
         let result = store.unify(&t, &func_type);
-        let exp_err = TypeInferenceError::InfiniteType { 
-            contained: TypeVarId(0), 
-            contains: Type::FnSig { 
-                param_types: thin_vec![Type::Var(TypeVarId(0))], return_type: Box::new(Type::I32) } };
+        let exp_err = TypeInferenceError::InfiniteType {
+            contained: TypeVarId(0),
+            contains: Type::FnSig {
+                param_types: thin_vec![Type::Var(TypeVarId(0))],
+                return_type: Box::new(Type::I32),
+            },
+        };
         assert_eq!(result.unwrap_err(), exp_err);
     }
     #[test]
     fn unify_var_with_itself_in_tuple() {
-        /* 
+        /*
             t1: T
-            t2: (T,..)    
-            
-            note: t2 is a tuple that takes t1 itself, 
+            t2: (T,..)
+
+            note: t2 is a tuple that takes t1 itself,
             if not handled, will cause infinite recursion
         */
         let mut store = TypeStore::default();
@@ -1377,21 +1407,21 @@ mod tests {
         let tuple_type = Type::Tuple(thin_vec![t.clone(), Type::I32]);
 
         let result = store.unify(&t, &tuple_type);
-        let exp_err = TypeInferenceError::InfiniteType { 
-            contained: TypeVarId(0), 
-            contains: Type::Tuple(thin_vec![Type::Var(TypeVarId(0)), Type::I32])
+        let exp_err = TypeInferenceError::InfiniteType {
+            contained: TypeVarId(0),
+            contains: Type::Tuple(thin_vec![Type::Var(TypeVarId(0)), Type::I32]),
         };
 
         assert_eq!(result.unwrap_err(), exp_err);
     }
 
-#[test]
+    #[test]
     fn unify_var_with_itself_in_tensor() {
-        /* 
+        /*
             t1: T
-            t2: (T,..)    
-            
-            note: t2 is a tuple that takes t1 itself, 
+            t2: (T,..)
+
+            note: t2 is a tuple that takes t1 itself,
             if not handled, will cause infinite recursion
         */
         let mut store = TypeStore::default();
@@ -1403,20 +1433,23 @@ mod tests {
         };
 
         let result = store.unify(&t, &tensor_type);
-        let exp_err = TypeInferenceError::InfiniteType { 
-            contained: TypeVarId(0), 
-            contains: Type::Tensor{shape: thin_vec![Some(3)], data_type:Maybe::Checked(Box::new(Type::Var(TypeVarId(0))))}
+        let exp_err = TypeInferenceError::InfiniteType {
+            contained: TypeVarId(0),
+            contains: Type::Tensor {
+                shape: thin_vec![Some(3)],
+                data_type: Maybe::Checked(Box::new(Type::Var(TypeVarId(0)))),
+            },
         };
         assert_eq!(result.unwrap_err(), exp_err);
     }
 
-#[test]
-fn unify_with_self() {
-    let mut store = TypeStore::default();
+    #[test]
+    fn unify_with_self() {
+        let mut store = TypeStore::default();
 
-    let t = Type::Var(store.new_var_type());
-    let result = store.unify(&t, &t);
+        let t = Type::Var(store.new_var_type());
+        let result = store.unify(&t, &t);
 
-    assert!(result.is_ok(), "Expected unifying with self to pass!");
+        assert!(result.is_ok(), "Expected unifying with self to pass!");
     }
 }
