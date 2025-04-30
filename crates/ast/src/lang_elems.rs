@@ -137,14 +137,7 @@ where
 {
     let results = node
         .children()
-        // .filter_map(|node| T::try_from(node).ok())
-        .filter_map(|node| match T::try_from(node) {
-            Ok(t) => Some(t),
-            Err(err) => {
-                println!("err: {:?}", err);
-                None
-            }
-        })
+        .filter_map(|node| T::try_from(node).ok())
         .collect::<ThinVec<_>>();
 
     if results.is_empty() {
