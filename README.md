@@ -47,7 +47,7 @@ The goal is to learn **compiler engineering**, **type systems**, and **optimizat
 ## 📋 Quick BNF Preview
 Example snippet of Chimera’s syntax rules:
 
-```bnf
+```
 Item ::= StructItem | EnumItem | ...
 
 StructItem ::= 'struct' Name '{' FieldList '}'
@@ -57,6 +57,8 @@ Expr ::= Factor | Expr '+'|'-' Expr
 Factor ::= Atom | Factor '*'|'/' Atom
 
 Atom ::= Number | '(' Expr ')'
+
+```
 
 ## 📋 Binding example for Pratt parsing 
     Pratt parsing
@@ -68,7 +70,7 @@ Atom ::= Number | '(' Expr ')'
 
 ## 📋 A quick example for CST -> AST -> HIR 
 → let p = i + 314
-
+```
 CST: 
 Root@0..10
   VariableDef@0..10
@@ -83,7 +85,8 @@ Root@0..10
         Plus@6..7 "+"
         Literal@7..10
           Number@7..10 "314"
-
+```
+```
 AST:
 VarDef(
     VarRef(
@@ -106,7 +109,8 @@ VarDef(
     ),
 ),
 
-
+```
+```
 HIR:
 VarDef(
     VarDef(
@@ -130,7 +134,7 @@ VarDef(
         ),
     ),
 ),
-
+```
 
 ## 🧩 Longer-Term Ideas
 	•	Lifetime analysis
