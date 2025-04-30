@@ -73,7 +73,7 @@ impl HIRBuilder {
     }
     pub fn try_lowering_expr_as_idx(&mut self, ast_expr: Option<ASTExpr>) -> HIRResult<ExprIdx> {
         let expr = unwrap_or_err(ast_expr.as_ref(), "expression")?;
-        self.lower_expr_as_idx(&expr)
+        self.lower_expr_as_idx(expr)
     }
     pub fn try_lower_expr_as_idx_with_default(
         &mut self,

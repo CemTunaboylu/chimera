@@ -9,8 +9,7 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     climbing::climb,
-    clone_from_iter_with_err, clone_with_err,
-    literal::Value,
+    clone_from_iter_with_err,
     scope::ExprIdx,
     typing::hindley_milner::types::{Maybe, Type},
 };
@@ -184,8 +183,8 @@ mod tests {
     use super::*;
     use ast::{ast_root_from, cast_node_into_type, literal::Literal as ASTLiteral};
 
-    use crate::scope::into_idx;
     use crate::{container::Shape, typing::hindley_milner::types::Maybe};
+    use crate::{literal::Value, scope::into_idx};
 
     fn get_tensor_literal_for(program: &str) -> CanonicalBuffer {
         let ast_root = ast_root_from(program);

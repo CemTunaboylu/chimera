@@ -1,10 +1,10 @@
 use crate::{
-    climbing::{EnumeratedScope, climb},
+    climbing::EnumeratedScope,
     delimited::Indexing,
-    scope::{NameIndexed, Selector, Span, StrIdx},
+    scope::{NameIndexed, Selector, Span, placeholder_idx},
     unwrap_or_err,
 };
-use la_arena::{Arena, Idx};
+use la_arena::Idx;
 use miette::{Diagnostic, Report};
 use smol_str::SmolStr;
 use thin_vec::ThinVec;
@@ -107,11 +107,10 @@ where
 {
     let current_scope = scopes.next();
     let (key, resolution_type, baggage) = {
-        let enumerated_scope = unwrap_or_err(
+        let enumerated_scope = *unwrap_or_err(
             current_scope.as_ref(),
             format!("cannot find scope for {:?}", unresolved_ref).as_str(),
-        )?
-        .clone();
+        )?;
         let idx = unresolved_ref.get_unresolved_index()?;
         let unresolved = &enumerated_scope.1.to_resolve[idx];
         (&unresolved.name, &unresolved.for_type, &unresolved.baggage)
@@ -120,7 +119,7 @@ where
     let mut guesstimates = ThinVec::new();
     for (scope_idx, scope) in scopes {
         if let Some((name_idx, obj_idx)) = scope.resolve_in::<E, S>(key) {
-            _ = span_check(scope, key, resolution_type)?;
+            span_check(scope, key, resolution_type)?;
             let resolved = Reference::<E>::Resolved {
                 at: scope_idx,
                 baggage: baggage.clone(),
@@ -132,7 +131,7 @@ where
             guesstimates.push(guess(&S::select_alloc(scope).name_to_idx_trie, key));
         }
     }
-    return Err(ResolutionError::new_with_guestimate(key, guesstimates).into());
+    Err(ResolutionError::new_with_guestimate(key, guesstimates).into())
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -153,7 +152,7 @@ impl Unresolved {
     pub fn baggaged(name: SmolStr, baggage: Baggage, t: ResolutionType) -> Self {
         Self {
             name,
-            baggage: baggage,
+            baggage,
             for_type: t,
         }
     }
@@ -175,6 +174,12 @@ pub enum Reference<R> {
         name_idx: Idx<SmolStr>,
         obj_idx: Idx<R>,
     },
+}
+
+impl<D: Default> Default for Reference<D> {
+    fn default() -> Self {
+        Self::Unresolved(placeholder_idx())
+    }
 }
 
 impl<R: Debug> Reference<R> {

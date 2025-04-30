@@ -26,7 +26,7 @@ impl TryFrom<&SyntaxNode> for Mut {
         if let Some(child) = mut_node.first_child() {
             Ok(Self(child))
         } else {
-            return Err(error_for_node(mut_node, "to have a child"));
+            Err(error_for_node(mut_node, "to have a child"))
         }
     }
 }

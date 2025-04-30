@@ -166,12 +166,12 @@ fn extract_shape_from_buffer(
             ));
         }
     };
-    f(&dim_hints_node)
+    f(dim_hints_node)
 }
 // note: initializer can be in the form : [<value>; [<shape>, [<dim_1>, <dim_2>, ...]]]
 fn extract_shape_from(shape_node: &SyntaxNode, for_kind: SyntaxKind) -> ASTResult<Shape> {
     if shape_node.kind() == DimHints {
-        return extract_shape_from_buffer(&shape_node, for_kind);
+        return extract_shape_from_buffer(shape_node, for_kind);
     }
     match for_kind {
         KwBuffer => {
@@ -192,13 +192,11 @@ fn extract_shape_from(shape_node: &SyntaxNode, for_kind: SyntaxKind) -> ASTResul
         }
         // note: this should be unreachable since we check for container_type before calling this function
         // but left as is as a safety net
-        nope => {
-            return Err(ASTError::new(
-                shape_node.text_range().into(),
-                [KwBuffer, KwTensor].as_ref(),
-                nope,
-            ));
-        }
+        nope => Err(ASTError::new(
+            shape_node.text_range().into(),
+            [KwBuffer, KwTensor].as_ref(),
+            nope,
+        )),
     }
 }
 
@@ -212,7 +210,7 @@ impl TryFrom<&SyntaxNode> for ContainerInitializer {
             init_node,
             [KwBuffer, KwTensor, LBrack, RBrack, Whitespace].as_ref(),
         );
-        _ = err_if_empty(
+        err_if_empty(
             &nodes,
             span.clone(),
             "have nodes for value to initialize and a shape",

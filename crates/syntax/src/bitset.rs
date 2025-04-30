@@ -23,7 +23,7 @@ impl Debug for SyntaxKindBitSet {
 impl SyntaxKindBitSet {
     const LARGEST_INDEX: u32 = i128::BITS - 1;
     pub fn empty() -> Self {
-        Self(0 as u128)
+        Self(0)
     }
     pub fn clear(&mut self) {
         self.0 = 0;
@@ -113,14 +113,6 @@ impl From<&SyntaxKind> for SyntaxKindBitSet {
     }
 }
 
-impl Into<SyntaxKindBitSet> for ThinVec<SyntaxKind> {
-    fn into(self) -> SyntaxKindBitSet {
-        self.iter()
-            .map(SyntaxKindBitSet::from)
-            .fold(SyntaxKindBitSet::empty(), |acc, x| acc + x)
-    }
-}
-
 impl Not for SyntaxKindBitSet {
     type Output = Self;
 
@@ -128,14 +120,6 @@ impl Not for SyntaxKindBitSet {
         Self(!self.0)
     }
 }
-
-// impl Into<BitSet> for &[SyntaxKind] {
-//     fn into(self) -> BitSet {
-//         self.iter()
-//             .map(BitSet::from)
-//             .fold(BitSet::empty(), |acc, x| acc + x)
-//     }
-// }
 
 impl Into<ThinVec<SyntaxKind>> for SyntaxKindBitSet {
     fn into(self) -> ThinVec<SyntaxKind> {
@@ -237,9 +221,14 @@ mod test {
             SyntaxKind::RBrace,
             SyntaxKind::Semi,
         ];
-        let all_exp: SyntaxKindBitSet = kinds.clone().into();
+        let all_exp: SyntaxKindBitSet = kinds.clone().as_ref().into();
         let chunked_exp = kinds.chunks(2).fold(SyntaxKindBitSet::empty(), |acc, x| {
-            acc + x.iter().map(|s| *s).collect::<ThinVec<SyntaxKind>>().into()
+            acc + x
+                .iter()
+                .map(|s| *s)
+                .collect::<ThinVec<SyntaxKind>>()
+                .as_ref()
+                .into()
         });
         assert_eq!(all_exp, chunked_exp);
     }

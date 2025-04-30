@@ -57,34 +57,36 @@ impl TryFrom<&SyntaxNode> for Conditional {
 
     fn try_from(conditional_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let kw = first_token_expect(
-            &conditional_node,
+            conditional_node,
             [SyntaxKind::KwIf, SyntaxKind::KwElif, SyntaxKind::KwElse].as_ref(),
         )?;
         let condition_and_block = get_children_in(
             conditional_node,
             [SyntaxKind::Condition, SyntaxKind::Block].as_ref(),
         );
-        if condition_and_block.len() > 2 {
-            return Err(ASTError::new(
+        match condition_and_block.len() {
+            two if two == 2 => {
+                ensure_token_kind_is_not(&kw, SyntaxKind::KwElse)?;
+                let (condition, block) = parse_condition_and_block(condition_and_block)?;
+
+                let c_flow = match kw.kind() {
+                    SyntaxKind::KwIf => Self::If(condition, block),
+                    SyntaxKind::KwElif => Self::Elif(condition, block),
+                    _ => unreachable!(),
+                };
+                Ok(c_flow)
+            }
+            more_than_2 if more_than_2 > 2 => Err(ASTError::new(
                 conditional_node.text_range().into(),
                 "a condition and a block",
                 condition_and_block.as_ref(),
-            ));
-        } else if condition_and_block.len() == 2 {
-            _ = ensure_token_kind_is_not(&kw, SyntaxKind::KwElse);
-            let (condition, block) = parse_condition_and_block(condition_and_block)?;
-
-            let c_flow = match kw.kind() {
-                SyntaxKind::KwIf => Self::If(condition, block),
-                SyntaxKind::KwElif => Self::Elif(condition, block),
-                _ => unreachable!(),
-            };
-            Ok(c_flow)
-        } else {
-            _ = ensure_token_kind_is(&kw, SyntaxKind::KwElse);
-            let block_node = condition_and_block.first().unwrap();
-            let block = Block::try_from(block_node)?;
-            Ok(Self::Else(block))
+            )),
+            _ => {
+                _ = ensure_token_kind_is(&kw, SyntaxKind::KwElse);
+                let block_node = condition_and_block.first().unwrap();
+                let block = Block::try_from(block_node)?;
+                Ok(Self::Else(block))
+            }
         }
     }
 }

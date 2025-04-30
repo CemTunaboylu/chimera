@@ -1,48 +1,28 @@
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    errors::HIRError,
     self_ref::SelfRef,
     typing::hindley_milner::{
         store::placeholder_type_var_id,
         types::{Status, Type, unit_type},
     },
 };
-use ast::types::{Hint as ASTHint, Type as ASTType};
+use ast::types::Type as ASTType;
 use thin_vec::ThinVec;
 
 /*
    1.	Lowering / Processing AST:
-    •	You lower an expression (e.g., a variable or function call).
-    •	Assign fresh type variables to unknowns.
+    •	While lowering an expression (e.g., a variable or function call)
+            assign fresh type variables to unknowns.
    2.	Unification:
-    •	When you apply functions or compare values, you unify types.
-    •	Substitution map grows.
+    •	When applying functions or comparing values, unify types.
+            (substitution map grows)
    3.	Generalization:
-    •	When you bind a variable (e.g., let id = |x| x), generalize its type.
-    •	This creates polymorphism: forall a. a -> a
+    •	When binding a variable (e.g., let id = |x| x), generalize its type.
+            this creates polymorphism: forall a. a -> a
    4.	Usage:
-    •	When calling or referencing the variable later, instantiate the scheme to a fresh type again.
-*/
-
-/*
-   apply(&Type) – replace variables using the substitution
-   compose(Subst) – combine substitutions
-
-   pub fn unify(t1: &Type, t2: &Type) -> Result<Subst, String>
-    •	Attempts to make two types equal by finding a substitution.
-    •	Handles:
-    •	Function types (A -> B) recursively
-    •	Type variables (a ↦ Int)
-    •	Occurs check (a = a -> b is invalid)
-
-   fn occurs_check(tv: TypeVar, ty: &Type) -> bool
-    •	Prevents infinite types.
-    •	Ensures you can’t unify a variable with a type that contains itself.
-
-    fn free_type_vars(ty: &Type) -> HashSet<TypeVar>
-    •   Finds all unbound type variables in a type.
-    •	Used when generalizing a type after inference.
+    •	When calling or referencing the variable later,
+            instantiate the scheme to a fresh type again.
 */
 
 impl HIRBuilder {
@@ -62,7 +42,7 @@ impl HIRBuilder {
                 }
 
                 let return_type = if let Some(ret_type) = return_type {
-                    self.lower_type(&**ret_type)?
+                    self.lower_type(ret_type)?
                 } else {
                     unit_type()
                 };

@@ -1,9 +1,6 @@
 use crate::{HIRResult, builder::HIRBuilder, unwrap_or_err};
 
-use super::{
-    canonical::{self, Canonical},
-    uninit::Uninitialized,
-};
+use super::{canonical::Canonical, uninit::Uninitialized};
 
 use ast::{container::BufferTree, errors::ASTError, literal::Value as ASTValue};
 
@@ -19,7 +16,7 @@ impl HIRBuilder {
             tensor_value.get_buffer_tree(),
             "tensor value should have a buffer tree",
         )?;
-        let (meta, canonical_idx) = self.flatten_buffer_tree(buffer_tree)?;
+        let (_meta, _canonical_idx) = self.flatten_buffer_tree(buffer_tree)?;
         Ok(todo!())
     }
 }

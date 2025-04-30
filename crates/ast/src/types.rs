@@ -76,7 +76,7 @@ fn filter_dim_hints(dim_hints_node: &SyntaxNode, err: bool) -> ASTResult<ThinVec
     Ok(children
         .iter()
         .filter(|c| !unwanted.contains(&c.kind()))
-        .map(|not| not.clone())
+        .cloned()
         .collect())
 }
 
@@ -124,7 +124,7 @@ impl TryFrom<&SyntaxNode> for Type {
                 let param_nodes = Param::get_params_nodes_from(parent_node);
                 let mut parameters = ThinVec::with_capacity(param_nodes.len());
                 // TOOD: take care of mut
-                let can_be_param: SyntaxKindBitSet = SyntaxKind::can_be_parameter().into();
+                let can_be_param: SyntaxKindBitSet = SyntaxKind::can_be_parameter().as_ref().into();
                 for param_decl in param_nodes {
                     let type_param =
                         get_first_child_in(&param_decl, can_be_param).ok_or_else(|| {
@@ -136,8 +136,8 @@ impl TryFrom<&SyntaxNode> for Type {
                     let typed = Type::try_from(&type_param)?;
                     parameters.push(typed);
                 }
-                let return_type = ASTFnDef::get_return_type_from(&parent_node)
-                    .and_then(|ret_type| ret_type.return_type().map(|rt| Box::new(rt)));
+                let return_type = ASTFnDef::get_return_type_from(parent_node)
+                    .and_then(|ret_type| ret_type.return_type().map(Box::new));
 
                 Self::Fn {
                     parameters,
@@ -180,7 +180,7 @@ impl TryFrom<&SyntaxNode> for Type {
                 }
             }
             _ => {
-                _ = ensure_node_kind_is_any(
+                ensure_node_kind_is_any(
                     parent_node,
                     [StructAsType, TyBuffer, TyFn, TyTensor].as_ref(),
                 )?;

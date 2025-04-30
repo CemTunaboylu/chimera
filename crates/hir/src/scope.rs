@@ -56,7 +56,7 @@ pub enum ScopeKind {
     Struct,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DefAllocator<D: NameIndexed> {
     pub names: Arena<SmolStr>,
     pub name_to_name_idx: HashMap<SmolStr, StrIdx>,
@@ -65,14 +65,6 @@ pub struct DefAllocator<D: NameIndexed> {
 }
 
 impl<D: NameIndexed> DefAllocator<D> {
-    pub fn new() -> Self {
-        Self {
-            names: Arena::<SmolStr>::new(),
-            name_to_name_idx: HashMap::new(),
-            definitions: Arena::<D>::new(),
-            name_to_idx_trie: NameToIndexTrie::<D>::new(),
-        }
-    }
     pub fn alloc(&mut self, name: SmolStr, mut d: D) -> HIRResult<Idx<D>> {
         if self.name_to_idx_trie.get(&name).is_some() {
             return Err(HIRError::with_msg(format!(
@@ -92,22 +84,12 @@ impl<D: NameIndexed> DefAllocator<D> {
 
 pub type MetaHolder<L, M> = HashMap<Idx<L>, M>;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct MetadataStore {
     pub vars: MetaHolder<VarDef, VarMeta>,
     pub fns: MetaHolder<FnDef, FnMeta>,
     pub structs: MetaHolder<StructDef, StructMeta>,
 }
-impl MetadataStore {
-    pub fn new() -> Self {
-        Self {
-            vars: MetaHolder::<VarDef, VarMeta>::new(),
-            fns: MetaHolder::<FnDef, FnMeta>::new(),
-            structs: MetaHolder::<StructDef, StructMeta>::new(),
-        }
-    }
-}
-
 pub trait Selector<E: Clone + Debug + PartialEq + NameIndexed> {
     fn select_alloc(scope: &Scope) -> &DefAllocator<E>;
     fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<E>;
@@ -166,11 +148,11 @@ impl Scope {
     pub fn new(parent: ScopeIdx, kind: ScopeKind) -> Self {
         let exprs = expr_arena_with_missing();
 
-        let variable_allocator = DefAllocator::<VarDef>::new();
-        let struct_allocator = DefAllocator::<StructDef>::new();
-        let fn_allocator = DefAllocator::<FnDef>::new();
+        let variable_allocator = DefAllocator::<VarDef>::default();
+        let struct_allocator = DefAllocator::<StructDef>::default();
+        let fn_allocator = DefAllocator::<FnDef>::default();
 
-        let metadata = MetadataStore::new();
+        let metadata = MetadataStore::default();
 
         let strs = Arena::<SmolStr>::new();
         let tensor_literals = Arena::<CanonicalBuffer>::new();

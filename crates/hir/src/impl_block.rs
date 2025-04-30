@@ -24,7 +24,7 @@ impl HIRBuilder {
         let of = self.lower_type(&impl_block.of)?;
         let mut lowered_methods = ThinVec::with_capacity(impl_block.methods.len());
         for method in impl_block.methods.iter() {
-            let mtd_ix = self.lower_fn_def(&method)?;
+            let mtd_ix = self.lower_fn_def(method)?;
             lowered_methods.push(mtd_ix);
         }
         Ok(Impl {

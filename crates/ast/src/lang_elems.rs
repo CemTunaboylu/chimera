@@ -38,10 +38,10 @@ pub fn first_token_expect(
         if set.contains(&first_token.kind()) {
             Ok(first_token)
         } else {
-            return Err(error_for_token(&first_token, set));
+            Err(error_for_token(&first_token, set))
         }
     } else {
-        return Err(ASTError::new(node.text_range().into(), set, node));
+        Err(ASTError::new(node.text_range().into(), set, node))
     }
 }
 
@@ -85,7 +85,7 @@ pub fn ensure_node_kind_is_any(
 pub fn get_single_children_as_expr(node: &SyntaxNode) -> ASTResult<Expr> {
     node.children()
         .find_map(|node| Expr::try_from(&node).ok())
-        .map(|opt_exp| Ok(opt_exp))
+        .map(Ok)
         .unwrap_or(Err(error_for_node(node, EXPR_CANDIDATES.as_ref())))
 }
 
@@ -106,7 +106,7 @@ pub fn first_child_of_kind_errs(
     if let Some(node) = first_child_of_kind(node, set) {
         Ok(node)
     } else {
-        return Err(error_for_node(node, set));
+        Err(error_for_node(node, set))
     }
 }
 
@@ -182,9 +182,7 @@ pub fn get_first_child_in(
     set: impl Into<SyntaxKindBitSet>,
 ) -> Option<SyntaxNode> {
     let set: SyntaxKindBitSet = set.into();
-    node.children()
-        .filter(|node| set.contains(&node.kind()))
-        .next()
+    node.children().find(|node| set.contains(&node.kind()))
 }
 
 pub fn get_token(node: &SyntaxNode) -> Option<SyntaxToken> {
@@ -207,7 +205,7 @@ pub fn get_token_of_errs(
     if let Some(token) = get_token_of(node, set) {
         Ok(token)
     } else {
-        return Err(error_for_node(node, set));
+        Err(error_for_node(node, set))
     }
 }
 

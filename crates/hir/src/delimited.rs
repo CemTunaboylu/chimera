@@ -9,7 +9,7 @@ use crate::{
     context::UsageContext,
     errors::HIRError,
     expression::Expr,
-    scope::{ExprIdx, ScopeIdx, ScopeKind},
+    scope::{ExprIdx, ScopeIdx, ScopeKind, placeholder_idx},
     statement::Stmt,
 };
 
@@ -22,6 +22,16 @@ pub struct Block {
     pub scope_idx: ScopeIdx,
     pub returns: ThinVec<usize>,
     pub statements: ThinVec<Stmt>,
+}
+
+impl Default for Block {
+    fn default() -> Self {
+        Self {
+            scope_idx: placeholder_idx(),
+            returns: Default::default(),
+            statements: Default::default(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -38,7 +48,7 @@ impl HIRBuilder {
         let mut lowered_statements = ThinVec::with_capacity(statements.len());
         let mut returns = ThinVec::new();
         for stmt in statements {
-            let low_stmt = self.lower_statement(&stmt)?;
+            let low_stmt = self.lower_statement(stmt)?;
             match low_stmt {
                 Stmt::Return(_) => {
                     returns.push(lowered_statements.len());

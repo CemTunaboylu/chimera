@@ -8,10 +8,10 @@ use crate::{
     parser::Parser,
 };
 
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     fn can_recover(&self) -> bool {
         self.peek().is_some_and(|r| {
-            r.is_err() || r.is_ok_and(|s| self.context.borrow().is_recovery_allowed(&s.get_kind()))
+            r.is_err() || r.is_ok_and(|s| self.context.borrow().is_recovery_allowed(s.get_kind()))
         })
     }
 

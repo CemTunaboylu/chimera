@@ -31,7 +31,7 @@ pub enum SeparatedElement {
     ParseExprWith(Bound),
 }
 
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     pub fn parse(self) -> ConcreteSyntaxTree {
         let root = self.start();
         while !self.is_at_the_end() {
@@ -52,7 +52,7 @@ impl<'input> Parser<'input> {
     ) {
         let unwanted: SyntaxKindBitSet = unwanted.into();
         while let IsNext::No = self.is_next_in_strict(unwanted) {
-            self.parse_with(&elements_in_order);
+            self.parse_with(elements_in_order);
             self.bump_if(separator);
         }
     }
@@ -67,7 +67,7 @@ impl<'input> Parser<'input> {
         while let IsNext::No = self.is_next_in_strict(unwanted) {
             let marker = self.start();
 
-            self.parse_with(&elements_in_order);
+            self.parse_with(elements_in_order);
             self.bump_if(separator);
 
             self.complete_marker_with(marker, wrapping_kind_to_complete);
@@ -121,9 +121,9 @@ impl<'input> Parser<'input> {
                     self.parse_expression_until_binding_power(bound.clone());
                 }
                 Branched(a, b) => {
-                    let to_iterate = if self.does_first_element_pass(a.get(0).unwrap()) {
+                    let to_iterate = if self.does_first_element_pass(a.first().unwrap()) {
                         a
-                    } else if self.does_first_element_pass(b.get(0).unwrap()) {
+                    } else if self.does_first_element_pass(b.first().unwrap()) {
                         b
                     } else {
                         continue;
@@ -141,7 +141,7 @@ impl<'input> Parser<'input> {
         } else {
             let cond_marker = self.start();
             let rollback_when_dropped = self.roll_back_context_after_drop();
-            self.expect_in_ctx(SyntaxKind::operators());
+            self.expect_in_ctx(SyntaxKind::operators().as_ref());
             self.parse_expression_until_binding_power(starting_precedence());
             self.complete_marker_with(cond_marker, Condition)
         };
@@ -214,7 +214,7 @@ impl<'input> Parser<'input> {
         };
         let kind = syntax.get_kind();
 
-        let marker = match kind {
+        match kind {
             Ident => self.parse_starting_with_identifier(),
             Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
             // & (ref), ! (bool negate), - (negative), * (deref)
@@ -236,16 +236,14 @@ impl<'input> Parser<'input> {
                 None
             }
             _ => None,
-        };
-
-        marker
+        }
     }
 
     pub fn parse_type(&self, syntax: &Syntax) -> Option<Finished> {
         let kind = syntax.get_kind();
         if !self.is_allowed(kind) {
             // it returns None thus acts as an early return
-            self.recover_restricted(kind.clone())?;
+            self.recover_restricted(kind)?;
         }
         match kind {
             KwTensor | KwBuffer => return self.parse_container_constructs(syntax),
@@ -394,7 +392,7 @@ impl<'input> Parser<'input> {
         let prefix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let marker = self.start();
         let rollback_after_drop = self.roll_back_context_after_drop();
-        self.expect_in_ctx(SyntaxKind::operators());
+        self.expect_in_ctx(SyntaxKind::operators().as_ref());
         self.expect_and_bump(kind);
         let bounded_precedence = Bound::from_op(prefix_unary_op.clone());
         _ = self.parse_expression_until_binding_power(bounded_precedence);

@@ -30,11 +30,11 @@ pub enum Block {
 impl TryFrom<&SyntaxNode> for Block {
     type Error = ASTError;
     fn try_from(block_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        _ = ensure_node_kind_is(block_node, SyntaxKind::Block)?;
+        ensure_node_kind_is(block_node, SyntaxKind::Block)?;
         // TODO: for now, we ignore the failures
         let stmts = get_children_as::<Stmt>(block_node)?;
         if matches!(stmts.last(), Some(Stmt::Expr(_))) {
-            Ok(Self::Returning(ThinVec::from(stmts)))
+            Ok(Self::Returning(stmts))
         } else {
             Ok(Self::Semi(stmts))
         }
@@ -55,22 +55,23 @@ pub struct Indexing(pub(crate) SyntaxNode);
 
 impl Indexing {
     pub fn get_indexing_nodes_from(node: &SyntaxNode) -> ThinVec<SyntaxNode> {
-        get_children_in(&node, SyntaxKind::Indexing)
+        get_children_in(node, SyntaxKind::Indexing)
     }
     pub fn index(&self) -> ASTResult<Expr> {
-        let children = self.0.children().into_iter();
-        let in_btw_brackets = children
+        if let Some(node) = self
+            .0
+            .children()
             .filter(|node_or_token| {
                 !matches!(
                     node_or_token.kind(),
                     SyntaxKind::LBrack | SyntaxKind::RBrack
                 )
             })
-            .next();
-        if let Some(node) = in_btw_brackets {
+            .next()
+        {
             Expr::try_from(&node)
         } else {
-            return Err(error_for_node(&self.0, "non empty child"));
+            Err(error_for_node(&self.0, "non empty child"))
         }
     }
 }

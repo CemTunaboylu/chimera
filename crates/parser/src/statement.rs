@@ -7,7 +7,7 @@ use syntax::{
     syntax_kind::SyntaxKind::{self, *},
 };
 
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     pub fn parse_statement(&self) -> Option<Finished> {
         let mut syntax = self.peek()?;
         while let Err(err) = syntax {
@@ -46,8 +46,8 @@ impl<'input> Parser<'input> {
         ctx.forbid_all();
         let non_assignments: SyntaxKindBitSet = non_assigning_operators();
         ctx.allow(non_assignments);
-        ctx.allow(SyntaxKind::can_be_parameter());
-        ctx.allow(SyntaxKind::opening_delimiters());
+        ctx.allow(SyntaxKind::can_be_parameter().as_ref());
+        ctx.allow(SyntaxKind::opening_delimiters().as_ref());
         ctx.allow([Eq, Ident, Semi, VarDef, VarRef, SelfRef, StructLit].as_ref());
         rollback_when_dropped
     }

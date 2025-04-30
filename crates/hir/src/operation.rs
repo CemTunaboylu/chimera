@@ -165,9 +165,9 @@ impl BinaryInfix {
         &self.op
     }
     fn validate_ast(bin: &ASTBinary) -> HIRResult<()> {
-        _ = err_if_none(bin.lhs(), "a left operand")?;
-        _ = err_if_none(bin.rhs(), "a right operand")?;
-        _ = err_if_none(bin.op().as_ref(), "an operation")?;
+        err_if_none(bin.lhs(), "a left operand")?;
+        err_if_none(bin.rhs(), "a right operand")?;
+        err_if_none(bin.op().as_ref(), "an operation")?;
         Ok(())
     }
 }
@@ -186,8 +186,8 @@ pub enum Unary {
 
 impl Unary {
     fn validate_ast(un: &ASTUnary) -> HIRResult<()> {
-        _ = err_if_none(un.operand(), "an operand")?;
-        _ = err_if_none(un.op().as_ref(), "an operation")?;
+        err_if_none(un.operand(), "an operand")?;
+        err_if_none(un.op().as_ref(), "an operation")?;
         Ok(())
     }
     fn get_inner_unary_operation(&self) -> &UnaryOperation {
@@ -222,7 +222,7 @@ impl HIRBuilder {
         Ok(l_o)
     }
     pub fn lower_binary_operation(&mut self, value: &ASTBinary) -> HIRResult<BinaryInfix> {
-        _ = BinaryInfix::validate_ast(&value)?;
+        BinaryInfix::validate_ast(value)?;
         let op = BinaryOp::from_syntax_kind(value.op().expect("binary operation"))?;
         let ctx = self.get_context();
         let ast_lhs = value.lhs().expect("left-hand-side operand");
@@ -242,7 +242,7 @@ impl HIRBuilder {
 
     #[with_context(UsageContext::Read)]
     pub fn lower_unary_operation(&mut self, value: &ASTUnary) -> HIRResult<Unary> {
-        _ = Unary::validate_ast(&value)?;
+        Unary::validate_ast(value)?;
         let op = UnaryOp::from_syntax_kind(value.op().expect("unary operation"))?;
         let ast_value = value.operand().expect("unary operand");
         let ctx: UsageContext = (&op).into();

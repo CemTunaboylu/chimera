@@ -22,6 +22,14 @@ pub struct VarDef {
     pub name_index: StrIdx,
     pub expr_index: ExprIdx,
 }
+impl Default for VarDef {
+    fn default() -> Self {
+        Self {
+            name_index: placeholder_idx(),
+            expr_index: placeholder_idx(),
+        }
+    }
+}
 
 impl NameIndexed for VarDef {
     fn set_name_index(&mut self, ix: StrIdx) {
@@ -78,7 +86,7 @@ impl HIRBuilder {
         };
 
         let idx = self.allocate::<VarDef, VarSelector>(name.clone(), var_def)?;
-        _ = self.store_metadata_for_var_def(ast_var_def, idx, expr_index)?;
+        self.store_metadata_for_var_def(ast_var_def, idx, expr_index)?;
         Ok(idx)
     }
     pub fn lower_var_ref(&mut self, var_ref: &ASTVarRef) -> HIRResult<Unresolved> {

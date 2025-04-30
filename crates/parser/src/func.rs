@@ -11,7 +11,7 @@ use syntax::{
 use SyntaxKind::*;
 use thin_vec::{ThinVec, thin_vec};
 
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     // fn <ident>({parameters as CSV}) {-> RetType} {}
     #[allow(unused_variables)]
     pub fn parse_function_def(&self) -> Option<Finished> {
@@ -100,7 +100,7 @@ impl<'input> Parser<'input> {
     pub fn parse_function_call(&self, marker: Marker<Incomplete>) -> Finished {
         self.expect_and_bump(LParen);
         let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.expect_in_ctx(SyntaxKind::operators());
+        self.expect_in_ctx(SyntaxKind::operators().as_ref());
         self.parse_comma_separated_arguments_until(RParen);
         self.expect_and_bump(RParen);
         self.complete_marker_with(marker, FnCall)
@@ -121,7 +121,7 @@ impl<'input> Parser<'input> {
         use SeparatedElement::*;
 
         let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
-        let types_set: SyntaxKindBitSet = SyntaxKind::types().into();
+        let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let arg_elements = thin_vec![ref_mut_with(Branched(
             thin_vec![KindAs(Ident, StructAsType)],
             // thin_vec![InSet(types_set)],
@@ -142,7 +142,7 @@ impl<'input> Parser<'input> {
         use SeparatedElement::*;
 
         let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
-        let types_set: SyntaxKindBitSet = SyntaxKind::types().into();
+        let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let arg_elements = thin_vec![
             Kind(Ident),
             Kind(Colon),

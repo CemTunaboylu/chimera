@@ -41,7 +41,7 @@ impl TryFrom<&SyntaxNode> for StructField {
                 None::<SyntaxToken>,
             ));
         }
-        let name = idents.get(0).unwrap().text().to_smolstr();
+        let name = idents.first().unwrap().text().to_smolstr();
         let field_type = if idents.len() == 2 {
             let struct_as_type = idents.last().unwrap();
             Type::try_from(struct_as_type)?
@@ -61,7 +61,7 @@ impl TryFrom<&SyntaxNode> for StructDef {
             .text()
             .to_smolstr();
         let mut fields = thin_vec![];
-        for field in get_children_in(&struct_def_node, SyntaxKind::StructField) {
+        for field in get_children_in(struct_def_node, SyntaxKind::StructField) {
             let ast_field = StructField::try_from(&field)?;
             fields.push(ast_field);
         }
@@ -114,7 +114,7 @@ impl TryFrom<&SyntaxNode> for StructLiteral {
             .text()
             .to_smolstr();
         let mut fields = thin_vec![];
-        for field in get_children_in(&struct_lit_node, SyntaxKind::StructField) {
+        for field in get_children_in(struct_lit_node, SyntaxKind::StructField) {
             let field_init = StructFieldInit::try_from(&field)?;
             fields.push(field_init);
         }

@@ -5,8 +5,8 @@ pub struct RollingBackAnchor<'caller> {
     syntax_sets: [SyntaxKindBitSet; 3],
 }
 
-impl<'caller> RollingBackAnchor<'caller> {
-    pub fn with(ctx: *mut ParserContext) -> Self {
+impl RollingBackAnchor<'_> {
+    pub unsafe fn with(ctx: *mut ParserContext) -> Self {
         let as_ref = unsafe { ctx.as_ref().unwrap() };
         let sets = [
             as_ref.get_expectations(),
@@ -20,7 +20,7 @@ impl<'caller> RollingBackAnchor<'caller> {
     }
 }
 
-impl<'caller> Drop for RollingBackAnchor<'caller> {
+impl Drop for RollingBackAnchor<'_> {
     fn drop(&mut self) {
         let reverted: ParserContext = self.syntax_sets.as_ref().into();
         self.reference.take(reverted);
@@ -40,13 +40,14 @@ mod tests {
         let to_forbid = SyntaxKind::LParen;
         assert!(ctx.is_allowed(to_forbid));
         {
-            let disallow_l_paren_anchor = RollingBackAnchor::with(&mut ctx as *mut ParserContext);
+            let disallow_l_paren_anchor =
+                unsafe { RollingBackAnchor::with(&mut ctx as *mut ParserContext) };
             ctx.forbid(to_forbid);
             {
                 assert!(!ctx.is_allowed(to_forbid));
                 let to_allow = to_forbid;
                 let reallow_l_paren_anchor =
-                    RollingBackAnchor::with(&mut ctx as *mut ParserContext);
+                    unsafe { RollingBackAnchor::with(&mut ctx as *mut ParserContext) };
                 ctx.allow(to_allow);
                 assert!(ctx.is_allowed(to_forbid));
             }

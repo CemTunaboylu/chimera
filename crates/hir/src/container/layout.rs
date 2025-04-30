@@ -47,7 +47,7 @@ impl Layout {
         let mut inner_strides = thin_vec![1; dimensionality];
 
         for ix in (0..num_blocks_in_shape.len() - 1).rev() {
-            num_blocks_in_shape[ix] = num_blocks_in_shape[ix + 1] * num_blocks_in_shape[ix];
+            num_blocks_in_shape[ix] *= num_blocks_in_shape[ix + 1];
             outer_strides[ix] *= num_blocks_in_shape[ix + 1];
             inner_strides[ix] = inner_strides[ix + 1] * block_size;
         }

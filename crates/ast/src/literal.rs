@@ -138,10 +138,10 @@ impl TryFrom<&SyntaxNode> for Literal {
         {
             Literal::try_from(&value_containing_token)
         } else {
-            return Err(ASTError::with_err_msg(
+            Err(ASTError::with_err_msg(
                 literal_node.text_range().into(),
                 "literal node should have a value".to_string(),
-            ));
+            ))
         }
     }
 }

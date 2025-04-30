@@ -33,14 +33,14 @@ impl TryFrom<&SyntaxNode> for Jump {
     type Error = ASTError;
 
     fn try_from(node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let tokens = get_tokens_in_errs(&node, [KwContinue, KwBreak].as_ref())?;
+        let tokens = get_tokens_in_errs(node, [KwContinue, KwBreak].as_ref())?;
         let kw = tokens.first().unwrap();
 
         let j = match kw {
             cont if matches!(cont.kind(), KwContinue) => Self::Continue,
             brk if matches!(brk.kind(), KwBreak) => {
                 let ignore: SyntaxKindBitSet = [KwBreak, Whitespace, Semi].as_ref().into();
-                if let Some(returning) = filtered_children_with_tokens(&node, !ignore).first() {
+                if let Some(returning) = filtered_children_with_tokens(node, !ignore).first() {
                     Self::Break(Some(returning.clone()))
                 } else {
                     Self::Break(None)

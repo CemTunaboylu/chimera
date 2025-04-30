@@ -1,6 +1,6 @@
 use canonical::CanonicalBuffer;
 use la_arena::Idx;
-use thin_vec::{ThinVec, thin_vec};
+use thin_vec::ThinVec;
 
 use crate::{
     HIRResult,
@@ -8,10 +8,6 @@ use crate::{
     expression::Expr,
     literal::{Literal, Value},
     scope::ExprIdx,
-    typing::hindley_milner::{
-        expression::HMExpr,
-        types::{Maybe, Type},
-    },
 };
 use ast::container::Shape as ASTShape;
 

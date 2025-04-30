@@ -27,8 +27,8 @@ impl ParserContext {
         }
     }
 
-    pub fn rolling_back_anchor<'caller>(raw_ptr: *mut Self) -> RollingBackAnchor<'caller> {
-        RollingBackAnchor::with(raw_ptr)
+    pub unsafe fn rolling_back_anchor<'caller>(raw_ptr: *mut Self) -> RollingBackAnchor<'caller> {
+        unsafe { RollingBackAnchor::with(raw_ptr) }
     }
 
     pub fn take(&self, ctx: ParserContext) {

@@ -20,7 +20,7 @@ use crate::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct RetType(Type);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 // TODO: add metadata
 pub struct FnDef {
     pub body: Block,
@@ -42,26 +42,24 @@ impl NameIndexed for FnDef {
 impl Clone for FnDef {
     fn clone(&self) -> Self {
         Self {
-            name_index: self.name_index.clone(),
+            name_index: self.name_index,
             scope_idx: self.scope_idx,
-            parameters: self
-                .parameters
-                .iter()
-                .map(|param| param.clone())
-                .collect::<ThinVec<_>>(),
+            parameters: self.parameters.iter().cloned().collect::<ThinVec<_>>(),
             return_type: self.return_type.clone(),
             body: self.body.clone(),
         }
     }
 }
 
-impl PartialEq for FnDef {
-    fn eq(&self, other: &Self) -> bool {
-        self.name_index == other.name_index
-            && self.scope_idx == other.scope_idx
-            && self.parameters.starts_with(other.parameters.as_ref())
-            && self.return_type == other.return_type
-            && self.body == other.body
+impl Default for FnDef {
+    fn default() -> Self {
+        Self {
+            body: Default::default(),
+            name_index: placeholder_idx(),
+            parameters: Default::default(),
+            return_type: Default::default(),
+            scope_idx: placeholder_idx(),
+        }
     }
 }
 
@@ -97,17 +95,14 @@ impl HIRBuilder {
     }
     pub fn resolve_fn_call(&self, unresolved: &Reference<FnDef>) -> HIRResult<Reference<FnDef>> {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
-        Ok(resolve::<FnDef, FnSelector>(
-            scope_climbing_iter,
-            unresolved,
-        )?)
+        resolve::<FnDef, FnSelector>(scope_climbing_iter, unresolved)
     }
 
     pub fn lower_fn_params(&mut self, fn_def: &ASTFnDef) -> HIRResult<ThinVec<Param>> {
         let mut parameters = ThinVec::with_capacity(fn_def.parameters().len());
 
         for param in fn_def.parameters() {
-            let p = self.lower_parameter(&param)?;
+            let p = self.lower_parameter(param)?;
             parameters.push(p);
         }
 

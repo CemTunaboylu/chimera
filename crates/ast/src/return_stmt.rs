@@ -19,7 +19,7 @@ impl TryFrom<&SyntaxNode> for Return {
     type Error = ASTError;
 
     fn try_from(return_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        _ = ensure_token_kind_is(
+        ensure_token_kind_is(
             return_node.first_token().as_ref().unwrap(),
             SyntaxKind::KwReturn,
         )?;

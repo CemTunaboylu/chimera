@@ -38,18 +38,11 @@ use typing::hindley_milner::inference::TypeKey;
 
 pub type HIRResult<T> = Result<T, Report>;
 
-pub fn clone_thin_vec<T: Clone>(thin_vec: &ThinVec<T>) -> ThinVec<T> {
-    thin_vec.iter().map(|e| e.clone()).collect::<ThinVec<_>>()
-}
-pub fn compare_thin_vecs<T: PartialEq>(a: &ThinVec<T>, b: &ThinVec<T>) -> bool {
-    a.len() == b.len() && a.starts_with(b.as_ref())
-}
-
 pub fn err_if_none<Any>(any: Option<&Any>, err_msg: &str) -> HIRResult<()> {
     if any.is_some() {
         return Ok(());
     }
-    return Err(HIRError::with_msg(err_msg).into());
+    Err(HIRError::with_msg(err_msg).into())
 }
 
 pub fn unwrap_or_err<'caller, Any>(
@@ -59,7 +52,7 @@ pub fn unwrap_or_err<'caller, Any>(
     if let Some(some) = any {
         return Ok(some);
     }
-    return Err(HIRError::with_msg(err_msg).into());
+    Err(HIRError::with_msg(err_msg).into())
 }
 
 pub fn expect_non_baggage(b: &Baggage, type_key: TypeKey) -> HIRResult<()> {
@@ -98,6 +91,3 @@ pub fn clone_with_err<Any: Clone, Post>(
     }
     Ok(clone)
 }
-
-#[cfg(test)]
-mod tests {}

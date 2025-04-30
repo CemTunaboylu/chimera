@@ -105,7 +105,7 @@ impl TryFrom<&SyntaxNode> for FnArg {
             let expr = Expr::try_from(&child)?;
             Ok(Self(expr))
         } else {
-            return Err(error_for_node(fn_arg_node, "to have a child"));
+            Err(error_for_node(fn_arg_node, "to have a child"))
         }
     }
 }

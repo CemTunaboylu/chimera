@@ -66,6 +66,12 @@ pub struct ContainerExamination {
     // min_max: MinMax,
     // types: Types,
 }
+impl Default for ContainerExamination {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContainerExamination {
     pub fn new() -> Self {
         Self {
@@ -74,7 +80,7 @@ impl ContainerExamination {
             // types: Types::new(),
         }
     }
-    pub fn add(&mut self, expr: &Expr, idx: ExprIdx) -> HIRResult<()> {
+    pub fn add(&mut self, _expr: &Expr, idx: ExprIdx) -> HIRResult<()> {
         self.sparsity.count(&idx);
         // self.min_max.min_max(value);
         // self.types.add(expr)?;
@@ -85,18 +91,13 @@ impl ContainerExamination {
     // }
 }
 
+#[derive(Default)]
 pub struct MinMax {
     max: Option<Value>,
     min: Option<Value>,
 }
 
 impl MinMax {
-    pub fn new() -> Self {
-        Self {
-            max: None,
-            min: None,
-        }
-    }
     pub fn min_max(&mut self, value: &Value) {
         let v = value.clone();
         let mx = self.max.get_or_insert(v.clone());
@@ -110,8 +111,13 @@ impl MinMax {
         }
     }
 }
-
 pub struct Sparsity<V: Eq + Hash + Clone>(HashMap<V, usize>, usize);
+
+impl<V: Eq + Hash + Clone> Default for Sparsity<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<V: Eq + Hash + Clone> Sparsity<V> {
     pub fn new() -> Self {
@@ -133,12 +139,10 @@ impl<V: Eq + Hash + Clone> Sparsity<V> {
     }
 }
 
+#[derive(Default)]
 pub struct Types(HashSet<Type>);
 
 impl Types {
-    pub fn new() -> Self {
-        Self(HashSet::new())
-    }
     pub fn add(&mut self, _value: &Expr) -> HIRResult<()> {
         // Expr -> HMExpr -> Type
         // let t: Type = Type::from(&hm);

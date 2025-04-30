@@ -146,13 +146,13 @@ impl HintParser {
 }
 
 #[allow(unused_variables)]
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     // the identifier is already bumped at this point because we ended up here
     // from parsing an identifier and saw a LBrack as well.
     #[allow(unused_variables)]
     pub fn parse_container_indexing(&self) {
         let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.expect_in_ctx(SyntaxKind::operators());
+        self.expect_in_ctx(SyntaxKind::operators().as_ref());
         self.allow_in_ctx(non_assigning_operators());
         while IsNext::Yes == self.is_next_strict(LBrack) {
             let marker = self.start();
@@ -229,7 +229,7 @@ impl<'input> Parser<'input> {
         let marker = self.start();
         let kind = syntax.get_kind();
         self.expect_and_bump(kind);
-        let completed = if IsNext::Yes == self.is_next_strict(LBrack) {
+        if IsNext::Yes == self.is_next_strict(LBrack) {
             self.parse_initializer(kind, marker)
         } else if IsNext::Yes == self.is_next_strict(ColonColon) {
             // parse the class method
@@ -240,8 +240,7 @@ impl<'input> Parser<'input> {
             // else we directly try typing since buffers need type and shape hint
             // so that they become a complete type, otherwise it is an error
             self.parse_buffer_or_tensor_typing(kind, marker)
-        };
-        completed
+        }
     }
 
     /*
@@ -269,8 +268,7 @@ impl<'input> Parser<'input> {
 
         let (opening, closing) = (Lt, Gt);
         let mut hint_parser = HintParser::new(opening, closing, parsing_buffer);
-        hint_parser.parse_hints(&self);
-
+        hint_parser.parse_hints(self);
         Some(self.complete_marker_with(marker, kind_to_complete_with))
     }
 

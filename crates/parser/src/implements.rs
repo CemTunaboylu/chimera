@@ -6,7 +6,7 @@ use crate::{
 use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
 
 #[allow(unused_variables)]
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     // impl <struct_identifier> {...}
     #[allow(unused_variables)]
     pub fn parse_impl_block(&self) -> Option<Finished> {

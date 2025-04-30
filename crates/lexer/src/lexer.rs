@@ -40,7 +40,7 @@ impl<'input> Lexer<'input> {
         self.peeked.as_ref().unwrap().as_ref()
     }
     pub fn source(&self) -> &str {
-        self.inner_lexer.source().as_ref()
+        self.inner_lexer.source()
     }
 }
 
@@ -57,7 +57,7 @@ impl Iterator for Lexer<'_> {
                     .then_some(self.inner_lexer.slice().to_smolstr());
                 Ok(Token {
                     kind,
-                    ttype: kind.clone().into(),
+                    ttype: kind.into(),
                     span: self.inner_lexer.span(),
                     slice,
                 })

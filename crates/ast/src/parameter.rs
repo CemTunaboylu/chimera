@@ -36,7 +36,7 @@ pub enum Param {
 
 impl Param {
     pub fn get_params_nodes_from(fn_def_node: &SyntaxNode) -> ThinVec<SyntaxNode> {
-        get_children_in(&fn_def_node, ParamDecl)
+        get_children_in(fn_def_node, ParamDecl)
     }
     fn validate_op(node: &SyntaxNode) -> ASTResult<()> {
         // note: in the future, raw pointers will be introduced thus we don't assume
@@ -49,12 +49,12 @@ impl Param {
         let child = got.first_child_or_token();
         let mut exp = SyntaxKind::can_be_parameter();
         exp.push(Mut);
-        return ASTError::new(got.text_range().into(), child.as_ref(), exp);
+        ASTError::new(got.text_range().into(), child.as_ref(), exp)
     }
     fn extract_from_ref(ref_node: &SyntaxNode) -> ASTResult<ParamType> {
         let node = get_children_with_tokens_in_f(ref_node, can_be_a_parameter_with_mut)
             .first()
-            .map(Clone::clone);
+            .cloned();
         if node.is_none() {
             return Err(Self::error_for_can_be_a_param_type(ref_node));
         }
@@ -87,20 +87,20 @@ impl Param {
     fn extract_from_mut(mut_node: &SyntaxNode) -> ASTResult<ParamType> {
         let node = get_children_with_tokens_in_f(mut_node, can_be_a_parameter)
             .first()
-            .map(Clone::clone);
+            .cloned();
 
         if let Some(node) = node {
             let t = Type::try_from(&node)?;
             Ok(ParamType(By::ValueMut, t))
         } else {
-            return Err(Self::error_for_can_be_a_param_type(mut_node));
+            Err(Self::error_for_can_be_a_param_type(mut_node))
         }
     }
     fn get_parameter_type_from_node(node: &NodeOrToken) -> ASTResult<ParamType> {
         let param_type = match node.kind() {
             PrefixUnaryOp => {
                 let node = node.clone().into_node().unwrap();
-                _ = Self::validate_op(&node)?;
+                Self::validate_op(&node)?;
                 Param::extract_from_ref(&node)?
             }
             Mut => {

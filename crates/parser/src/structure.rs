@@ -12,7 +12,7 @@ use syntax::{
 use thin_vec::thin_vec;
 
 #[allow(unused_variables)]
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_struct_definition(&self) -> Option<Finished> {
         let marker = self.start();

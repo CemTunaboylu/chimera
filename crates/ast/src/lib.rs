@@ -39,13 +39,12 @@ where
     T: TryFrom<&'caller SyntaxNode>,
     <T as TryFrom<&'caller SyntaxNode>>::Error: Debug,
 {
-    let _desired_type: T = parent_node.try_into().expect(
-        format!(
+    let _desired_type: T = parent_node.try_into().unwrap_or_else(|_| {
+        panic!(
             "try_into should have been successful for {:?}",
             parent_node.text()
         )
-        .as_str(),
-    );
+    });
     _desired_type
 }
 pub fn cast_token_into_type<'caller, T>(token: &'caller SyntaxToken) -> T
@@ -53,12 +52,10 @@ where
     T: TryFrom<&'caller SyntaxToken>,
     <T as TryFrom<&'caller SyntaxToken>>::Error: Debug,
 {
-    let _desired_type: T = token.try_into().expect(
-        format!(
+    token.try_into().unwrap_or_else(|_| {
+        panic!(
             "try_into should have been successful for {:?}",
             token.text()
         )
-        .as_str(),
-    );
-    _desired_type
+    })
 }

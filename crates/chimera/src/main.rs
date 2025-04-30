@@ -86,7 +86,7 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
                 AstStmt::Loop(_) => todo!(),
                 AstStmt::Return(_) => todo!(),
                 AstStmt::Impl(_) => todo!(),
-                AstStmt::StructDef(struct_def) => todo!(),
+                AstStmt::StructDef(_) => todo!(),
             })
             // match expr {
             //     Expr::VarRef(var_ref) => Some(var_ref.name()),

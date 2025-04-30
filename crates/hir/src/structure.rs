@@ -42,13 +42,22 @@ impl<TorV: Clone + Debug + PartialEq> PartialEq for InternalStructure<TorV> {
                 .eq(other.field_name_to_index.iter())
     }
 }
+impl<TorV: Clone + Debug + PartialEq> Default for InternalStructure<TorV> {
+    fn default() -> Self {
+        Self {
+            field_name_to_index: Default::default(),
+            field_names: Default::default(),
+            data: Default::default(),
+            scope_idx: placeholder_idx(),
+        }
+    }
+}
+
 impl<TorV: Clone + Debug + PartialEq> InternalStructure<TorV> {
     fn new(scope_idx: ScopeIdx) -> Self {
         Self {
-            field_name_to_index: PatriciaMap::new(),
-            field_names: Arena::new(),
-            data: Arena::new(),
             scope_idx,
+            ..Default::default()
         }
     }
     fn add(&mut self, name: SmolStr, data: TorV) -> HIRResult<()> {
@@ -72,6 +81,16 @@ pub struct StructDef {
     pub internal_with_field_types: InternalStructure<Type>,
     pub name_index: StrIdx,
 }
+
+impl Default for StructDef {
+    fn default() -> Self {
+        Self {
+            internal_with_field_types: Default::default(),
+            name_index: placeholder_idx(),
+        }
+    }
+}
+
 impl NameIndexed for StructDef {
     fn set_name_index(&mut self, ix: StrIdx) {
         self.name_index = ix;
@@ -84,7 +103,12 @@ impl NameIndexed for StructDef {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct StructRef(pub StructDefIdx);
 
-#[derive(Clone, Debug, PartialEq)]
+impl Default for StructRef {
+    fn default() -> Self {
+        Self(placeholder_idx())
+    }
+}
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct StructLiteral {
     pub struct_ref: Reference<StructRef>,
     pub internal_with_field_values: InternalStructure<ExprIdx>,
@@ -113,7 +137,7 @@ impl HIRBuilder {
         if let ASTType::Struct(name) = struct_as_type {
             Ok(Unresolved::new(name.clone(), ResolutionType::Struct))
         } else {
-            Err(HIRError::with_msg(format!("expects a struct type")).into())
+            Err(HIRError::with_msg("expects a struct type").into())
         }
     }
     pub fn resolve_struct_ref(
@@ -121,10 +145,7 @@ impl HIRBuilder {
         unresolved: &Reference<StructDef>,
     ) -> HIRResult<Reference<StructDef>> {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
-        Ok(resolve::<StructDef, StructSelector>(
-            scope_climbing_iter,
-            unresolved,
-        )?)
+        resolve::<StructDef, StructSelector>(scope_climbing_iter, unresolved)
     }
 
     pub fn lower_struct_literal(

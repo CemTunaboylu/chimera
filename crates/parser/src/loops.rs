@@ -9,7 +9,7 @@ use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
 use thin_vec::thin_vec;
 
 #[allow(unused_variables)]
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_while_loop(&self) -> Option<Finished> {
         let marker = self.start();

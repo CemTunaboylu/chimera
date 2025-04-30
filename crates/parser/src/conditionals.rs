@@ -6,7 +6,7 @@ use crate::{
 use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
 
 #[allow(unused_variables)]
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_conditionals(&self) -> Option<Finished> {
         let marker = self.start();

@@ -12,7 +12,7 @@ use syntax::{
 };
 
 #[allow(unused_variables)]
-impl<'input> Parser<'input> {
+impl Parser<'_> {
     #[allow(unused_variables)] // for rollback anchor
     pub fn parse_delimited(&self, syntax: Syntax) -> Option<Finished> {
         let kind = syntax.get_kind();
@@ -31,13 +31,11 @@ impl<'input> Parser<'input> {
                     } else {
                         self.parse_buffer_literal();
                     }
-                    return None;
+                    None
                 }
                 _ => unreachable!(),
             },
-            ClosingDelimiter(expected_token_kind) => {
-                return None;
-            }
+            ClosingDelimiter(expected_token_kind) => None,
             _ => unreachable!(),
         }
     }
@@ -72,7 +70,7 @@ impl<'input> Parser<'input> {
         let ctx = self.context.borrow();
         ctx.forbid(RBrace);
         ctx.disallow_recovery_of(RBrace);
-        self.expect_in_ctx(SyntaxKind::operators());
+        self.expect_in_ctx(SyntaxKind::operators().as_ref());
         rollback_when_dropped
     }
 }

@@ -15,7 +15,7 @@ impl TryFrom<&SyntaxNode> for SelfRef {
     type Error = ASTError;
 
     fn try_from(self_ref_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        _ = ensure_node_kind_is(self_ref_node, SyntaxKind::SelfRef)?;
+        ensure_node_kind_is(self_ref_node, SyntaxKind::SelfRef)?;
         let token = get_token(self_ref_node).unwrap();
         let txt = token.text();
         let s = if txt == "self" {

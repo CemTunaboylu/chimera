@@ -36,7 +36,7 @@ impl TryFrom<&SyntaxNode> for Loop {
     type Error = ASTError;
 
     fn try_from(node: &SyntaxNode) -> Result<Self, Self::Error> {
-        _ = ensure_node_kind_is_any(node, [SyntaxKind::ForLoop, SyntaxKind::WhileLoop].as_ref())?;
+        ensure_node_kind_is_any(node, [SyntaxKind::ForLoop, SyntaxKind::WhileLoop].as_ref())?;
         match node.kind() {
             SyntaxKind::ForLoop => {
                 let identifiers = get_children_in_errs(node, SyntaxKind::ForIdent)?
@@ -51,7 +51,7 @@ impl TryFrom<&SyntaxNode> for Loop {
                     .unwrap()
                     .clone();
                 let block_node = node.last_child().unwrap();
-                _ = ensure_node_kind_is(&block_node, SyntaxKind::Block)?;
+                ensure_node_kind_is(&block_node, SyntaxKind::Block)?;
                 let block = Block::try_from(&block_node)?;
                 Ok(Self::For(Identifiers(identifiers), In(in_part), block))
             }
@@ -61,11 +61,11 @@ impl TryFrom<&SyntaxNode> for Loop {
                     [SyntaxKind::Condition, SyntaxKind::Block].as_ref(),
                 )?;
                 if condition_and_block.len() != 2 {
-                    return Err(ASTError::new(
+                    Err(ASTError::new(
                         node.text_range().into(),
                         "a condition and a block",
                         condition_and_block.as_ref(),
-                    ));
+                    ))
                 } else {
                     let (condition, block) = parse_condition_and_block(condition_and_block)?;
                     Ok(Self::While(condition, block))

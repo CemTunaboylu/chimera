@@ -48,7 +48,7 @@ impl TryFrom<&SyntaxNode> for VarDef {
 
     fn try_from(var_def_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let mut child = first_child_of_kind_errs(
-            &var_def_node,
+            var_def_node,
             [SyntaxKind::InfixBinOp, SyntaxKind::Mut].as_ref(),
         )?;
         let is_mut = child.kind() == SyntaxKind::Mut;
@@ -61,11 +61,11 @@ impl TryFrom<&SyntaxNode> for VarDef {
             var_ref.clone()
         } else {
             return Err(error_for_node(
-                &bin.get_pre_computed().get_node(),
+                bin.get_pre_computed().get_node(),
                 SyntaxKind::VarRef,
             ));
         };
-        let assignment = bin.rhs().map(|e| e.clone());
+        let assignment = bin.rhs().cloned();
         let span = var_def_node.text_range().into();
         Ok(Self {
             var_ref,
@@ -93,7 +93,7 @@ impl TryFrom<&SyntaxNode> for VarRef {
     type Error = ASTError;
 
     fn try_from(var_ref_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        _ = ensure_node_kind_is(var_ref_node, SyntaxKind::VarRef)?;
+        ensure_node_kind_is(var_ref_node, SyntaxKind::VarRef)?;
         let name = get_token(var_ref_node).unwrap().text().to_smolstr();
         let type_hint = get_type_hint(var_ref_node);
         let span = var_ref_node.text_range().into();

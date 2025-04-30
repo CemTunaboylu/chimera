@@ -77,7 +77,7 @@ impl<'input> Parser<'input> {
 
     pub fn roll_back_context_after_drop(&self) -> RollingBackAnchor {
         let ctx = self.context.as_ptr();
-        let anchor = ParserContext::rolling_back_anchor(ctx);
+        let anchor = unsafe { ParserContext::rolling_back_anchor(ctx) };
         anchor
     }
 
