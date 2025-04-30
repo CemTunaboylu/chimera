@@ -1,0 +1,23 @@
+[package]
+name = "parser"
+version = "0.1.0"
+edition = "2024"
+description = "Chimera's parser"
+
+[dependencies]
+lexer = { path = "../lexer" }
+syntax = { path = "../syntax" }
+
+drop_bomb = "0.1.5"
+la-arena = "0.3.1"
+miette = { version = "7.5.0", features = ["fancy"] }
+num-derive = "0.4.2"
+num-traits = "0.2.19"
+rowan = "0.16.1"
+smol_str = "0.3.2"
+thin-vec = "0.2.13"
+thiserror = "2.0.11"
+
+[dev-dependencies]
+parameterized_test = "0.2.1"
+expect-test = "1.5.1"

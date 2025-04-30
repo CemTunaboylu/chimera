@@ -1,0 +1,14 @@
+[package]
+name = "syntax"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lexer = { path = "../lexer" }
+
+lazy_static = "1.5.0"
+num-derive = "0.4.2"
+num-traits = "0.2.19"
+rowan = "0.16.1"
+smol_str = "0.3.2"
+thin-vec = "0.2.13"
