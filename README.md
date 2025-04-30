@@ -62,14 +62,14 @@ Atom ::= Number | '(' Expr ')'
 
 ## 📋 Binding example for Pratt parsing 
     Pratt parsing
-    1 + 2 * 3 - 4! 
+    1 + 2 * 3 - 4?
 
     1      +      2      *       3      -      4     ?     
        10    10.1    11     11.1   10     10.1    13
 
 
 ## 📋 A quick example for CST -> AST -> HIR 
-→ let p = i + 314
+→ `let p = i + 314`
 ```
 CST: 
 Root@0..10
