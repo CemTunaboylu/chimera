@@ -25,9 +25,7 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Run Sccache
-      uses: mozilla-actions/sccache-action@v0.0.4
-      with:
-        version: "v4.2.0"
+      uses: mozilla-actions/sccache-action@v0.0.9
 
     - name: Install stable Rust toolchain
       uses: actions-rs/toolchain@v1
