@@ -217,6 +217,7 @@ impl Parser<'_> {
             Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
             // & (ref), ! (bool negate), - (negative), * (deref)
             And | Excl | Minus | Star => self.parse_prefix_unary_operation(kind),
+            Or => self.parse_lambda_def(),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             typing if is_a_type(&typing) || matches!(typing, KwBuffer | KwTensor) => {
                 self.parse_type(&syntax)
@@ -245,6 +246,7 @@ impl Parser<'_> {
         }
         match kind {
             KwTensor | KwBuffer => return self.parse_container_constructs(syntax),
+            // note: a lambda is typed as a function when hinted or as a parameter as in Rust
             KwFn => return self.parse_function_as_type(),
             t if is_a_type(&t) => {
                 self.bump();

@@ -45,6 +45,7 @@ pub enum SyntaxKind {
     ControlFlow,
     FnArg,
     FnDef,
+    Lambda,
     ForIdent,
     ForLoop,
     Generic,
