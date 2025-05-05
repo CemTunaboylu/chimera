@@ -36,6 +36,14 @@ impl Parser<'_> {
         self.dont_recover_in_ctx(LBrace);
         self.expect_and_bump(RParen);
 
+        self.parse_return_type_if_any();
+
+        self.parse_block();
+        Some(self.complete_marker_with(marker, SyntaxKind::FnDef))
+    }
+
+    #[allow(unused_variables)]
+    fn parse_return_type_if_any(&self) {
         if self.is_next(RArrow) {
             let ret_type_marker = self.start();
             let rollback_after_drop = self.roll_back_context_after_drop();
@@ -290,7 +298,7 @@ mod tests {
                     Block@11..13
                       LBrace@11..12 "{"
                       RBrace@12..13 "}""#]],
-          ),
+    ),
 
     function_def_with_single_parameter: ("fn empty(single:i32) {}",
         expect![[r#"
@@ -550,7 +558,7 @@ mod tests {
                               Ident@65..66 "y"
                         Semi@66..67 ";"
                       RBrace@67..68 "}""#]],
-        ),
+    ),
 
         fn_with_ref_mut_param: ("fn translate(&mut self, by: &mut Point) { }",
             expect![[r#"
@@ -585,7 +593,7 @@ mod tests {
                       LBrace@39..40 "{"
                       Whitespace@40..41 " "
                       RBrace@41..42 "}""#]],
-        ),
+    ),
 
     function_call_with_single_parameter: ("empty(single)",
         expect![[r#"
