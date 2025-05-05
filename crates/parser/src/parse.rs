@@ -123,10 +123,8 @@ impl Parser<'_> {
                 Branched(a, b) => {
                     let to_iterate = if self.does_first_element_pass(a.first().unwrap()) {
                         a
-                    } else if self.does_first_element_pass(b.first().unwrap()) {
-                        b
                     } else {
-                        continue;
+                        b
                     };
                     self.parse_with(to_iterate);
                 }
