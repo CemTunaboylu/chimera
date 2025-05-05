@@ -858,7 +858,47 @@ mod tests {
                       RBrace@67..68 "}""#]],
     ),
 
-        fn_with_ref_mut_param: ("fn translate(&mut self, by: &mut Point) { }",
+    lambda_with_ref_mut_parameter: ("let like_a_method = |s:&mut Structure| {s.mutate()};",
+        expect![[r#"
+            Root@0..52
+              VarDef@0..52
+                KwLet@0..3 "let"
+                Whitespace@3..4 " "
+                InfixBinOp@4..51
+                  VarRef@4..18
+                    Ident@4..17 "like_a_method"
+                    Whitespace@17..18 " "
+                  Eq@18..19 "="
+                  Whitespace@19..20 " "
+                  Literal@20..51
+                    Lambda@20..51
+                      Or@20..21 "|"
+                      ParamDecl@21..37
+                        Ident@21..22 "s"
+                        Colon@22..23 ":"
+                        PrefixUnaryOp@23..37
+                          And@23..24 "&"
+                          Mut@24..37
+                            KwMut@24..27 "mut"
+                            Whitespace@27..28 " "
+                            StructAsType@28..37 "Structure"
+                      Or@37..38 "|"
+                      Whitespace@38..39 " "
+                      Block@39..51
+                        LBrace@39..40 "{"
+                        InfixBinOp@40..50
+                          VarRef@40..41
+                            Ident@40..41 "s"
+                          Dot@41..42 "."
+                          FnCall@42..50
+                            Ident@42..48 "mutate"
+                            LParen@48..49 "("
+                            RParen@49..50 ")"
+                        RBrace@50..51 "}"
+                Semi@51..52 ";""#]],
+    ),
+
+    fn_with_ref_mut_param: ("fn translate(&mut self, by: &mut Point) { }",
             expect![[r#"
                 Root@0..42
                   FnDef@0..42
