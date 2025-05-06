@@ -91,7 +91,7 @@ impl HIRBuilder {
                 let idx = self.allocate_for_resolution(unresolved);
                 Expr::ContainerRef(Reference::Unresolved(idx))
             }
-            ASTExpr::FnCall(fn_call) => {
+            ASTExpr::Call(fn_call) => {
                 let unresolved = self.lower_fn_call(fn_call)?;
                 let idx = self.allocate_for_resolution(unresolved);
                 Expr::FnCall(Reference::Unresolved(idx))

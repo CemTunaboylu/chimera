@@ -249,7 +249,11 @@ mod tests {
     use thin_vec::thin_vec;
 
     use super::{BufferTree, ContainerInitializer, Expr, Literal, Shape, Value};
-    use crate::{ast_root_from, cast_node_into_type, function::FnCall, variable::VarRef};
+    use crate::{
+        ast_root_from, cast_node_into_type,
+        function::{Call, On},
+        variable::VarRef,
+    };
 
     fn literal_from(program: &str) -> Literal {
         let ast_root = ast_root_from(program);
@@ -281,8 +285,8 @@ mod tests {
         assert_eq!(
             literal,
             Literal(Value::Tensor(BufferTree::Uninit(ContainerInitializer {
-                value: Box::new(Expr::FnCall(FnCall {
-                    name: SmolStr::from("random_value"),
+                value: Box::new(Expr::Call(Call {
+                    on: On::Binding("random_value".into()),
                     arguments: thin_vec![],
                 })),
                 shape: Shape::MaybeUnknown(thin_vec![Some(Expr::VarRef(VarRef {
@@ -301,8 +305,8 @@ mod tests {
         assert_eq!(
             literal,
             Literal(Value::Buffer(BufferTree::Uninit(ContainerInitializer {
-                value: Box::new(Expr::FnCall(FnCall {
-                    name: SmolStr::from("weird"),
+                value: Box::new(Expr::Call(Call {
+                    on: On::Binding("weird".into()),
                     arguments: thin_vec![],
                 })),
                 shape: Shape::Known(thin_vec![1000]),

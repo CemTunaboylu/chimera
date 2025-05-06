@@ -8,8 +8,10 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        error_for_node, first_child_of_kind, get_children_in, get_first_child_in, get_token_of_errs,
+        error_for_node, filtered_children_with_tokens, first_child_of_kind, get_children_in,
+        get_first_child_in, get_token_of_errs,
     },
+    literal::Literal,
     parameter::Param,
     types::Type,
 };
@@ -140,35 +142,48 @@ impl TryFrom<&SyntaxNode> for FnArg {
         }
     }
 }
+
 #[derive(Clone, Debug, PartialEq)]
-pub struct FnCall {
-    pub name: SmolStr,
+pub enum On {
+    Binding(SmolStr),
+    Literal(Literal),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Call {
+    pub on: On,
     pub arguments: ThinVec<FnArg>,
 }
 
-impl FnCall {
-    pub fn name(&self) -> &SmolStr {
-        &self.name
-    }
-    pub fn arguments(&self) -> &[FnArg] {
-        self.arguments.as_ref()
-    }
-}
-
-impl TryFrom<&SyntaxNode> for FnCall {
+impl TryFrom<&SyntaxNode> for Call {
     type Error = ASTError;
 
-    fn try_from(fn_call_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let name = get_token_of_errs(fn_call_node, SyntaxKind::Ident)?
-            .text()
-            .to_smolstr();
-
+    fn try_from(call_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let mut arguments = ThinVec::new();
-        for arg in FnArg::get_fn_arg_nodes_from(fn_call_node) {
+        for arg in FnArg::get_fn_arg_nodes_from(call_node) {
             arguments.push(FnArg::try_from(&arg)?);
         }
 
-        Ok(Self { name, arguments })
+        let name_or_err = get_token_of_errs(call_node, SyntaxKind::Ident);
+        let call = if let Ok(name) = name_or_err {
+            let n = name.text().to_smolstr();
+            Self {
+                on: On::Binding(n),
+                arguments,
+            }
+        } else if let Some(node_or_token) =
+            filtered_children_with_tokens(call_node, SyntaxKind::Literal).first()
+        {
+            let literal = Literal::try_from(node_or_token)?;
+            Self {
+                on: On::Literal(literal),
+                arguments,
+            }
+        } else {
+            return Err(name_or_err.expect_err("must have been an error"));
+        };
+
+        Ok(call)
     }
 }
 
@@ -252,10 +267,10 @@ mod tests {
         happy_path_func_call_test,
         (program, exp_name, exp_arg_len), {
             let ast_root = ast_root_from(program);
-            let fn_call_node = ast_root.get_root().first_child().unwrap();
-            let fn_call = cast_node_into_type::<FnCall>(&fn_call_node);
-            assert_eq!(exp_name, fn_call.name());
-            assert!(exp_arg_len == fn_call.arguments.len());
+            let call_node = ast_root.get_root().first_child().unwrap();
+            let call = cast_node_into_type::<Call>(&call_node);
+            assert_eq!(On::Binding(exp_name.into()), call.on);
+            assert!(exp_arg_len == call.arguments.len());
         }
     }
 
@@ -270,9 +285,10 @@ mod tests {
     fn detailed_testing_of_complex_call() {
         let program = "foo(me.expectation().as_tensor() - reality.variable_tensor)";
         let ast_root = ast_root_from(program);
-        let fn_call_node = ast_root.get_root().first_child().unwrap();
-        let fn_call: FnCall = cast_node_into_type::<FnCall>(&fn_call_node);
-        let args = fn_call.arguments();
+        let call_node = ast_root.get_root().first_child().unwrap();
+        let call: Call = cast_node_into_type::<Call>(&call_node);
+        assert_eq!(call.on, On::Binding("foo".into()));
+        let args = call.arguments;
         assert!(matches!(args[0].0, Expr::Infix(Binary::Infix(_))));
         if let Expr::Infix(binary) = &args[0].0 {
             assert!(matches!(
@@ -286,6 +302,7 @@ mod tests {
             assert_eq!(SyntaxKind::Minus, binary.op().unwrap());
         }
     }
+
     #[test]
     fn detailed_testing_of_lambda_returning_lambda() {
         let program = "|a: &mut i32, b: i32| { |f| {a += b*f} }";
@@ -316,5 +333,23 @@ mod tests {
                 }
             };
         };
+    }
+
+    #[test]
+    fn detailed_testing_of_direct_call_on_lambda_literal() {
+        let program = "let two = |a| {2*a}(1);";
+        let ast_root = ast_root_from(program);
+        let var_def_node = ast_root.get_root().first_child().unwrap();
+        let eq_infix_node = var_def_node.first_child().unwrap();
+        let call_node = eq_infix_node.last_child().unwrap();
+        let call: Call = cast_node_into_type::<Call>(&call_node);
+        assert_eq!(
+            call.arguments,
+            thin_vec![FnArg(Expr::Literal(Literal(Value::Int(1))))],
+        );
+        assert!(matches!(
+            call.on,
+            On::Literal(Literal(Value::Lambda(Lambda(_))))
+        ));
     }
 }
