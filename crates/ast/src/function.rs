@@ -25,6 +25,59 @@ impl RetType {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Lambda {
+    parameters: ThinVec<Param>,
+    return_type: Option<RetType>,
+    body: ASTBlock,
+}
+impl Lambda {
+    pub fn get_return_type_from(lambda: &SyntaxNode) -> Option<RetType> {
+        Some(RetType(first_child_of_kind(lambda, SyntaxKind::RetType)?))
+    }
+    fn get_block_from(lambda: &SyntaxNode) -> ASTResult<ASTBlock> {
+        if let Some(block) = get_first_child_in(lambda, Block) {
+            ASTBlock::try_from(&block)
+        } else {
+            let block_to_be = lambda.last_child();
+            Err(ASTError::new(
+                lambda.text_range().into(),
+                Block,
+                block_to_be.as_ref(),
+            ))
+        }
+    }
+    pub fn body(&self) -> &ASTBlock {
+        &self.body
+    }
+    pub fn parameters(&self) -> &ThinVec<Param> {
+        &self.parameters
+    }
+    pub fn return_type(&self) -> Option<&RetType> {
+        self.return_type.as_ref()
+    }
+}
+
+impl TryFrom<&SyntaxNode> for Lambda {
+    type Error = ASTError;
+
+    fn try_from(lambda: &SyntaxNode) -> Result<Self, Self::Error> {
+        let mut parameters = ThinVec::new();
+        for param in Param::get_params_nodes_from(lambda) {
+            parameters.push(Param::try_from(&param)?);
+        }
+
+        let return_type = Self::get_return_type_from(lambda);
+        let body = Self::get_block_from(lambda)?;
+
+        Ok(Self {
+            parameters,
+            return_type,
+            body,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct FnDef {
     name: SmolStr,
     parameters: ThinVec<Param>,
