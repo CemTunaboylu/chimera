@@ -12,7 +12,7 @@ use crate::{
     semi::Semi,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Stmt {
     ControlFlow(ControlFlow),
     Expr(ExprIdx),

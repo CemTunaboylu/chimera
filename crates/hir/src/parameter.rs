@@ -5,7 +5,7 @@ use crate::{
 };
 use ast::parameter::{By as ASTBy, Param as ASTParam, ParamType as ASTParamType};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum By {
     Ref,
     RefMut,
@@ -24,8 +24,9 @@ impl From<&ASTBy> for By {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Param {
+    Generic(SmolStr), // note: as of now, we don't allow ref or mut, thus only the variable ref.
     Named(SmolStr, By, Type),
     SelfRef(By),
 }
@@ -63,6 +64,11 @@ impl HIRBuilder {
             ASTParam::SelfRef(by) => {
                 let by = By::from(by);
                 Ok(Param::SelfRef(by))
+            }
+            ASTParam::Generic(smol_str) => {
+                // note: since we don't allow ref or mut for now, we have to move the value in
+                let ctx = UsageContext::Moved;
+                todo!()
             }
         }
     }

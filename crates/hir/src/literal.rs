@@ -7,11 +7,12 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     container::{Shape, canonical::CanonicalBuffer, layout::Layout},
+    function::Callable,
     scope::{ContainerLiteralIdx, StrIdx},
     typing::hindley_milner::types::{Maybe, Type},
 };
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Value {
     Bool(bool),
     Buffer {
@@ -21,7 +22,7 @@ pub enum Value {
     },
     Char(char),
     Float(Decimal),
-    // Fn
+    Lambda(Callable),
     Int(i32),
     Str(StrIdx),
     // Struct
@@ -42,12 +43,13 @@ impl From<&ASTValue> for Value {
             ASTValue::Int(i) => Value::Int(*i),
             ASTValue::Str(_) => unreachable!(),
             ASTValue::Tensor(_) => unreachable!(),
-            ASTValue::Struct(struct_literal) => todo!(),
+            ASTValue::Struct(_) => todo!(),
+            ASTValue::Lambda(_) => todo!(),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Literal(pub Value);
 
 impl HIRBuilder {
@@ -56,6 +58,10 @@ impl HIRBuilder {
             ASTValue::Str(string) => {
                 let idx = self.allocate_string(string);
                 Value::Str(idx)
+            }
+            ASTValue::Lambda(lambda) => {
+                let c = self.lower_callable(&lambda.0)?;
+                Value::Lambda(c)
             }
             // TODO: fix here!
             ASTValue::Buffer(buffer_tree) => {
@@ -69,6 +75,9 @@ impl HIRBuilder {
                     data_type: Maybe::Checked(Box::new(Type::I32)), // TODO: FIX ME: for now a dyummy default value to make tests pass
                                                                     // data_type: ten_meta.data_type.clone(),
                 }
+            }
+            ASTValue::Tensor(buffer_tree) => {
+                todo!()
             }
             primitive => Value::from(&primitive),
         };

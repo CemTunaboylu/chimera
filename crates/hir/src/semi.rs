@@ -2,7 +2,7 @@ use ast::semi::Semi as ASTSemi;
 
 use crate::{HIRResult, builder::HIRBuilder, scope::ExprIdx};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Semi(ExprIdx);
 
 impl HIRBuilder {

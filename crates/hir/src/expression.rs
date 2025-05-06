@@ -6,7 +6,7 @@ use crate::{
     climbing::climb,
     container_ref::ContainerRef,
     delimited::{Block, Indexing, Paren},
-    function::FnCall,
+    function::Call,
     literal::Literal,
     mutable::Mut,
     operation::{BinaryInfix, Unary},
@@ -23,7 +23,7 @@ use crate::{
 pub enum Expr {
     Block(Block),
     ContainerRef(Reference<ContainerRef>),
-    FnCall(Reference<FnCall>),
+    FnCall(Reference<Call>),
     Indexing(Indexing),
     Infix(BinaryInfix),
     Literal(Literal),

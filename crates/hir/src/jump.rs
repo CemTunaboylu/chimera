@@ -4,7 +4,7 @@ use hir_macro::with_context;
 use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ExprIdx};
 
 // possible types are primitives + custom types i.e. structs
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Jump {
     Continue,
     Break(Option<ExprIdx>),

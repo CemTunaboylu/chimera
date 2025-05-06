@@ -91,3 +91,16 @@ pub fn clone_with_err<Any: Clone, Post>(
     }
     Ok(clone)
 }
+
+pub fn mut_clone_with_err<Any: Clone, Post>(
+    tv: &[Any],
+    hir: &mut HIRBuilder,
+    payload: fn(a: &Any, &mut HIRBuilder) -> HIRResult<Post>,
+) -> HIRResult<ThinVec<Post>> {
+    let mut clone: ThinVec<Post> = ThinVec::with_capacity(tv.len());
+    for c in tv {
+        let put = payload(c, hir)?;
+        clone.push(put);
+    }
+    Ok(clone)
+}

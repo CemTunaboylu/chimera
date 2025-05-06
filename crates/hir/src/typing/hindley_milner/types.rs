@@ -86,6 +86,7 @@ impl From<&Value> for Type {
                 shape: shape.get().expect("a valid hspae for buffer value").clone(),
                 data_type: data_type.clone(),
             },
+            Value::Lambda(callable) => todo!(),
         }
     }
 }

@@ -17,7 +17,7 @@ use crate::{
 pub struct Paren(pub ExprIdx);
 
 // TODO: needs metadata as well
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Block {
     pub scope_idx: ScopeIdx,
     pub returns: ThinVec<usize>,

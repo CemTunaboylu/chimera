@@ -218,6 +218,7 @@ impl TryFrom<&Value> for HMExpr {
                 data_type: data_type.clone(),
                 shape: shape.clone(),
             }),
+            Value::Lambda(callable) => todo!(),
         }
     }
 }

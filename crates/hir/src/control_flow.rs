@@ -9,17 +9,17 @@ use crate::{
     HIRResult, builder::HIRBuilder, context::UsageContext, delimited::Block, scope::ExprIdx,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Condition(pub ExprIdx);
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Conditional {
     If(Condition, Block),
     Elif(Condition, Block),
     Else(Block),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct ControlFlow(pub ThinVec<Conditional>);
 
 impl HIRBuilder {

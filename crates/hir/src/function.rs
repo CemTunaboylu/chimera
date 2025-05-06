@@ -1,7 +1,12 @@
 use hir_macro::{scoped, with_context};
 use thin_vec::ThinVec;
 
-use ast::function::{FnArg as ASTFnArg, FnCall as ASTFnCall, FnDef as ASTFnDef};
+use ast::{
+    function::{
+        Call as ASTCall, Callable as ASTCallable, FnArg as ASTFnArg, FnDef as ASTFnDef, On as ASTOn,
+    },
+    parameter::Param as ASTParam,
+};
 
 use crate::{
     HIRResult,
@@ -9,6 +14,9 @@ use crate::{
     climbing::climb,
     context::UsageContext,
     delimited::Block,
+    errors::HIRError,
+    literal::Literal,
+    mut_clone_with_err,
     parameter::Param,
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
     scope::{
@@ -17,16 +25,21 @@ use crate::{
     typing::hindley_milner::types::Type,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct RetType(Type);
 
-#[derive(Debug, PartialEq)]
-// TODO: add metadata
-pub struct FnDef {
-    pub body: Block,
-    pub name_index: StrIdx,
+// TODO: what to put in the arena now?
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
+pub struct Callable {
     pub parameters: ThinVec<Param>,
     pub return_type: Option<RetType>,
+    pub body: Block,
+}
+#[derive(Clone, Debug, PartialEq)]
+// TODO: add metadata
+pub struct FnDef {
+    pub name_index: StrIdx,
+    pub callable: Callable,
     pub scope_idx: ScopeIdx,
 }
 
@@ -39,25 +52,11 @@ impl NameIndexed for FnDef {
     }
 }
 
-impl Clone for FnDef {
-    fn clone(&self) -> Self {
-        Self {
-            name_index: self.name_index,
-            scope_idx: self.scope_idx,
-            parameters: self.parameters.iter().cloned().collect::<ThinVec<_>>(),
-            return_type: self.return_type.clone(),
-            body: self.body.clone(),
-        }
-    }
-}
-
 impl Default for FnDef {
     fn default() -> Self {
         Self {
-            body: Default::default(),
             name_index: placeholder_idx(),
-            parameters: Default::default(),
-            return_type: Default::default(),
+            callable: Default::default(),
             scope_idx: placeholder_idx(),
         }
     }
@@ -83,9 +82,13 @@ impl HIRBuilder {
 
         Ok(arguments)
     }
-    pub fn lower_fn_call(&mut self, fn_call: &ASTFnCall) -> HIRResult<Unresolved> {
-        let name = fn_call.name().clone();
-        let arguments = self.lower_fn_args(fn_call.arguments())?;
+    pub fn lower_fn_call(&mut self, fn_call: &ASTCall) -> HIRResult<Unresolved> {
+        let name = if let ASTOn::Binding(name) = &fn_call.on {
+            name.clone()
+        } else {
+            return Err(HIRError::for_ast(fn_call, "A call on function definition binding").into());
+        };
+        let arguments = self.lower_fn_args(fn_call.arguments.as_slice())?;
 
         Ok(Unresolved::baggaged(
             name,
@@ -98,20 +101,10 @@ impl HIRBuilder {
         resolve::<FnDef, FnSelector>(scope_climbing_iter, unresolved)
     }
 
-    pub fn lower_fn_params(&mut self, fn_def: &ASTFnDef) -> HIRResult<ThinVec<Param>> {
-        let mut parameters = ThinVec::with_capacity(fn_def.parameters().len());
-
-        for param in fn_def.parameters() {
-            let p = self.lower_parameter(param)?;
-            parameters.push(p);
-        }
-
-        Ok(parameters)
-    }
     #[with_context(UsageContext::Return)]
-    pub fn lower_return_type(&mut self, fn_def: &ASTFnDef) -> HIRResult<Option<RetType>> {
+    pub fn lower_return_type(&mut self, callable: &ASTCallable) -> HIRResult<Option<RetType>> {
         let mut return_type = None;
-        if let Some(ret_type) = fn_def.return_type() {
+        if let Some(ret_type) = callable.return_type() {
             if let Some(t) = ret_type.return_type() {
                 let low_type = self.lower_type(&t)?;
                 return_type = Some(RetType(low_type));
@@ -119,29 +112,38 @@ impl HIRBuilder {
         }
         Ok(return_type)
     }
-
     #[scoped(ScopeKind::Function)]
     pub fn lower_fn_params_and_body(
         &mut self,
-        fn_def: &ASTFnDef,
+        callable: &ASTCallable,
     ) -> HIRResult<(Block, ThinVec<Param>)> {
-        let body = self.lower_block(fn_def.body())?;
-        let parameters = self.lower_fn_params(fn_def)?;
+        let body = self.lower_block(callable.body())?;
+        let parameters = mut_clone_with_err(
+            callable.parameters().as_slice(),
+            self,
+            |p: &ASTParam, hir: &mut HIRBuilder| hir.lower_parameter(p),
+        )?;
         Ok((body, parameters))
     }
+    pub fn lower_callable(&mut self, callable: &ASTCallable) -> HIRResult<Callable> {
+        let (body, parameters) = self.lower_fn_params_and_body(callable)?;
+        let return_type = self.lower_return_type(callable)?;
+        Ok(Callable {
+            body,
+            parameters,
+            return_type,
+        })
+    }
+
     pub fn lower_fn_def(&mut self, fn_def: &ASTFnDef) -> HIRResult<FnDefIdx> {
         let name = fn_def.name().clone();
         let scope_idx = self.current_scope_cursor;
 
-        let (body, parameters) = self.lower_fn_params_and_body(fn_def)?;
-
-        let return_type = self.lower_return_type(fn_def)?;
+        let callable = self.lower_callable(&fn_def.callable)?;
 
         let low_fn_def = FnDef {
-            body,
+            callable,
             name_index: placeholder_idx(),
-            parameters,
-            return_type,
             scope_idx,
         };
 
