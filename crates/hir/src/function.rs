@@ -158,15 +158,15 @@ impl HIRBuilder {
 
 #[cfg(test)]
 mod tests {
-    use ast::cast_node_into_type;
+    // use ast::cast_node_into_type;
 
-    use smol_str::SmolStr;
-    use thin_vec::thin_vec;
+    // use smol_str::SmolStr;
+    // use thin_vec::thin_vec;
 
-    use super::*;
-    use crate::{
-        builder::tests::ast_root_from, parameter::By, typing::hindley_milner::types::Maybe,
-    };
+    // use super::*;
+    // use crate::{
+    //     builder::tests::ast_root_from, parameter::By, typing::hindley_milner::types::Maybe,
+    // };
 
     // #[test]
     // fn fn_def() {
