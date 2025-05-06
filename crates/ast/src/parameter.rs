@@ -30,6 +30,7 @@ pub struct ParamType(pub By, pub Type);
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Param {
+    Generic(SmolStr),
     Named(SmolStr, ParamType),
     SelfRef(By),
 }
@@ -149,13 +150,20 @@ impl TryFrom<&SyntaxNode> for Param {
     */
 
     fn try_from(param_decl_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let child_as_param_type = param_decl_node.last_child_or_token();
+        let child_as_param_type = param_decl_node
+            .children_with_tokens()
+            .filter(|not| !matches!(not.kind(), SyntaxKind::Whitespace | SyntaxKind::Comma))
+            .last();
         if child_as_param_type.is_none() {
             let mut types = SyntaxKind::types();
             types.extend_from_slice(&[PrefixUnaryOp, Mut, SelfRef]);
             return Err(error_for_node(param_decl_node, types));
         }
         let node_or_token = child_as_param_type.unwrap();
+        // untyped variable ('generic') for lambda
+        if node_or_token.kind() == SyntaxKind::Ident {
+            return Ok(Self::Generic(node_or_token.to_smolstr()));
+        }
         let param_type = Self::get_parameter_type_from_node(&node_or_token)?;
         let param = if let Some(name) = get_token(param_decl_node).map(|t| t.text().to_smolstr()) {
             Self::Named(name, param_type)
@@ -213,6 +221,7 @@ mod tests {
             Param::SelfRef(_) => {
                 unreachable!();
             },
+            _ => unreachable!(),
         }
         }
     }
@@ -259,6 +268,22 @@ mod tests {
             let p = cast_node_into_type::<Param>(param_node);
             let assertion = assert_param_types[ix];
             assertion(p);
+        }
+    }
+
+    #[test]
+    fn generic_lambda_params() {
+        let program = "|g, en, eric| {g+en+eric}";
+        let ast_root = ast_root_from(program);
+
+        let literal_node = ast_root.get_root().first_child().unwrap();
+        let lambda_node = literal_node.first_child().unwrap();
+        let params_nodes = Param::get_params_nodes_from(&lambda_node);
+
+        let assert_param_names = ["g", "en", "eric"];
+        for (p, n) in params_nodes.iter().zip(assert_param_names.iter()) {
+            let param = cast_node_into_type::<Param>(&p);
+            assert!(matches!(param, Param::Generic(name) if name == *n));
         }
     }
 }
