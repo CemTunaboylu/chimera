@@ -366,7 +366,7 @@ mod tests {
                           VarRef@4..7
                             Ident@4..7 "arr"
                           Dot@7..8 "."
-                          FnCall@8..13
+                          Call@8..13
                             Ident@8..11 "len"
                             LParen@11..12 "("
                             RParen@12..13 ")"
@@ -394,7 +394,7 @@ mod tests {
                                 Int@14..15 "0"
                               RBrack@15..16 "]"
                           Dot@16..17 "."
-                          FnCall@17..22
+                          Call@17..22
                             Ident@17..20 "len"
                             LParen@20..21 "("
                             RParen@21..22 ")"
@@ -603,7 +603,7 @@ mod tests {
                             Whitespace@21..22 " "
                       Eq@22..23 "="
                       Whitespace@23..24 " "
-                      FnCall@24..42
+                      Call@24..42
                         Ident@24..40 "random_3d_tensor"
                         LParen@40..41 "("
                         RParen@41..42 ")"
@@ -629,7 +629,7 @@ mod tests {
                             TyF32@15..18 "f32"
                           Gt@18..19 ">"
                         ColonColon@19..21 "::"
-                        FnCall@21..26
+                        Call@21..26
                           Ident@21..24 "new"
                           LParen@24..25 "("
                           RParen@25..26 ")"
@@ -661,7 +661,7 @@ mod tests {
                               TyI32@20..23 "i32"
                           Gt@23..24 ">"
                         ColonColon@24..26 "::"
-                        FnCall@26..31
+                        Call@26..31
                           Ident@26..29 "new"
                           LParen@29..30 "("
                           RParen@30..31 ")"
@@ -756,7 +756,7 @@ mod tests {
                       Return@30..52
                         KwReturn@30..36 "return"
                         Whitespace@36..37 " "
-                        FnCall@37..51
+                        Call@37..51
                           Ident@37..49 "inner_matmul"
                           LParen@49..50 "("
                           RParen@50..51 ")"
@@ -826,7 +826,7 @@ mod tests {
                         VarRef@18..23
                           Ident@18..23 "Color"
                         ColonColon@23..25 "::"
-                        FnCall@25..31
+                        Call@25..31
                           Ident@25..29 "dims"
                           LParen@29..30 "("
                           RParen@30..31 ")"
@@ -895,7 +895,7 @@ mod tests {
                     Gt@10..11 ">"
                     Lt@11..12 "<"
                     DimHints@12..36
-                      FnCall@12..26
+                      Call@12..26
                         Ident@12..24 "batch_number"
                         LParen@24..25 "("
                         RParen@25..26 ")"

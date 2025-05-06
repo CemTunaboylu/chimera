@@ -2,7 +2,7 @@ use crate::{
     marker::{Incomplete, Marker},
     operator::starting_precedence,
     parse::{Finished, SeparatedElement},
-    parser::Parser,
+    parser::{IsNext, Parser},
 };
 use syntax::{
     Syntax, anchor::RollingBackAnchor, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind,
@@ -83,7 +83,13 @@ impl Parser<'_> {
         self.parse_block();
         let lambda_marker = self.complete_marker_with(marker, SyntaxKind::Lambda);
         let wrapping_in_literal = self.precede_marker_with(&lambda_marker);
-        Some(self.complete_marker_with(wrapping_in_literal, SyntaxKind::Literal))
+        let mut m = self.complete_marker_with(wrapping_in_literal, SyntaxKind::Literal);
+        // check if immediately calling the lambda
+        if IsNext::Yes == self.is_next_strict(LParen) {
+            let c = self.precede_marker_with(&m);
+            m = self.parse_call(c);
+        }
+        Some(m)
     }
 
     #[allow(unused_variables)]
@@ -127,13 +133,13 @@ impl Parser<'_> {
     // the identifier is already bumped at this point because we ended up here
     // from parsing an identifier and saw a LParen as well.
     #[allow(unused_variables)]
-    pub fn parse_function_call(&self, marker: Marker<Incomplete>) -> Finished {
+    pub fn parse_call(&self, marker: Marker<Incomplete>) -> Finished {
         self.expect_and_bump(LParen);
         let rollback_when_dropped = self.roll_back_context_after_drop();
         self.expect_in_ctx(SyntaxKind::operators().as_ref());
         self.parse_comma_separated_arguments_until(RParen);
         self.expect_and_bump(RParen);
-        self.complete_marker_with(marker, FnCall)
+        self.complete_marker_with(marker, Call)
     }
 
     fn impose_comma_sep_typed_decl_restrictions(&self) -> RollingBackAnchor {
@@ -272,7 +278,7 @@ impl Parser<'_> {
         let rollback_when_dropped = self.roll_back_context_after_drop();
         let ctx = self.context.borrow();
         ctx.allow(RParen);
-        ctx.expect(FnCall);
+        ctx.expect(Call);
         rollback_when_dropped
     }
 
@@ -378,6 +384,43 @@ mod tests {
                       Int@16..17 "0"
                     Recovered@17..18
                       RBrace@17..18 "}""#]],
+    ),
+
+        call_on_lambda_literal: ("let two = |a| {2*a}(1);",
+              expect![[r#"
+                  Root@0..23
+                    VarDef@0..23
+                      KwLet@0..3 "let"
+                      Whitespace@3..4 " "
+                      InfixBinOp@4..22
+                        VarRef@4..8
+                          Ident@4..7 "two"
+                          Whitespace@7..8 " "
+                        Eq@8..9 "="
+                        Whitespace@9..10 " "
+                        Call@10..22
+                          Literal@10..19
+                            Lambda@10..19
+                              Or@10..11 "|"
+                              ParamDecl@11..12
+                                Ident@11..12 "a"
+                              Or@12..13 "|"
+                              Whitespace@13..14 " "
+                              Block@14..19
+                                LBrace@14..15 "{"
+                                InfixBinOp@15..18
+                                  Literal@15..16
+                                    Int@15..16 "2"
+                                  Star@16..17 "*"
+                                  VarRef@17..18
+                                    Ident@17..18 "a"
+                                RBrace@18..19 "}"
+                          LParen@19..20 "("
+                          FnArg@20..21
+                            Literal@20..21
+                              Int@20..21 "1"
+                          RParen@21..22 ")"
+                      Semi@22..23 ";""#]],
     ),
 
     function_def_with_single_parameter: ("fn empty(single:i32) {}",
@@ -552,7 +595,7 @@ mod tests {
                           VarRef@53..58
                             Ident@53..58 "third"
                           Dot@58..59 "."
-                          FnCall@59..80
+                          Call@59..80
                             Ident@59..65 "juggle"
                             LParen@65..66 "("
                             FnArg@66..72
@@ -608,7 +651,7 @@ mod tests {
                           VarRef@74..83
                             Ident@74..83 "structure"
                           Dot@83..84 "."
-                          FnCall@84..126
+                          Call@84..126
                             Ident@84..90 "juggle"
                             LParen@90..91 "("
                             FnArg@91..100
@@ -663,7 +706,7 @@ mod tests {
                                 VarRef@34..35
                                   Ident@34..35 "t"
                                 Dot@35..36 "."
-                                FnCall@36..56
+                                Call@36..56
                                   Ident@36..46 "steal_type"
                                   LParen@46..47 "("
                                   FnArg@47..55
@@ -890,7 +933,7 @@ mod tests {
                           VarRef@40..41
                             Ident@40..41 "s"
                           Dot@41..42 "."
-                          FnCall@42..50
+                          Call@42..50
                             Ident@42..48 "mutate"
                             LParen@48..49 "("
                             RParen@49..50 ")"
@@ -936,7 +979,7 @@ mod tests {
     function_call_with_single_parameter: ("empty(single)",
         expect![[r#"
             Root@0..13
-              FnCall@0..13
+              Call@0..13
                 Ident@0..5 "empty"
                 LParen@5..6 "("
                 FnArg@6..12
@@ -948,7 +991,7 @@ mod tests {
     function_call_with_ref_mut_parameter: ("steal(&mut me.mine)",
         expect![[r#"
             Root@0..19
-              FnCall@0..19
+              Call@0..19
                 Ident@0..5 "steal"
                 LParen@5..6 "("
                 FnArg@6..18
@@ -969,7 +1012,7 @@ mod tests {
     function_call_with_ref_parameters: ("meet(&me, &him, &her)",
         expect![[r#"
             Root@0..21
-              FnCall@0..21
+              Call@0..21
                 Ident@0..4 "meet"
                 LParen@4..5 "("
                 FnArg@5..9
@@ -997,7 +1040,7 @@ mod tests {
     function_call_with_ref_mut_parameters: ("bond(&mut me, &mut him, &mut her)",
         expect![[r#"
             Root@0..33
-              FnCall@0..33
+              Call@0..33
                 Ident@0..4 "bond"
                 LParen@4..5 "("
                 FnArg@5..13
@@ -1034,7 +1077,7 @@ mod tests {
     function_call_with_complex_parameters: ("am_i_happy(me.expectations().as_tensor() - reality.variable_tensor )",
         expect![[r#"
             Root@0..68
-              FnCall@0..68
+              Call@0..68
                 Ident@0..10 "am_i_happy"
                 LParen@10..11 "("
                 FnArg@11..67
@@ -1044,12 +1087,12 @@ mod tests {
                         VarRef@11..13
                           Ident@11..13 "me"
                         Dot@13..14 "."
-                        FnCall@14..28
+                        Call@14..28
                           Ident@14..26 "expectations"
                           LParen@26..27 "("
                           RParen@27..28 ")"
                       Dot@28..29 "."
-                      FnCall@29..40
+                      Call@29..40
                         Ident@29..38 "as_tensor"
                         LParen@38..39 "("
                         RParen@39..40 ")"
@@ -1072,7 +1115,7 @@ mod tests {
                 VarRef@0..4
                   Ident@0..4 "Life"
                 ColonColon@4..6 "::"
-                FnCall@6..41
+                Call@6..41
                   Ident@6..10 "diff"
                   LParen@10..11 "("
                   FnArg@11..40
@@ -1081,12 +1124,12 @@ mod tests {
                         VarRef@11..13
                           Ident@11..13 "me"
                         Dot@13..14 "."
-                        FnCall@14..28
+                        Call@14..28
                           Ident@14..26 "expectations"
                           LParen@26..27 "("
                           RParen@27..28 ")"
                       Dot@28..29 "."
-                      FnCall@29..40
+                      Call@29..40
                         Ident@29..38 "as_tensor"
                         LParen@38..39 "("
                         RParen@39..40 ")"

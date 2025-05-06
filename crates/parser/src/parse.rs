@@ -270,7 +270,7 @@ impl Parser<'_> {
         self.expect_and_bump(Ident);
 
         let finished = if self.is_next(LParen) {
-            self.parse_function_call(marker)
+            self.parse_call(marker)
         } else if self.is_next(LBrack) {
             self.expect_in_ctx(ContainerRef);
             self.parse_container_indexing();

@@ -108,7 +108,7 @@ mod tests {
                   Block@15..29
                     LBrace@15..16 "{"
                     Whitespace@16..17 " "
-                    FnCall@17..27
+                    Call@17..27
                       Ident@17..22 "print"
                       LParen@22..23 "("
                       FnArg@23..26
@@ -143,7 +143,7 @@ mod tests {
                             VarRef@17..20
                               Ident@17..20 "arr"
                             Dot@20..21 "."
-                            FnCall@21..26
+                            Call@21..26
                               Ident@21..24 "len"
                               LParen@24..25 "("
                               RParen@25..26 ")"
@@ -151,7 +151,7 @@ mod tests {
                   Block@27..41
                     LBrace@27..28 "{"
                     Whitespace@28..29 " "
-                    FnCall@29..39
+                    Call@29..39
                       Ident@29..34 "print"
                       LParen@34..35 "("
                       FnArg@35..38
@@ -189,13 +189,13 @@ mod tests {
                               VarRef@20..23
                                 Ident@20..23 "arr"
                               Dot@23..24 "."
-                              FnCall@24..29
+                              Call@24..29
                                 Ident@24..27 "len"
                                 LParen@27..28 "("
                                 RParen@28..29 ")"
                           RBrack@29..30 "]"
                       Dot@30..31 "."
-                      FnCall@31..42
+                      Call@31..42
                         Ident@31..40 "enumerate"
                         LParen@40..41 "("
                         RParen@41..42 ")"
@@ -203,7 +203,7 @@ mod tests {
                   Block@43..61
                     LBrace@43..44 "{"
                     Whitespace@44..45 " "
-                    FnCall@45..59
+                    Call@45..59
                       Ident@45..50 "print"
                       LParen@50..51 "("
                       FnArg@51..54
@@ -239,7 +239,7 @@ mod tests {
                     Block@13..31
                       LBrace@13..14 "{"
                       Whitespace@14..15 " "
-                      FnCall@15..29
+                      Call@15..29
                         Ident@15..20 "print"
                         LParen@20..21 "("
                         FnArg@21..28
@@ -267,7 +267,7 @@ mod tests {
                           VarRef@7..12
                             Ident@7..12 "stack"
                           Dot@12..13 "."
-                          FnCall@13..23
+                          Call@13..23
                             Ident@13..21 "is_empty"
                             LParen@21..22 "("
                             RParen@22..23 ")"
@@ -275,7 +275,7 @@ mod tests {
                     Block@24..46
                       LBrace@24..25 "{"
                       Whitespace@25..26 " "
-                      FnCall@26..44
+                      Call@26..44
                         Ident@26..31 "print"
                         LParen@31..32 "("
                         FnArg@32..43
@@ -283,7 +283,7 @@ mod tests {
                             VarRef@32..37
                               Ident@32..37 "stack"
                             Dot@37..38 "."
-                            FnCall@38..43
+                            Call@38..43
                               Ident@38..41 "pop"
                               LParen@41..42 "("
                               RParen@42..43 ")"

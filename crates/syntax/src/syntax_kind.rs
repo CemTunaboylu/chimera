@@ -17,7 +17,7 @@ pub enum SyntaxKind {
     CharLit,
     DimHints,
     DimValue,
-    FnCall,
+    Call,
     In,
     ImplBlock,
     Jump,
