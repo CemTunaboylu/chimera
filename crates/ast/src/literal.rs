@@ -20,7 +20,6 @@ pub enum Value {
     Buffer(BufferTree),
     Char(char),
     Float(f32),
-    // Fn(FnDef),
     Lambda(Lambda),
     Int(i32),
     Str(SmolStr),
