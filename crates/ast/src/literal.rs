@@ -10,6 +10,7 @@ use crate::{
     ast::ASTResult,
     container::{BufferTree, try_container_tree_from},
     errors::ASTError,
+    function::Lambda,
     structure::StructLiteral,
 };
 
@@ -19,7 +20,8 @@ pub enum Value {
     Buffer(BufferTree),
     Char(char),
     Float(f32),
-    // Fn
+    // Fn(FnDef),
+    Lambda(Lambda),
     Int(i32),
     Str(SmolStr),
     Struct(StructLiteral),
@@ -143,6 +145,9 @@ impl TryFrom<&SyntaxNode> for Literal {
             } else if child.kind() == SyntaxKind::TensorLit {
                 let tensor_tree = try_container_tree_from(&child)?;
                 return Ok(Self(Value::Tensor(tensor_tree)));
+            } else if child.kind() == SyntaxKind::Lambda {
+                let lambda = Lambda::try_from(&child)?;
+                return Ok(Self(Value::Lambda(lambda)));
             }
         }
         if let Some(value_containing_token) = literal_node

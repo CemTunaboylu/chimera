@@ -13,7 +13,6 @@ use crate::{
     parameter::Param,
     types::Type,
 };
-use SyntaxKind::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RetType(SyntaxNode);
@@ -22,30 +21,35 @@ impl RetType {
     pub fn return_type(&self) -> Option<Type> {
         Type::try_from(&self.0.first_child().unwrap()).ok()
     }
+    pub fn get_return_type_from(fn_def_or_lambda: &SyntaxNode) -> Option<RetType> {
+        Some(RetType(first_child_of_kind(
+            fn_def_or_lambda,
+            SyntaxKind::RetType,
+        )?))
+    }
+}
+
+fn get_block_from(fn_def_or_lambda: &SyntaxNode) -> ASTResult<ASTBlock> {
+    if let Some(block) = get_first_child_in(fn_def_or_lambda, SyntaxKind::Block) {
+        ASTBlock::try_from(&block)
+    } else {
+        let block_to_be = fn_def_or_lambda.last_child();
+        Err(ASTError::new(
+            fn_def_or_lambda.text_range().into(),
+            SyntaxKind::Block,
+            block_to_be.as_ref(),
+        ))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Lambda {
+pub struct Callable {
     parameters: ThinVec<Param>,
     return_type: Option<RetType>,
     body: ASTBlock,
 }
-impl Lambda {
-    pub fn get_return_type_from(lambda: &SyntaxNode) -> Option<RetType> {
-        Some(RetType(first_child_of_kind(lambda, SyntaxKind::RetType)?))
-    }
-    fn get_block_from(lambda: &SyntaxNode) -> ASTResult<ASTBlock> {
-        if let Some(block) = get_first_child_in(lambda, Block) {
-            ASTBlock::try_from(&block)
-        } else {
-            let block_to_be = lambda.last_child();
-            Err(ASTError::new(
-                lambda.text_range().into(),
-                Block,
-                block_to_be.as_ref(),
-            ))
-        }
-    }
+
+impl Callable {
     pub fn body(&self) -> &ASTBlock {
         &self.body
     }
@@ -57,17 +61,17 @@ impl Lambda {
     }
 }
 
-impl TryFrom<&SyntaxNode> for Lambda {
+impl TryFrom<&SyntaxNode> for Callable {
     type Error = ASTError;
 
-    fn try_from(lambda: &SyntaxNode) -> Result<Self, Self::Error> {
+    fn try_from(fn_def_or_lambda: &SyntaxNode) -> Result<Self, Self::Error> {
         let mut parameters = ThinVec::new();
-        for param in Param::get_params_nodes_from(lambda) {
+        for param in Param::get_params_nodes_from(fn_def_or_lambda) {
             parameters.push(Param::try_from(&param)?);
         }
 
-        let return_type = Self::get_return_type_from(lambda);
-        let body = Self::get_block_from(lambda)?;
+        let return_type = RetType::get_return_type_from(fn_def_or_lambda);
+        let body = get_block_from(fn_def_or_lambda)?;
 
         Ok(Self {
             parameters,
@@ -78,44 +82,25 @@ impl TryFrom<&SyntaxNode> for Lambda {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Lambda(pub Callable);
+
+impl TryFrom<&SyntaxNode> for Lambda {
+    type Error = ASTError;
+
+    fn try_from(lambda: &SyntaxNode) -> Result<Self, Self::Error> {
+        Ok(Self(Callable::try_from(lambda)?))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct FnDef {
     name: SmolStr,
-    parameters: ThinVec<Param>,
-    return_type: Option<RetType>,
-    body: ASTBlock,
+    pub callable: Callable,
 }
 
 impl FnDef {
-    pub fn get_return_type_from(fn_def_node: &SyntaxNode) -> Option<RetType> {
-        Some(RetType(first_child_of_kind(
-            fn_def_node,
-            SyntaxKind::RetType,
-        )?))
-    }
-
-    fn get_block_from(fn_def_node: &SyntaxNode) -> ASTResult<ASTBlock> {
-        if let Some(block) = get_first_child_in(fn_def_node, Block) {
-            ASTBlock::try_from(&block)
-        } else {
-            let block_to_be = fn_def_node.last_child();
-            Err(ASTError::new(
-                fn_def_node.text_range().into(),
-                Block,
-                block_to_be.as_ref(),
-            ))
-        }
-    }
     pub fn name(&self) -> &SmolStr {
         &self.name
-    }
-    pub fn body(&self) -> &ASTBlock {
-        &self.body
-    }
-    pub fn parameters(&self) -> &ThinVec<Param> {
-        &self.parameters
-    }
-    pub fn return_type(&self) -> Option<&RetType> {
-        self.return_type.as_ref()
     }
 }
 
@@ -123,20 +108,13 @@ impl TryFrom<&SyntaxNode> for FnDef {
     type Error = ASTError;
 
     fn try_from(fn_def_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let name = get_token_of_errs(fn_def_node, Ident)?.text().to_smolstr();
-        let mut parameters = ThinVec::new();
-        for param in Param::get_params_nodes_from(fn_def_node) {
-            parameters.push(Param::try_from(&param)?);
-        }
-
-        let return_type = Self::get_return_type_from(fn_def_node);
-        let body = Self::get_block_from(fn_def_node)?;
+        let name = get_token_of_errs(fn_def_node, SyntaxKind::Ident)?
+            .text()
+            .to_smolstr();
 
         Ok(Self {
             name,
-            parameters,
-            return_type,
-            body,
+            callable: Callable::try_from(fn_def_node)?,
         })
     }
 }
@@ -181,7 +159,9 @@ impl TryFrom<&SyntaxNode> for FnCall {
     type Error = ASTError;
 
     fn try_from(fn_call_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let name = get_token_of_errs(fn_call_node, Ident)?.text().to_smolstr();
+        let name = get_token_of_errs(fn_call_node, SyntaxKind::Ident)?
+            .text()
+            .to_smolstr();
 
         let mut arguments = ThinVec::new();
         for arg in FnArg::get_fn_arg_nodes_from(fn_call_node) {
@@ -197,10 +177,16 @@ mod tests {
 
     use super::*;
     use crate::{
+        ast_root_from, cast_node_into_type,
+        delimited::Block,
+        function::Lambda,
+        literal::{Literal, Value},
         operation::Binary,
-        {ast_root_from, cast_node_into_type},
+        parameter::{By, ParamType},
+        statement::Stmt,
     };
     use parameterized_test::create;
+    use thin_vec::thin_vec;
 
     create! {
         happy_path_func_def_test,
@@ -209,8 +195,8 @@ mod tests {
             let fn_def_node = ast_root.get_root().first_child().unwrap();
             let fn_def = cast_node_into_type::<FnDef>(&fn_def_node);
             assert_eq!(exp_name, fn_def.name());
-            assert!(ret_type_some == fn_def.return_type.is_some());
-            assert!(params_count == fn_def.parameters.len());
+            assert!(ret_type_some == fn_def.callable.return_type.is_some());
+            assert!(params_count == fn_def.callable.parameters.len());
         }
     }
 
@@ -237,6 +223,28 @@ mod tests {
         non_returning_method_def: (
          "fn f(&mut self) { self.called += 1;}",
          "f", DOES_NOT_RETURN, 1,
+        ),
+    }
+    create! {
+        happy_path_lambda_test,
+        (program, ret_type_some, params_count), {
+            let ast_root = ast_root_from(program);
+            let literal_node = ast_root.get_root().first_child().unwrap();
+            let lambda_node = literal_node.first_child().unwrap();
+            let lambda= cast_node_into_type::<Lambda>(&lambda_node);
+            assert!(ret_type_some == lambda.0.return_type.is_some());
+            assert!(params_count == lambda.0.parameters.len());
+        }
+    }
+
+    happy_path_lambda_test! {
+        returning_lambda: (
+         " |s: &mut Structure| -> i32 {s.lifetime()}",
+         RETURNS, 1,
+        ),
+        non_returning_lambda: (
+         "|a: &mut i32, b: i32| { a += b; }",
+         DOES_NOT_RETURN, 2,
         ),
     }
 
@@ -277,5 +285,36 @@ mod tests {
             ));
             assert_eq!(SyntaxKind::Minus, binary.op().unwrap());
         }
+    }
+    #[test]
+    fn detailed_testing_of_lambda_returning_lambda() {
+        let program = "|a: &mut i32, b: i32| { |f| {a += b*f} }";
+        let ast_root = ast_root_from(program);
+        let literal_node = ast_root.get_root().first_child().unwrap();
+        let lambda_node = literal_node.first_child().unwrap();
+        let lambda: Lambda = cast_node_into_type::<Lambda>(&lambda_node);
+        assert_eq!(
+            lambda.0.parameters,
+            ThinVec::from([
+                Param::Named("a".into(), ParamType(By::RefMut, Type::Integer32)),
+                Param::Named("b".into(), ParamType(By::Value, Type::Integer32)),
+            ]),
+        );
+        assert!(lambda.0.return_type.is_none());
+        assert!(matches!(lambda.0.body, Block::Returning(_)));
+        if let Block::Returning(stmts) = lambda.0.body {
+            assert!(matches!(stmts.as_slice(), &[Stmt::Expr(_)]));
+            if let [Stmt::Expr(Expr::Literal(Literal(Value::Lambda(l))))] = stmts.as_ref() {
+                assert_eq!(l.0.parameters, thin_vec![Param::Generic("f".into())]);
+                assert!(l.0.return_type.is_none());
+                assert!(matches!(l.0.body, Block::Returning(_)));
+                if let Block::Returning(stmts) = &l.0.body {
+                    assert!(matches!(
+                        stmts.as_slice(),
+                        &[Stmt::Expr(Expr::Infix(Binary::Infix(_),))]
+                    ));
+                }
+            };
+        };
     }
 }
