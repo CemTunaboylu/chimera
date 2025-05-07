@@ -182,14 +182,14 @@ impl Parser<'_> {
                             self.parse_binary_operation(syntax, &min_precedence, &lhs_marker)
                         {
                             lhs_marker = marker;
-                            if is_an_assignment(&kind) && !self.context.borrow().is_expected(VarDef)
+                            if is_an_assignment(&kind)
+                                && !self.context.borrow().is_expected(VarDef)
+                                && self.is_next(Semi)
                             {
-                                if self.is_next(Semi) {
-                                    let semi_marker = self.precede_marker_with(&lhs_marker);
-                                    self.expect_and_bump(Semi);
-                                    lhs_marker = self.complete_marker_with(semi_marker, Semi);
-                                    break;
-                                }
+                                let semi_marker = self.precede_marker_with(&lhs_marker);
+                                self.expect_and_bump(Semi);
+                                lhs_marker = self.complete_marker_with(semi_marker, Semi);
+                                break;
                             }
                             continue;
                         }

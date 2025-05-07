@@ -58,11 +58,7 @@ pub fn unwrap_or_err<'caller, Any>(
 pub fn expect_non_baggage(b: &Baggage, type_key: TypeKey) -> HIRResult<()> {
     match b {
         Baggage::None => Ok(()),
-        _ => {
-            return Err(
-                HIRError::with_msg(format!("{:?} does not expect a baggage", type_key)).into(),
-            );
-        }
+        _ => Err(HIRError::with_msg(format!("{:?} does not expect a baggage", type_key)).into()),
     }
 }
 
