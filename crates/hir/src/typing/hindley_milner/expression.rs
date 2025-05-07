@@ -186,6 +186,7 @@ impl HIRBuilder {
                 expect_non_baggage(&baggage, type_key)?;
                 Ok(HMExpr::Var(type_key))
             }
+            Expr::LitCall(call) => todo!(),
         }
     }
 }

@@ -6,7 +6,7 @@ use crate::{
     climbing::climb,
     container_ref::ContainerRef,
     delimited::{Block, Indexing, Paren},
-    function::Call,
+    function::{Call, MayNeedResolution},
     literal::Literal,
     mutable::Mut,
     operation::{BinaryInfix, Unary},
@@ -24,6 +24,7 @@ pub enum Expr {
     Block(Block),
     ContainerRef(Reference<ContainerRef>),
     FnCall(Reference<Call>),
+    LitCall(Call),
     Indexing(Indexing),
     Infix(BinaryInfix),
     Literal(Literal),
@@ -91,11 +92,13 @@ impl HIRBuilder {
                 let idx = self.allocate_for_resolution(unresolved);
                 Expr::ContainerRef(Reference::Unresolved(idx))
             }
-            ASTExpr::Call(fn_call) => {
-                let unresolved = self.lower_fn_call(fn_call)?;
-                let idx = self.allocate_for_resolution(unresolved);
-                Expr::FnCall(Reference::Unresolved(idx))
-            }
+            ASTExpr::Call(fn_call) => match self.lower_call(fn_call)? {
+                MayNeedResolution::Yes(unresolved) => {
+                    let idx = self.allocate_for_resolution(unresolved);
+                    Expr::FnCall(Reference::Unresolved(idx))
+                }
+                MayNeedResolution::No(call) => Expr::LitCall(call),
+            },
             ASTExpr::Indexing(indexing) => Expr::Indexing(self.lower_indexing(indexing)?),
             ASTExpr::Infix(infix) => Expr::Infix(self.lower_binary_operation(infix)?),
             ASTExpr::Literal(literal) => Expr::Literal(self.lower_literal(literal)?),

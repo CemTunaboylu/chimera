@@ -65,10 +65,22 @@ impl Default for FnDef {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct FnArg(pub ExprIdx);
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum On {
+    Binding(FnDefIdx),
+    Literal(Literal),
+}
+
 #[derive(Clone, Debug, PartialEq)]
-pub struct FnCall {
-    index: FnDefIdx,
+pub struct Call {
+    on: On,
     arguments: ThinVec<FnArg>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum MayNeedResolution {
+    Yes(Unresolved),
+    No(Call),
 }
 
 impl HIRBuilder {
@@ -82,19 +94,21 @@ impl HIRBuilder {
 
         Ok(arguments)
     }
-    pub fn lower_fn_call(&mut self, fn_call: &ASTCall) -> HIRResult<Unresolved> {
-        let name = if let ASTOn::Binding(name) = &fn_call.on {
-            name.clone()
-        } else {
-            return Err(HIRError::for_ast(fn_call, "A call on function definition binding").into());
-        };
+    pub fn lower_call(&mut self, fn_call: &ASTCall) -> HIRResult<MayNeedResolution> {
         let arguments = self.lower_fn_args(fn_call.arguments.as_slice())?;
-
-        Ok(Unresolved::baggaged(
-            name,
-            Baggage::Arg(arguments),
-            ResolutionType::Fn,
-        ))
+        let may_need_resolution = match &fn_call.on {
+            ASTOn::Binding(name) => MayNeedResolution::Yes(Unresolved::baggaged(
+                name.clone(),
+                Baggage::Arg(arguments),
+                ResolutionType::Fn,
+            )),
+            ASTOn::Literal(literal) => {
+                let literal = self.lower_literal(&literal)?;
+                let on = On::Literal(literal);
+                MayNeedResolution::No(Call { on, arguments })
+            }
+        };
+        Ok(may_need_resolution)
     }
     pub fn resolve_fn_call(&self, unresolved: &Reference<FnDef>) -> HIRResult<Reference<FnDef>> {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
