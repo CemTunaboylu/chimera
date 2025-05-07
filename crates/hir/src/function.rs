@@ -14,7 +14,6 @@ use crate::{
     climbing::climb,
     context::UsageContext,
     delimited::Block,
-    errors::HIRError,
     literal::Literal,
     mut_clone_with_err,
     parameter::Param,
@@ -172,69 +171,153 @@ impl HIRBuilder {
 
 #[cfg(test)]
 mod tests {
-    // use ast::cast_node_into_type;
+    use ast::{cast_node_into_type, literal::Literal as ASTLiteral};
 
-    // use smol_str::SmolStr;
-    // use thin_vec::thin_vec;
+    use smol_str::SmolStr;
+    use thin_vec::thin_vec;
 
-    // use super::*;
-    // use crate::{
-    //     builder::tests::ast_root_from, parameter::By, typing::hindley_milner::types::Maybe,
-    // };
+    use super::*;
+    use crate::{
+        builder::tests::ast_root_from, literal::Value, parameter::By, scope::into_idx,
+        statement::Stmt, typing::hindley_milner::types::Status,
+    };
 
-    // #[test]
-    // fn fn_def() {
-    //     let program = "fn mat_mul(t1: &tensor<i32><_, 100, 90>, t2: &tensor<i32><_ ,90, 100>) -> tensor<i32><_,100,100> { t1.matmul(t2) \n}";
+    #[test]
+    fn fn_def() {
+        let program = "fn foo(i: &Structure) -> bool { i.can_foo() }";
 
-    //     let ast_root = ast_root_from(program);
-    //     let ast_fn_def =
-    //         cast_node_into_type::<ASTFnDef>(ast_root.get_root().first_child().as_ref().unwrap());
+        let ast_root = ast_root_from(program);
+        let ast_fn_def =
+            cast_node_into_type::<ASTFnDef>(ast_root.get_root().first_child().as_ref().unwrap());
 
-    //     let mut hir_builder = HIRBuilder::new(ast_root);
-    //     let fn_def_idx = hir_builder
-    //         .lower_fn_def(&ast_fn_def)
-    //         .expect("should have been ok");
+        let mut hir_builder = HIRBuilder::new(ast_root);
+        let fn_def_idx = hir_builder
+            .lower_fn_def(&ast_fn_def)
+            .expect("should have been ok");
 
-    //     let scope_idx = hir_builder.current_scope_cursor;
-    //     let scope = hir_builder.get_current_scope();
-    //     let fn_defs = &scope.fn_allocator.definitions;
-    //     let fn_names = &scope.fn_allocator.names;
+        let scope_idx = hir_builder.current_scope_cursor;
+        let scope = hir_builder.get_current_scope();
+        let fn_defs = &scope.fn_allocator.definitions;
+        let fn_names = &scope.fn_allocator.names;
 
-    //     let fn_def = &fn_defs[fn_def_idx];
-    //     let fn_name = &fn_names[fn_def.name_index];
+        let fn_def = &fn_defs[fn_def_idx];
+        let fn_name = &fn_names[fn_def.name_index];
 
-    //     assert_eq!("mat_mul", fn_name);
-    //     assert_eq!(scope_idx, fn_def.scope_idx);
+        assert_eq!("foo", fn_name);
+        assert_eq!(scope_idx, fn_def.scope_idx);
 
-    //     assert_eq!(
-    //         &Param::Named(
-    //             SmolStr::from("t1"),
-    //             By::Ref,
-    //             Type::Tensor {
-    //                 shape: thin_vec![None, Some(100), Some(90)],
-    //                 data_type: Some(Maybe::Checked(Box::new(Type::I32))),
-    //             },
-    //         ),
-    //         fn_def.parameters.get(0).unwrap()
-    //     );
-    //     assert_eq!(
-    //         &Param::Named(
-    //             SmolStr::from("t2"),
-    //             By::Ref,
-    //             Type::Tensor {
-    //                 shape: thin_vec![None, Some(90), Some(100)],
-    //                 data_type: Some(Maybe::Checked(Box::new(Type::I32))),
-    //             },
-    //         ),
-    //         fn_def.parameters.get(1).unwrap()
-    //     );
+        let params = fn_def.callable.parameters.as_slice();
+        if let &[Param::Named(n, By::Ref, Type::StructAsType(Status::Pending(_)))] = &params {
+            assert_eq!(&SmolStr::from("i"), n);
+        } else {
+            unreachable!()
+        }
 
-    //     assert_eq!(
-    //         &RetType(Type::Tensor {
-    //             shape: thin_vec![None, Some(100), Some(100)],
-    //             data_type: Some(Maybe::Checked(Box::new(Type::I32))),
-    //         }),
-    //         fn_def.return_type.as_ref().unwrap()
-    //     );
-    // }
+        assert_eq!(
+            &RetType(Type::Bool),
+            fn_def.callable.return_type.as_ref().unwrap()
+        );
+    }
+
+    #[test]
+    fn lambda() {
+        let program = "|i| -> bool { true }";
+
+        let ast_root = ast_root_from(program);
+        let ast_call =
+            cast_node_into_type::<ASTLiteral>(ast_root.get_root().first_child().as_ref().unwrap());
+
+        let mut hir_builder = HIRBuilder::new(ast_root);
+        let lambda_literal = hir_builder
+            .lower_literal(&ast_call)
+            .expect("should have been ok");
+
+        if let Literal(Value::Lambda(callable)) = lambda_literal {
+            if let &[Param::Generic(n)] = &callable.parameters.as_slice() {
+                assert_eq!(&SmolStr::from("i"), n);
+            } else {
+                unreachable!()
+            }
+            assert_eq!(&RetType(Type::Bool), callable.return_type.as_ref().unwrap());
+            let Block {
+                scope_idx,
+                returns,
+                statements,
+                ..
+            } = callable.body;
+            // note: scopeIdx(2) since lower_fn_params_and_body starts a scope and then Block starts its own
+            assert_eq!(into_idx(2), scope_idx);
+            assert_eq!(&[0], returns.as_slice());
+            assert_eq!(&[Stmt::Expr(into_idx(1))], statements.as_slice());
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn fn_call() {
+        let program = "foo(i)";
+
+        let ast_root = ast_root_from(program);
+        let ast_call =
+            cast_node_into_type::<ASTCall>(ast_root.get_root().first_child().as_ref().unwrap());
+
+        let mut hir_builder = HIRBuilder::new(ast_root);
+        let unresolved_call: Unresolved = match hir_builder
+            .lower_call(&ast_call)
+            .expect("should have been ok")
+        {
+            MayNeedResolution::Yes(unresolved) => unresolved,
+            MayNeedResolution::No(_call) => unreachable!(),
+        };
+
+        assert_eq!(SmolStr::from("foo"), unresolved_call.name);
+        assert_eq!(
+            Baggage::Arg(thin_vec![FnArg(into_idx(1))]),
+            unresolved_call.baggage
+        );
+        assert_eq!(ResolutionType::Fn, unresolved_call.for_type);
+    }
+
+    #[test]
+    fn direct_call_on_lambda_literal() {
+        let program = "|i| -> bool { true }(1)";
+
+        let ast_root = ast_root_from(program);
+        let ast_call =
+            cast_node_into_type::<ASTCall>(ast_root.get_root().first_child().as_ref().unwrap());
+
+        let mut hir_builder = HIRBuilder::new(ast_root);
+        let call_lambda_literal = match hir_builder
+            .lower_call(&ast_call)
+            .expect("should have been ok")
+        {
+            MayNeedResolution::Yes(_) => unreachable!(),
+            MayNeedResolution::No(call) => call,
+        };
+        if let On::Literal(Literal(Value::Lambda(callable))) = call_lambda_literal.on {
+            if let &[Param::Generic(n)] = &callable.parameters.as_slice() {
+                assert_eq!(&SmolStr::from("i"), n);
+            } else {
+                unreachable!()
+            }
+            assert_eq!(&RetType(Type::Bool), callable.return_type.as_ref().unwrap());
+            let Block {
+                scope_idx,
+                returns,
+                statements,
+                ..
+            } = callable.body;
+            // note: scopeIdx(2) since lower_fn_params_and_body starts a scope and then Block starts its own
+            assert_eq!(into_idx(2), scope_idx);
+            assert_eq!(&[0], returns.as_slice());
+            assert_eq!(&[Stmt::Expr(into_idx(1))], statements.as_slice());
+        } else {
+            unreachable!()
+        }
+        assert_eq!(
+            &[FnArg(into_idx(1))],
+            call_lambda_literal.arguments.as_slice()
+        );
+    }
 }
