@@ -8,8 +8,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        error_for_node, filtered_children_with_tokens, first_child_of_kind, get_children_in,
-        get_first_child_in, get_token_of_errs,
+        children_with_tokens_without_unwanted, error_for_node, filtered_children_with_tokens,
+        first_child_of_kind, get_children_in, get_first_child_in, get_token_of_errs,
     },
     literal::Literal,
     parameter::Param,
@@ -21,7 +21,16 @@ pub struct RetType(SyntaxNode);
 
 impl RetType {
     pub fn return_type(&self) -> Option<Type> {
-        Type::try_from(&self.0.first_child().unwrap()).ok()
+        if let Some(c) = children_with_tokens_without_unwanted(
+            &self.0,
+            [SyntaxKind::Whitespace, SyntaxKind::RArrow].as_slice(),
+        )
+        .last()
+        {
+            Type::try_from(c).ok()
+        } else {
+            None
+        }
     }
     pub fn get_return_type_from(fn_def_or_lambda: &SyntaxNode) -> Option<RetType> {
         Some(RetType(first_child_of_kind(
@@ -239,6 +248,10 @@ mod tests {
          "fn f(&mut self) { self.called += 1;}",
          "f", DOES_NOT_RETURN, 1,
         ),
+        returning_structure_as_param: (
+        "fn foo(i: &Structure) -> bool { i.can_foo() }",
+         "foo", RETURNS, 1,
+        ),
     }
     create! {
         happy_path_lambda_test,
@@ -300,6 +313,8 @@ mod tests {
                 Expr::Infix(Binary::Infix(_))
             ));
             assert_eq!(SyntaxKind::Minus, binary.op().unwrap());
+        } else {
+            unreachable!()
         }
     }
 
@@ -330,8 +345,14 @@ mod tests {
                         stmts.as_slice(),
                         &[Stmt::Expr(Expr::Infix(Binary::Infix(_),))]
                     ));
+                } else {
+                    unreachable!()
                 }
+            } else {
+                unreachable!()
             };
+        } else {
+            unreachable!()
         };
     }
 
