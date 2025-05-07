@@ -46,7 +46,7 @@ impl Default for SyntaxKindBitSet {
         Self::empty()
     }
 }
-
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl Add for SyntaxKindBitSet {
     type Output = SyntaxKindBitSet;
 
@@ -55,12 +55,14 @@ impl Add for SyntaxKindBitSet {
     }
 }
 
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl AddAssign for SyntaxKindBitSet {
     fn add_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0;
     }
 }
 
+#[allow(clippy::suspicious_arithmetic_impl)]
 impl AddAssign for &mut SyntaxKindBitSet {
     fn add_assign(&mut self, rhs: Self) {
         self.0 |= rhs.0;
