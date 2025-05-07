@@ -53,24 +53,24 @@ impl HIRBuilder {
         expr
     }
     pub fn infer_type_from_expr(&self, idx: ExprIdx) -> Type {
-        match self.get_expr(idx) {
-            // TODO: if returning, infer the type from them
-            Expr::Block(block) => todo!(),
-            // TODO: not resolved yet, thus should be taken care of separately after the resolution pass
-            Expr::ContainerRef(reference) => todo!(),
-            // TODO: not resolved yet, thus should be taken care of separately after the resolution pass
-            Expr::FnCall(reference) => todo!(),
-            Expr::Indexing(indexing) => self.infer_type_from_expr(indexing.0),
-            Expr::Infix(binary_infix) => todo!(),
-            Expr::Literal(literal) => todo!(),
-            Expr::Missing => todo!(),
-            Expr::Mut(_) => todo!(),
-            Expr::Paren(paren) => todo!(),
-            Expr::SelfRef(self_ref) => todo!(),
-            Expr::StructRef(reference) => todo!(),
-            Expr::Unary(unary) => todo!(),
-            Expr::VarRef(reference) => todo!(),
-        }
+        // match self.get_expr(idx) {
+        // TODO: if returning, infer the type from them
+        // Expr::Block(block) => todo!(),
+        // TODO: not resolved yet, thus should be taken care of separately after the resolution pass
+        // Expr::ContainerRef(reference) => todo!(),
+        // TODO: not resolved yet, thus should be taken care of separately after the resolution pass
+        // Expr::FnCall(reference) => todo!(),
+        // Expr::Indexing(indexing) => self.infer_type_from_expr(indexing.0),
+        // Expr::Infix(binary_infix) => todo!(),
+        // Expr::Literal(literal) => todo!(),
+        // Expr::Missing => todo!(),
+        // Expr::Mut(_) => todo!(), // Expr::Paren(paren) => todo!(),
+        // Expr::SelfRef(self_ref) => todo!(),
+        // Expr::StructRef(reference) => todo!(),
+        // Expr::Unary(unary) => todo!(),
+        // Expr::VarRef(reference) => todo!(),
+        // }
+        todo!()
     }
     pub fn try_lowering_expr_as_idx(&mut self, ast_expr: Option<ASTExpr>) -> HIRResult<ExprIdx> {
         let expr = unwrap_or_err(ast_expr.as_ref(), "expression")?;
