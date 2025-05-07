@@ -125,6 +125,7 @@ pub(crate) mod test {
     use crate::{
         ast::Root,
         ast_root_from,
+        function::On,
         literal::{Literal, Value},
         types::Type,
         variable::VarRef,
@@ -305,11 +306,11 @@ pub(crate) mod test {
         }
 
         let method_call = infix_bin_op.rhs().unwrap();
-        assert!(matches!(method_call, Expr::FnCall(_)));
+        assert!(matches!(method_call, Expr::Call(_)));
 
-        if let Expr::FnCall(call) = method_call {
-            assert_eq!("new", call.name());
-            assert!(call.arguments().is_empty());
+        if let Expr::Call(call) = method_call {
+            assert_eq!(On::Binding("new".into()), call.on);
+            assert!(call.arguments.is_empty());
         }
     }
 }

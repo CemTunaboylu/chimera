@@ -44,9 +44,7 @@ impl EventHolder {
 
     pub fn push_marker_event(&mut self) -> usize {
         let checkpoint = self.checkpoint();
-        let event = Event::Marker {
-            checkpoint: checkpoint,
-        };
+        let event = Event::Marker { checkpoint };
         self.events.push(event);
         checkpoint
     }

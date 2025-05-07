@@ -10,6 +10,7 @@ use crate::{
     ast::ASTResult,
     container::{BufferTree, try_container_tree_from},
     errors::ASTError,
+    function::Lambda,
     structure::StructLiteral,
 };
 
@@ -19,7 +20,7 @@ pub enum Value {
     Buffer(BufferTree),
     Char(char),
     Float(f32),
-    // Fn
+    Lambda(Lambda),
     Int(i32),
     Str(SmolStr),
     Struct(StructLiteral),
@@ -137,13 +138,22 @@ impl TryFrom<&SyntaxNode> for Literal {
             return Ok(Self(Value::Struct(struct_literal)));
         }
         if let Some(child) = literal_node.first_child() {
-            if child.kind() == SyntaxKind::BufferLit {
-                let buffer_tree = try_container_tree_from(&child)?;
-                return Ok(Self(Value::Buffer(buffer_tree)));
-            } else if child.kind() == SyntaxKind::TensorLit {
-                let tensor_tree = try_container_tree_from(&child)?;
-                return Ok(Self(Value::Tensor(tensor_tree)));
-            }
+            let literal = match child.kind() {
+                SyntaxKind::BufferLit => {
+                    let buffer_tree = try_container_tree_from(&child)?;
+                    Self(Value::Buffer(buffer_tree))
+                }
+                SyntaxKind::TensorLit => {
+                    let tensor_tree = try_container_tree_from(&child)?;
+                    Self(Value::Tensor(tensor_tree))
+                }
+                SyntaxKind::Lambda => {
+                    let lambda = Lambda::try_from(&child)?;
+                    Self(Value::Lambda(lambda))
+                }
+                _ => unreachable!(),
+            };
+            return Ok(literal);
         }
         if let Some(value_containing_token) = literal_node
             .children_with_tokens()

@@ -30,7 +30,6 @@ pub mod variable;
 
 pub fn ast_root_from(program: &str) -> Root {
     let root = Parser::new(program).parse();
-    println!("debug_tree: {:?}", root.debug_tree());
     Root::try_from(root).expect("should have been ok")
 }
 

@@ -7,7 +7,7 @@ use crate::{
     container_ref::ContainerRef as ASTContainerRef,
     delimited::{Block as ASTBlock, Indexing as ASTIndexing, Paren},
     errors::ASTError,
-    function::FnCall as ASTFnCall,
+    function::Call as ASTCall,
     literal::Literal as ASTLiteral,
     mutable::Mut as ASTMut,
     operation::{Binary, Unary},
@@ -21,7 +21,7 @@ pub enum Expr {
     Block(ASTBlock),
     Class(Type),
     ContainerRef(ASTContainerRef),
-    FnCall(ASTFnCall),
+    Call(ASTCall),
     Infix(Binary),
     Indexing(ASTIndexing),
     Literal(ASTLiteral),
@@ -50,9 +50,9 @@ impl TryFrom<&SyntaxNode> for Expr {
                 let container_ref = ASTContainerRef::try_from(node)?;
                 Self::ContainerRef(container_ref)
             }
-            FnCall => {
-                let fn_call = ASTFnCall::try_from(node)?;
-                Self::FnCall(fn_call)
+            Call => {
+                let call = ASTCall::try_from(node)?;
+                Self::Call(call)
             }
             InfixBinOp => {
                 let infix = Binary::new(node)?;
@@ -91,7 +91,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                     [
                         Block,
                         ContainerRef,
-                        FnCall,
+                        Call,
                         Indexing,
                         InfixBinOp,
                         Literal,

@@ -144,8 +144,8 @@ pub enum Baggage {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Unresolved {
     pub name: SmolStr,
-    baggage: Baggage,
-    for_type: ResolutionType,
+    pub baggage: Baggage,
+    pub for_type: ResolutionType,
 }
 
 impl Unresolved {

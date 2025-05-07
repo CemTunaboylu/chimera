@@ -74,27 +74,18 @@ fn display_as_cst(cst: &ConcreteSyntaxTree) {
 
 fn display_as_ast(cst: &ConcreteSyntaxTree) {
     let ast = Root::try_from(cst).unwrap();
-    dbg!(
-        ast.statements()
-            .filter_map(|stmt| match stmt {
-                AstStmt::VarDef(var_def) => Some(var_def),
-                AstStmt::Expr(_) => None,
-                AstStmt::FnDef(_) => None,
-                AstStmt::Jump(_) => None,
-                AstStmt::Semi(_) => todo!(),
-                AstStmt::ControlFlow(_) => todo!(),
-                AstStmt::Loop(_) => todo!(),
-                AstStmt::Return(_) => todo!(),
-                AstStmt::Impl(_) => todo!(),
-                AstStmt::StructDef(_) => todo!(),
-            })
-            // match expr {
-            //     Expr::VarRef(var_ref) => Some(var_ref.name()),
-            //     _ => None,
-            // },
-            // })
-            .collect::<Vec<_>>()
-    );
+    dbg!(ast.statements().for_each(|stmt| match stmt {
+        AstStmt::VarDef(var_def) => println!("VarDef: {:?}", var_def),
+        AstStmt::Expr(_) => {}
+        AstStmt::FnDef(_) => {}
+        AstStmt::Jump(_) => {}
+        AstStmt::Semi(_) => todo!(),
+        AstStmt::ControlFlow(_) => todo!(),
+        AstStmt::Loop(_) => todo!(),
+        AstStmt::Return(_) => todo!(),
+        AstStmt::Impl(_) => todo!(),
+        AstStmt::StructDef(_) => todo!(),
+    }));
 }
 
 fn display_as_hir(cst: &ConcreteSyntaxTree) {

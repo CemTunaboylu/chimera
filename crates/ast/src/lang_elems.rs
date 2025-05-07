@@ -11,7 +11,7 @@ use std::{fmt::Debug, ops::Range};
 
 use SyntaxKind::*;
 const EXPR_CANDIDATES: &[SyntaxKind; 10] = &[
-    Literal, Block, FnCall, Ident, InfixBinOp, KwSelf, Kwself, KwFalse, KwTrue, ParenExpr,
+    Literal, Block, Call, Ident, InfixBinOp, KwSelf, Kwself, KwFalse, KwTrue, ParenExpr,
 ];
 
 pub fn err_if_empty<T>(a: &ThinVec<T>, span: Range<usize>, exp: &str) -> ASTResult<()> {

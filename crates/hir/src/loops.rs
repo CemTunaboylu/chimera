@@ -10,14 +10,14 @@ use crate::{
 use ast::loops::{In as ASTIn, Loop as ASTLoop};
 
 // TODO: do I support multiple var defs at once?
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Identifiers(pub ThinVec<SmolStr>);
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct In(ExprIdx);
 
 // TODO: lower loops into a single structure
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Loop {
     While(Condition, Block),
     For(Identifiers, In, Block),

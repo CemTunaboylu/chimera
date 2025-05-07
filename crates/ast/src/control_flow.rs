@@ -65,7 +65,7 @@ impl TryFrom<&SyntaxNode> for Conditional {
             [SyntaxKind::Condition, SyntaxKind::Block].as_ref(),
         );
         match condition_and_block.len() {
-            two if two == 2 => {
+            2 => {
                 ensure_token_kind_is_not(&kw, SyntaxKind::KwElse)?;
                 let (condition, block) = parse_condition_and_block(condition_and_block)?;
 

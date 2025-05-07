@@ -194,7 +194,7 @@ mod tests {
                         LBrace@16..17 "{"
                         Whitespace@17..18 " "
                         Semi@18..25
-                          FnCall@18..24
+                          Call@18..24
                             Ident@18..22 "stop"
                             LParen@22..23 "("
                             RParen@23..24 ")"
@@ -216,7 +216,7 @@ mod tests {
                       Block@47..68
                         LBrace@47..48 "{"
                         Semi@48..66
-                          FnCall@48..65
+                          Call@48..65
                             Ident@48..63 "prepare_to_stop"
                             LParen@63..64 "("
                             RParen@64..65 ")"
@@ -230,7 +230,7 @@ mod tests {
                         Whitespace@73..74 " "
                         LBrace@74..75 "{"
                         Whitespace@75..76 " "
-                        FnCall@76..82
+                        Call@76..82
                           Ident@76..80 "pass"
                           LParen@80..81 "("
                           RParen@81..82 ")"
@@ -259,7 +259,7 @@ mod tests {
                         Jump@18..31
                           KwBreak@18..23 "break"
                           Whitespace@23..24 " "
-                          FnCall@24..30
+                          Call@24..30
                             Ident@24..28 "stop"
                             LParen@28..29 "("
                             RParen@29..30 ")"

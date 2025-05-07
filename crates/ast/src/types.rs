@@ -12,7 +12,7 @@ use crate::{
     ast::ASTResult,
     errors::ASTError,
     expression::Expr,
-    function::FnDef as ASTFnDef,
+    function::RetType as ASTRetType,
     lang_elems::{
         ensure_node_kind_is_any, error_for_token, get_children_with_tokens_in_f, get_first_child_in,
     },
@@ -136,7 +136,7 @@ impl TryFrom<&SyntaxNode> for Type {
                     let typed = Type::try_from(&type_param)?;
                     parameters.push(typed);
                 }
-                let return_type = ASTFnDef::get_return_type_from(parent_node)
+                let return_type = ASTRetType::get_return_type_from(parent_node)
                     .and_then(|ret_type| ret_type.return_type().map(Box::new));
 
                 Self::Fn {

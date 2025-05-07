@@ -186,6 +186,7 @@ impl HIRBuilder {
                 expect_non_baggage(&baggage, type_key)?;
                 Ok(HMExpr::Var(type_key))
             }
+            Expr::LitCall(call) => todo!(),
         }
     }
 }
@@ -218,6 +219,7 @@ impl TryFrom<&Value> for HMExpr {
                 data_type: data_type.clone(),
                 shape: shape.clone(),
             }),
+            Value::Lambda(callable) => todo!(),
         }
     }
 }

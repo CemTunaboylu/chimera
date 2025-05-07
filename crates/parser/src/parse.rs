@@ -123,10 +123,8 @@ impl Parser<'_> {
                 Branched(a, b) => {
                     let to_iterate = if self.does_first_element_pass(a.first().unwrap()) {
                         a
-                    } else if self.does_first_element_pass(b.first().unwrap()) {
-                        b
                     } else {
-                        continue;
+                        b
                     };
                     self.parse_with(to_iterate);
                 }
@@ -184,14 +182,14 @@ impl Parser<'_> {
                             self.parse_binary_operation(syntax, &min_precedence, &lhs_marker)
                         {
                             lhs_marker = marker;
-                            if is_an_assignment(&kind) && !self.context.borrow().is_expected(VarDef)
+                            if is_an_assignment(&kind)
+                                && !self.context.borrow().is_expected(VarDef)
+                                && self.is_next(Semi)
                             {
-                                if self.is_next(Semi) {
-                                    let semi_marker = self.precede_marker_with(&lhs_marker);
-                                    self.expect_and_bump(Semi);
-                                    lhs_marker = self.complete_marker_with(semi_marker, Semi);
-                                    break;
-                                }
+                                let semi_marker = self.precede_marker_with(&lhs_marker);
+                                self.expect_and_bump(Semi);
+                                lhs_marker = self.complete_marker_with(semi_marker, Semi);
+                                break;
                             }
                             continue;
                         }
@@ -219,6 +217,7 @@ impl Parser<'_> {
             Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
             // & (ref), ! (bool negate), - (negative), * (deref)
             And | Excl | Minus | Star => self.parse_prefix_unary_operation(kind),
+            Or => self.parse_lambda_def(),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             typing if is_a_type(&typing) || matches!(typing, KwBuffer | KwTensor) => {
                 self.parse_type(&syntax)
@@ -247,6 +246,7 @@ impl Parser<'_> {
         }
         match kind {
             KwTensor | KwBuffer => return self.parse_container_constructs(syntax),
+            // note: a lambda is typed as a function when hinted or as a parameter as in Rust
             KwFn => return self.parse_function_as_type(),
             t if is_a_type(&t) => {
                 self.bump();
@@ -270,7 +270,7 @@ impl Parser<'_> {
         self.expect_and_bump(Ident);
 
         let finished = if self.is_next(LParen) {
-            self.parse_function_call(marker)
+            self.parse_call(marker)
         } else if self.is_next(LBrack) {
             self.expect_in_ctx(ContainerRef);
             self.parse_container_indexing();

@@ -167,7 +167,7 @@ mod tests {
                         Whitespace@7..8 " "
                         ParenExpr@8..21
                           LParen@8..9 "("
-                          FnCall@9..20
+                          Call@9..20
                             Ident@9..18 "something"
                             LParen@18..19 "("
                             RParen@19..20 ")"

@@ -305,7 +305,7 @@ impl<'input> Parser<'input> {
             let syntax: Syntax = token.into();
             let kind = syntax.get_kind();
             self.context.borrow().del_expectation(kind);
-            self.push_event(Event::AddSyntax { syntax: syntax });
+            self.push_event(Event::AddSyntax { syntax });
         }
         Some(())
     }
@@ -315,7 +315,7 @@ impl<'input> Parser<'input> {
             let s_kind = syntax.get_kind();
             self.context.borrow().del_expectation(s_kind);
             syntax.set_kind(kind);
-            self.push_event(Event::AddSyntax { syntax: syntax });
+            self.push_event(Event::AddSyntax { syntax });
         }
         Some(())
     }

@@ -10,7 +10,7 @@ use crate::{
     typing::hindley_milner::types::Type,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Impl {
     pub scope_idx: ScopeIdx,
     pub of: Type,
