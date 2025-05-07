@@ -30,6 +30,7 @@ pub struct ParamType(pub By, pub Type);
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Param {
+    /// Represents a lambda parameter without an explicit type annotation.
     Generic(SmolStr),
     Named(SmolStr, ParamType),
     SelfRef(By),
