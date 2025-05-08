@@ -1,6 +1,6 @@
 use crate::scope::ScopeIdx;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
 pub enum UsageContext {
     Ref, // borrowing
     RefMut,
@@ -11,6 +11,7 @@ pub enum UsageContext {
     Mut,       // declared as mut
     Read,      // non-mut read
     ReadWrite, // x *= 2;
+    #[default]
     Return,
     StructInit,
     Unknown,

@@ -6,7 +6,10 @@ use std::collections::HashSet;
 use la_arena::Idx;
 use thin_vec::{ThinVec, thin_vec};
 
-use crate::{literal::Value, resolution::Unresolved};
+use crate::{
+    literal::Value,
+    resolution::{Reference, Unresolved},
+};
 
 use super::{inference::TypeKey, store::TypeVarId};
 
@@ -87,6 +90,13 @@ impl From<&Value> for Type {
                 data_type: data_type.clone(),
             },
             Value::Lambda(callable) => todo!(),
+            Value::Struct(struct_literal) => todo!(), // {
+                                                      // Reference::Unresolved(idx) => todo!(),
+                                                      // Reference::Resolved { name_idx, .. } => Type::Struct {
+                                                      //     key: name_idx,
+                                                      //     fields: struct_literal.internal_with_field_values.data.iter().map(|(_idx, expr_idx)| ).collect::<ThinVec<_>>(),
+                                                      // },
+                                                      // },
         }
     }
 }

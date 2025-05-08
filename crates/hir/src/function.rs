@@ -25,7 +25,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct RetType(Type);
+pub struct RetType(pub Type);
 
 // TODO: what to put in the arena now?
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
@@ -34,7 +34,7 @@ pub struct Callable {
     pub return_type: Option<RetType>,
     pub body: Block,
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 // TODO: add metadata
 pub struct FnDef {
     pub name_index: StrIdx,
@@ -61,7 +61,7 @@ impl Default for FnDef {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct FnArg(pub ExprIdx);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -72,8 +72,8 @@ pub enum On {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Call {
-    on: On,
-    arguments: ThinVec<FnArg>,
+    pub on: On,
+    pub arguments: ThinVec<FnArg>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

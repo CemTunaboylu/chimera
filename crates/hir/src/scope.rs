@@ -26,7 +26,31 @@ pub type VarDefIdx = Idx<VarDef>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
 
-pub type Span = Range<usize>;
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl PartialOrd for Span {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let result = self.start.partial_cmp(&other.end);
+        if let Some(std::cmp::Ordering::Greater) = result {
+            result
+        } else {
+            self.end.partial_cmp(&other.start)
+        }
+    }
+}
+
+impl From<Range<usize>> for Span {
+    fn from(value: Range<usize>) -> Self {
+        Self {
+            start: value.start,
+            end: value.end,
+        }
+    }
+}
 
 pub(crate) fn into_idx<T>(from: u32) -> Idx<T> {
     Idx::from_raw(RawIdx::from_u32(from))

@@ -220,6 +220,7 @@ impl TryFrom<&Value> for HMExpr {
                 shape: shape.clone(),
             }),
             Value::Lambda(callable) => todo!(),
+            Value::Struct(struct_literal) => todo!(),
         }
     }
 }

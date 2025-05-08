@@ -9,6 +9,7 @@ use crate::{
     container::{Shape, canonical::CanonicalBuffer, layout::Layout},
     function::Callable,
     scope::{ContainerLiteralIdx, StrIdx},
+    structure::StructLiteral,
     typing::hindley_milner::types::{Maybe, Type},
 };
 
@@ -25,7 +26,7 @@ pub enum Value {
     Lambda(Callable),
     Int(i32),
     Str(StrIdx),
-    // Struct
+    Struct(StructLiteral),
     Tensor {
         idx: ContainerLiteralIdx,
         shape: ThinVec<Option<usize>>,

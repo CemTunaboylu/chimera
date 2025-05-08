@@ -34,7 +34,7 @@ impl HIRBuilder {
             let low_indexing = self.lower_indexing(idx)?;
             lowered_indices.push(low_indexing);
         }
-        let span: Span = container_ref.span();
+        let span: Span = container_ref.span().into();
 
         Ok(Unresolved::baggaged(
             name,

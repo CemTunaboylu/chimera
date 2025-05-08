@@ -134,7 +134,7 @@ where
     Err(ResolutionError::new_with_guestimate(key, guesstimates).into())
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Baggage {
     None,
     Arg(ThinVec<FnArg>),
@@ -165,7 +165,7 @@ impl Unresolved {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Reference<R> {
     Unresolved(Idx<Unresolved>),
     Resolved {
