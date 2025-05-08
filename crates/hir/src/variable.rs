@@ -17,7 +17,7 @@ use crate::{
     resolution::{Reference, ResolutionType, Unresolved, resolve},
     scope::{ExprIdx, NameIndexed, Span, StrIdx, VarDefIdx, VarSelector, placeholder_idx},
 };
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
 pub struct VarDef {
     pub name_index: StrIdx,
     pub expr_index: ExprIdx,
@@ -47,33 +47,33 @@ impl HIRBuilder {
     }
     fn store_metadata_for_var_def(
         &mut self,
-        ast_var_def: &ASTVarDef,
-        idx: Idx<VarDef>,
-        expr_idx: ExprIdx,
+        _ast_var_def: &ASTVarDef,
+        _idx: Idx<VarDef>,
+        _expr_idx: ExprIdx,
     ) -> HIRResult<()> {
-        let span = ast_var_def.span();
-        self.allocate_span(ast_var_def.name(), span.clone());
-        let usage_for_def = {
-            let l_ctx = self.get_context().expect("a context");
-            Usage::from(l_ctx, span, self.get_current_stmt_idx())
-        };
-        let of_type = if let Some(ASTHint::Type(type_hint)) = ast_var_def.type_hint() {
-            self.lower_type(type_hint)?;
-        } else {
-            todo!()
-        };
-        let scope = self.get_current_scope_mut();
-        scope.metadata.vars.insert(
-            idx,
-            VarMeta {
-                def: usage_for_def,
-                usages: Usages::new(),
-                is_mut: ast_var_def.is_mut(),
-                first_read_idx: None,
-                first_write_idx: None,
-                of_type: todo!(), // should be able to infer this?
-            },
-        );
+        // let span = ast_var_def.span();
+        // self.allocate_span(ast_var_def.name(), span.clone().into());
+        // let usage_for_def = {
+        //     let l_ctx = self.get_context().expect("a context");
+        //     Usage::from(l_ctx, span.into(), self.get_current_stmt_idx())
+        // };
+        // let of_type = if let Some(ASTHint::Type(type_hint)) = ast_var_def.type_hint() {
+        //     self.lower_type(type_hint)?;
+        // } else {
+        // };
+        // let scope = self.get_current_scope_mut();
+        // scope.metadata.vars.insert(
+        //     idx,
+        //     VarMeta {
+        //         def: usage_for_def,
+        //         usages: Usages::new(),
+        //         is_mut: ast_var_def.is_mut(),
+        //         first_read_idx: None,
+        //         first_write_idx: None,
+        //         of_type: todo!(), // should be able to infer this?
+        //     },
+        // );
+        todo!()
     }
     #[with_context(UsageContext::Init)]
     pub fn lower_var_def(&mut self, ast_var_def: &ASTVarDef) -> HIRResult<VarDefIdx> {
@@ -91,7 +91,7 @@ impl HIRBuilder {
     }
     pub fn lower_var_ref(&mut self, var_ref: &ASTVarRef) -> HIRResult<Unresolved> {
         let name = var_ref.name().clone();
-        let span: Span = var_ref.span();
+        let span: Span = var_ref.span().into();
         let low_var_ref = Unresolved::new(name, ResolutionType::Var(span));
         Ok(low_var_ref)
     }
@@ -102,18 +102,18 @@ impl HIRBuilder {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
         let resolved_reference = resolve::<VarDef, VarSelector>(scope_climbing_iter, unresolved)?;
 
-        let scope = self.get_current_scope_mut();
-        let usage = todo!();
-        if let Some(meta) = scope
-            .metadata
-            .vars
-            .get_mut(&resolved_reference.get_obj_index()?)
-        {
-            meta.usages.push(usage);
-            if meta.first_read_idx.is_none() {
-                meta.first_read_idx = Some(self.get_current_stmt_idx());
-            }
-        }
+        // let scope = self.get_current_scope_mut();
+        // let usage = todo!();
+        // if let Some(meta) = scope
+        //     .metadata
+        //     .vars
+        //     .get_mut(&resolved_reference.get_obj_index()?)
+        // {
+        //     meta.usages.push(usage);
+        //     if meta.first_read_idx.is_none() {
+        //         meta.first_read_idx = Some(self.get_current_stmt_idx());
+        //     }
+        // }
 
         Ok(resolved_reference)
     }
