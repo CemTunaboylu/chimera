@@ -14,7 +14,7 @@ use crate::{
     variable::VarDef,
 };
 
-use std::{collections::HashMap, fmt::Debug, ops::Range};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
 
 pub type ExprIdx = Idx<Expr>;
 pub type FnDefIdx = Idx<FnDef>;
@@ -33,10 +33,12 @@ pub struct Span {
 }
 
 impl PartialOrd for Span {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let result = self.start.partial_cmp(&other.end);
-        if let Some(std::cmp::Ordering::Greater) = result {
-            result
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if let Some(result) = self.start.partial_cmp(&other.end) {
+            match result {
+                Ordering::Greater | Ordering::Less => Some(result),
+                Ordering::Equal => self.end.partial_cmp(&other.start),
+            }
         } else {
             self.end.partial_cmp(&other.start)
         }
