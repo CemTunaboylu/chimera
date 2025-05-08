@@ -74,7 +74,7 @@ impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> PartialOrd for Interna
 }
 
 impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> InternalStructure<TorV> {
-    fn new(scope_idx: ScopeIdx) -> Self {
+    pub fn new(scope_idx: ScopeIdx) -> Self {
         Self {
             scope_idx,
             ..Default::default()
