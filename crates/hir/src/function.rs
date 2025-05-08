@@ -102,7 +102,7 @@ impl HIRBuilder {
                 ResolutionType::Fn,
             )),
             ASTOn::Literal(literal) => {
-                let literal = self.lower_literal(&literal)?;
+                let literal = self.lower_literal(literal)?;
                 let on = On::Literal(literal);
                 MayNeedResolution::No(Call { on, arguments })
             }

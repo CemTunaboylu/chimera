@@ -58,17 +58,12 @@ impl Indexing {
         get_children_in(node, SyntaxKind::Indexing)
     }
     pub fn index(&self) -> ASTResult<Expr> {
-        if let Some(node) = self
-            .0
-            .children()
-            .filter(|node_or_token| {
-                !matches!(
-                    node_or_token.kind(),
-                    SyntaxKind::LBrack | SyntaxKind::RBrack
-                )
-            })
-            .next()
-        {
+        if let Some(node) = self.0.children().find(|node_or_token| {
+            !matches!(
+                node_or_token.kind(),
+                SyntaxKind::LBrack | SyntaxKind::RBrack
+            )
+        }) {
             Expr::try_from(&node)
         } else {
             Err(error_for_node(&self.0, "non empty child"))
