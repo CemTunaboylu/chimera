@@ -1,21 +1,15 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-};
+use std::fmt::Debug;
 
 use thin_vec::ThinVec;
 
 use crate::{
-    HIRResult,
     context::{LoweringContext, UsageContext},
-    errors::HIRError,
-    literal::Value,
     scope::{ScopeIdx, Span},
     typing::hindley_milner::types::Type,
 };
 
 pub type Usages = ThinVec<Usage>;
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Usage {
     pub kind: UsageContext,
     pub span: Span,
@@ -41,7 +35,7 @@ pub struct BlkMeta {
     pub capturing_indices: ThinVec<usize>, // Indices of statements within the block that capture variables from the parent scope
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct VarMeta {
     pub def: Usage,
     pub of_type: Type,

@@ -14,7 +14,7 @@ use crate::{
     variable::VarDef,
 };
 
-use std::{collections::HashMap, fmt::Debug, ops::Range};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
 
 pub type ExprIdx = Idx<Expr>;
 pub type FnDefIdx = Idx<FnDef>;
@@ -26,7 +26,33 @@ pub type VarDefIdx = Idx<VarDef>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
 
-pub type Span = Range<usize>;
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
+}
+
+impl PartialOrd for Span {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if let Some(result) = self.start.partial_cmp(&other.end) {
+            match result {
+                Ordering::Greater | Ordering::Less => Some(result),
+                Ordering::Equal => self.end.partial_cmp(&other.start),
+            }
+        } else {
+            self.end.partial_cmp(&other.start)
+        }
+    }
+}
+
+impl From<Range<usize>> for Span {
+    fn from(value: Range<usize>) -> Self {
+        Self {
+            start: value.start,
+            end: value.end,
+        }
+    }
+}
 
 pub(crate) fn into_idx<T>(from: u32) -> Idx<T> {
     Idx::from_raw(RawIdx::from_u32(from))

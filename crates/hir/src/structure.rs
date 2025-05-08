@@ -1,3 +1,4 @@
+use core::hash::Hash;
 use std::fmt::Debug;
 
 use la_arena::Arena;
@@ -25,13 +26,13 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct InternalStructure<TorV: Clone + Debug + PartialEq> {
+pub struct InternalStructure<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> {
     pub field_name_to_index: PatriciaMap<u32>,
     pub field_names: Arena<SmolStr>,
     pub data: Arena<TorV>,
     pub scope_idx: ScopeIdx,
 }
-impl<TorV: Clone + Debug + PartialEq> PartialEq for InternalStructure<TorV> {
+impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> PartialEq for InternalStructure<TorV> {
     fn eq(&self, other: &Self) -> bool {
         self.scope_idx == other.scope_idx
             && self.data == other.data
@@ -42,7 +43,9 @@ impl<TorV: Clone + Debug + PartialEq> PartialEq for InternalStructure<TorV> {
                 .eq(other.field_name_to_index.iter())
     }
 }
-impl<TorV: Clone + Debug + PartialEq> Default for InternalStructure<TorV> {
+
+impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> Eq for InternalStructure<TorV> {}
+impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> Default for InternalStructure<TorV> {
     fn default() -> Self {
         Self {
             field_name_to_index: Default::default(),
@@ -53,14 +56,31 @@ impl<TorV: Clone + Debug + PartialEq> Default for InternalStructure<TorV> {
     }
 }
 
-impl<TorV: Clone + Debug + PartialEq> InternalStructure<TorV> {
-    fn new(scope_idx: ScopeIdx) -> Self {
+impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> Hash for InternalStructure<TorV> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.field_name_to_index
+            .iter()
+            .for_each(|tuple| tuple.hash(state));
+        self.field_names.hash(state);
+        self.data.iter().for_each(|d| d.hash(state));
+        self.scope_idx.hash(state);
+    }
+}
+
+impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> PartialOrd for InternalStructure<TorV> {
+    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
+        None
+    }
+}
+
+impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> InternalStructure<TorV> {
+    pub fn new(scope_idx: ScopeIdx) -> Self {
         Self {
             scope_idx,
             ..Default::default()
         }
     }
-    fn add(&mut self, name: SmolStr, data: TorV) -> HIRResult<()> {
+    pub fn add(&mut self, name: SmolStr, data: TorV) -> HIRResult<()> {
         if self.field_names.len() != self.data.len() {
             return Err(HIRError::with_msg(format!(
                 "Struct field allocation encountered mismatched indices: 'name index: {:?}' != 'data index: {:?}'",
@@ -76,7 +96,7 @@ impl<TorV: Clone + Debug + PartialEq> InternalStructure<TorV> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct StructDef {
     pub internal_with_field_types: InternalStructure<Type>,
     pub name_index: StrIdx,
@@ -100,7 +120,7 @@ impl NameIndexed for StructDef {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct StructRef(pub StructDefIdx);
 
 impl Default for StructRef {
@@ -108,11 +128,27 @@ impl Default for StructRef {
         Self(placeholder_idx())
     }
 }
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct StructLiteral {
     pub struct_ref: Reference<StructRef>,
     pub internal_with_field_values: InternalStructure<ExprIdx>,
     pub field_metadata: MetaHolder<VarDef, VarMeta>,
+}
+
+impl PartialOrd for StructLiteral {
+    fn partial_cmp(&self, _: &Self) -> Option<std::cmp::Ordering> {
+        None
+    }
+}
+
+impl Hash for StructLiteral {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.struct_ref.hash(state);
+        self.internal_with_field_values.hash(state);
+        self.field_metadata
+            .iter()
+            .for_each(|tuple| tuple.hash(state));
+    }
 }
 
 impl HIRBuilder {
@@ -164,7 +200,7 @@ impl HIRBuilder {
         }
 
         let struct_literal = StructLiteral {
-            field_metadata: MetaHolder::new(),
+            field_metadata: MetaHolder::default(),
             internal_with_field_values: internal,
             struct_ref,
         };

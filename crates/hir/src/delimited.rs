@@ -34,7 +34,7 @@ impl Default for Block {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Indexing(pub(crate) ExprIdx);
 
 impl HIRBuilder {
