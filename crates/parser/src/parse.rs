@@ -138,8 +138,8 @@ impl Parser<'_> {
             self.bump_with_marker(Condition)
         } else {
             let cond_marker = self.start();
-            let rollback_when_dropped = self.roll_back_context_after_drop();
-            self.expect_in_ctx(SyntaxKind::operators().as_ref());
+            let rollback_when_dropped =
+                self.impose_restrictions_of_currently_parsing_on_context(SyntaxKind::Condition);
             self.parse_expression_until_binding_power(starting_precedence());
             self.complete_marker_with(cond_marker, Condition)
         };
