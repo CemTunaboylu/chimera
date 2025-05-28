@@ -161,10 +161,7 @@ impl Parser<'_> {
                     if !is_an_operator(&kind) {
                         break;
                     }
-                    if !self.is_allowed(kind) {
-                        if self.is_expected(kind) {
-                            break;
-                        }
+                    if !self.is_allowed(kind) && !self.is_expected(kind) {
                         // note: returns None thus shortcircuits from here
                         self.recover_restricted(kind)?;
                     }
@@ -224,14 +221,7 @@ impl Parser<'_> {
             }
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
             operator if is_an_operator(&operator) => {
-                // TODO: check this one
-                println!("DIRTY WATERS : {:?}", self.peek());
-                if !self.is_expected(operator) {
-                    self.recover_unmet_expectation();
-                } else if !self.is_allowed(operator) {
-                    // note: returns None thus shortcircuits from here
-                    self.recover_restricted(operator);
-                }
+                self.recover();
                 None
             }
             _ => None,
@@ -240,7 +230,7 @@ impl Parser<'_> {
 
     pub fn parse_type(&self, syntax: &Syntax) -> Option<Finished> {
         let kind = syntax.get_kind();
-        if !self.is_allowed(kind) {
+        if !self.is_allowed(kind) && !self.is_expected(kind) {
             // it returns None thus acts as an early return
             self.recover_restricted(kind)?;
         }
@@ -261,6 +251,7 @@ impl Parser<'_> {
     // Possible options: a variable reference, function/method call or an iterable indexing
     #[allow(unused_variables)]
     pub fn parse_starting_with_identifier(&self) -> Option<Finished> {
+        // TODO: bring this in to the middle of instead
         if self.is_expected(StructAsType) {
             self.expect_and_bump_as(Ident, StructAsType);
             return None;
@@ -272,6 +263,7 @@ impl Parser<'_> {
         let finished = if self.is_next(LParen) {
             self.parse_call(marker)
         } else if self.is_next(LBrack) {
+            // TODO: bring this in to the middle of instead
             self.expect_in_ctx(ContainerRef);
             self.parse_container_indexing();
             self.complete_marker_with(marker, ContainerRef)
@@ -317,11 +309,9 @@ impl Parser<'_> {
         let marker = self.start();
         self.expect_and_bump(KwBreak);
 
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        self.expect_in_ctx(Semi);
+        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Jump);
 
         self.parse_expression_until_binding_power(starting_precedence());
-
         self.expect_and_bump(Semi);
 
         Some(self.complete_marker_with(marker, Jump))
@@ -332,9 +322,7 @@ impl Parser<'_> {
         let marker = self.start();
         self.expect_and_bump(KwReturn);
 
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        self.expect_in_ctx(Semi);
-
+        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Return);
         self.parse_expression_until_binding_power(starting_precedence());
         self.expect_and_bump(Semi);
 
@@ -368,17 +356,6 @@ impl Parser<'_> {
             KwReturn => self.parse_return(),
             KwStruct => self.parse_struct_definition(),
             KwSelf | Kwself => Some(self.bump_with_marker(SelfRef)),
-
-            // Kwself => {
-            //     if self.is_expected([FnCall, FnDef].as_ref()) {
-            //         let marker = self.start();
-            //         self.bump_with_marker(SelfRef);
-            //         Some(self.complete_marker_with(marker, StructAsType))
-            //     } else {
-            //         Some(self.bump_with_marker(SelfRef))
-            //     }
-            // }
-            // KwSelf => Some(self.bump_with_marker(SelfRef)),
             nope => {
                 println!("{:?} is not implemented yet", nope);
                 todo!()
@@ -390,8 +367,8 @@ impl Parser<'_> {
     pub fn parse_prefix_unary_operation(&self, kind: SyntaxKind) -> Option<Finished> {
         let prefix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let marker = self.start();
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        self.expect_in_ctx(SyntaxKind::operators().as_ref());
+        let rollback_after_drop =
+            self.impose_restrictions_of_currently_parsing_on_context(PrefixUnaryOp);
         self.expect_and_bump(kind);
         let bounded_precedence = Bound::from_op(prefix_unary_op.clone());
         _ = self.parse_expression_until_binding_power(bounded_precedence);
@@ -406,7 +383,6 @@ impl Parser<'_> {
     ) -> Option<Finished> {
         let postfix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let precedence = postfix_unary_op.precedence();
-        // note: ? has lower precedence then prefix operators to ensure that &opt? behaves like opt.as_ref().unwrap()
         if min_precedence.gt(&precedence) {
             return None;
         }
@@ -439,14 +415,9 @@ impl Parser<'_> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::errors::ParseError;
-
     use super::*;
     use expect_test::{Expect, expect};
-    use miette::Report;
     use parameterized_test::create;
-    use std::ops::Range;
-    use thin_vec::{ThinVec, thin_vec};
 
     pub(crate) fn check(prog: &str, expect: Expect) {
         let parse = Parser::new(prog).parse();

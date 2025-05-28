@@ -278,7 +278,14 @@ impl SyntaxKind {
             Condition => {
                 context_update[0] = RestrictionType::Add(SyntaxKind::operators().as_ref().into());
             }
+            Jump | Return => {
+                context_update[0] = RestrictionType::Add(Semi.into());
+            }
+            PrefixUnaryOp => {
+                context_update[2] = RestrictionType::Add(SyntaxKind::operators().as_ref().into());
+            }
             VarDef => {
+                // ! FIXME: this is a hack, I need to find a better way to do expect things IN ORDER
                 context_update[0] = RestrictionType::Add([Eq, Ident, Semi].as_slice().into());
                 let non_assignments: SyntaxKindBitSet = non_assigning_operators();
                 let can_be_parameter: SyntaxKindBitSet =

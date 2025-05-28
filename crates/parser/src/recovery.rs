@@ -16,20 +16,23 @@ impl Parser<'_> {
     }
 
     // an unmet expectation is meaningful at the first incident, after that it stops being an expectation
-    fn take_expectations(&self) -> ThinVec<SyntaxKind> {
+    fn take_expectation(&self) -> ThinVec<SyntaxKind> {
         let expectations = self.context.borrow().get_expectations();
         self.context.borrow().del_expectation(expectations);
         expectations.into()
     }
 
     pub fn recover_from_err(&self, err: Report) {
-        let kinds: ThinVec<SyntaxKind> = self.take_expectations();
+        let kinds: ThinVec<SyntaxKind> = self.take_expectation();
+        let was_in_the_middle_of: ThinVec<SyntaxKind> =
+            self.context.borrow().get_in_the_middle_of().into();
+        let msg = if let Some(kind) = was_in_the_middle_of.first() {
+            format!("{:?} while parsing {:?}", err, kind)
+        } else {
+            format!("{:?}", err)
+        };
         self.push_event(Event::Error {
-            err: ParseError::new(
-                self.lexer.borrow().span().clone(),
-                kinds,
-                format!("{:?}", err).as_str(),
-            ),
+            err: ParseError::new(self.lexer.borrow().span().clone(), kinds, msg.as_str()),
         });
         if self.can_recover() {
             self.lexer.borrow_mut().next();
@@ -45,26 +48,13 @@ impl Parser<'_> {
         }
     }
 
-    pub fn recover_unmet_expectation(&self) {
-        let got = self.peek();
-        let kinds: ThinVec<SyntaxKind> = self.take_expectations();
-        self.push_event(Event::Error {
-            err: ParseError::new(self.lexer.borrow_mut().span().clone(), kinds, got),
-        });
-        if self.can_recover() {
-            self.bump_with_marker(SyntaxKind::Recovered);
-        }
-    }
-
     pub fn recover(&self) {
-        let exps = if let Some(Ok(got)) = self.peek() {
+        let exps = if let Some(Ok(_)) = self.peek() {
             let ctx = self.context.borrow();
-            let kind = got.get_kind();
-            // first check restrictions
-            let kinds: ThinVec<SyntaxKind> = if !ctx.is_allowed(kind) {
+            let kinds: ThinVec<SyntaxKind> = if ctx.get_allowed().has_any() {
                 ctx.get_allowed().into()
             } else {
-                self.take_expectations()
+                self.take_expectation()
             };
             kinds
         } else {
@@ -73,9 +63,16 @@ impl Parser<'_> {
 
         let err_span = self.lexer.borrow().span().clone();
 
-        self.push_event(Event::Error {
-            err: ParseError::new(err_span, exps, self.peek()),
-        });
+        if let Some(during) = self.get_in_the_middle_of_parsing() {
+            self.push_event(Event::Error {
+                err: ParseError::during(err_span, exps, self.peek(), during),
+            });
+        } else {
+            self.push_event(Event::Error {
+                err: ParseError::new(err_span, exps, self.peek()),
+            });
+        }
+
         if self.can_recover() {
             self.bump_with_marker(SyntaxKind::Recovered);
         }

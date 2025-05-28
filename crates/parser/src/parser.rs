@@ -31,13 +31,18 @@ pub struct Parser<'input> {
 
 use SyntaxKind::*;
 
+fn default_context() -> ParserContext {
+    let context = ParserContext::new();
+    context.disallow_recovery_of([KwLet].as_ref());
+    context.forbid_only([RParen, RBrace, RBrack].as_ref());
+    context.allow([StructLit].as_ref());
+    context
+}
+
 impl<'input> Parser<'input> {
     pub fn new(program: &'input str) -> Self {
         // let is by default in recovery set, i.e. it won't be bumped in a recovery case
-        let context = ParserContext::new();
-        context.disallow_recovery_of([KwLet].as_ref());
-        context.forbid_only([RParen, RBrace, RBrack].as_ref());
-        context.allow(StructLit);
+        let context = default_context();
 
         Self {
             lexer: RefCell::new(Lexer::new(program)),
@@ -131,6 +136,9 @@ impl<'input> Parser<'input> {
     pub fn expect_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
         self.context.borrow().expect(e);
     }
+    pub fn mark_expectation_as_satisfied_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
+        self.context.borrow().del_expectation(e);
+    }
 
     pub fn allow_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
         self.context.borrow().allow(e);
@@ -158,6 +166,11 @@ impl<'input> Parser<'input> {
 
     pub fn is_expected(&self, e: impl Into<SyntaxKindBitSet>) -> bool {
         self.context.borrow().is_expected(e)
+    }
+
+    pub fn get_in_the_middle_of_parsing(&self) -> Option<SyntaxKind> {
+        let tv: ThinVec<SyntaxKind> = self.context.borrow().get_in_the_middle_of().into();
+        tv.first().cloned()
     }
 
     pub fn is_in_the_middle_of_parsing(&self, kind: SyntaxKind) -> bool {
@@ -326,7 +339,7 @@ impl<'input> Parser<'input> {
         if let Ok(token) = self.lexer.borrow_mut().next()? {
             let syntax: Syntax = token.into();
             let kind = syntax.get_kind();
-            self.context.borrow().del_expectation(kind);
+            self.mark_expectation_as_satisfied_in_ctx(kind);
             self.push_event(Event::AddSyntax { syntax });
         }
         Some(())
@@ -335,7 +348,7 @@ impl<'input> Parser<'input> {
         if let Ok(token) = self.lexer.borrow_mut().next()? {
             let mut syntax: Syntax = token.into();
             let s_kind = syntax.get_kind();
-            self.context.borrow().del_expectation(s_kind);
+            self.mark_expectation_as_satisfied_in_ctx(s_kind);
             syntax.set_kind(kind);
             self.push_event(Event::AddSyntax { syntax });
         }

@@ -27,8 +27,6 @@ mod tests {
 
     use crate::parser::Parser;
 
-    // use crate::{parse_behaviors::IgnoreTrivia, parser::Parser};
-
     const TEST_DIR: &str = "test_programs";
     const OK: &str = "ok";
     const ERRD: &str = "errd";
@@ -40,7 +38,6 @@ mod tests {
         Ok(file_contents)
     }
 
-    // fn parse_file_contents(file_path: PathBuf, expect_errs: bool) {
     fn parse_file_contents(file_path: PathBuf, expect_errs: bool) {
         assert!(
             file_path.to_str().unwrap().ends_with(".chi"),

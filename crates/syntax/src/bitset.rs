@@ -28,6 +28,7 @@ impl SyntaxKindBitSet {
     pub fn clear(&mut self) {
         self.0 = 0;
     }
+    // TODO: do not take this as ref, SyntaxKind is smaller than ptr.
     pub fn contains(&self, kind: &SyntaxKind) -> bool {
         self.0 & (1 << kind.to_u16().unwrap()) != 0
     }

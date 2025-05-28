@@ -91,4 +91,21 @@ impl ParseError {
             expected_but_found,
         }
     }
+    pub fn during(
+        err_span: Range<usize>,
+        expected_kinds: impl Stringer,
+        kind_opt: impl Stringer,
+        during: impl Stringer,
+    ) -> Self {
+        let expected_but_found = format!(
+            "expected {}, but got {} during {}",
+            expected_kinds.into(),
+            kind_opt.into(),
+            during.into()
+        );
+        Self {
+            err_span,
+            expected_but_found,
+        }
+    }
 }
