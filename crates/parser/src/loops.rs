@@ -1,6 +1,6 @@
 use crate::{
     operator::starting_precedence,
-    parse::{Finished, SeparatedElement},
+    parse::{Element, Finished},
     parser::Parser,
 };
 
@@ -67,7 +67,7 @@ impl Parser<'_> {
             let rollback_when_dropped = self.roll_back_context_after_drop();
             self.context.borrow().allow(KwIn);
 
-            use SeparatedElement::*;
+            use Element::*;
 
             let idents = thin_vec![Kind(Ident)];
             self.parse_separated_by(&idents, ForIdent, Comma, KwIn);

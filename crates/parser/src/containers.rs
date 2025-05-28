@@ -1,6 +1,6 @@
 use crate::{
     operator::starting_precedence,
-    parse::{Finished, SeparatedElement, Started},
+    parse::{Element, Finished, Started},
     parser::{IsNext, Parser},
 };
 
@@ -52,7 +52,7 @@ impl HintParser {
             // for buffer to be a static type (allocated on the stack)
             // its size must be known at compile time
             parser.allow_in_ctx([Int, Comma].as_ref());
-            thin_vec![SeparatedElement::Kind(Int)]
+            thin_vec![Element::Kind(Int)]
         } else {
             // tensor, since it is a dynamic type (allocated on the heap)
             // its size can be adjusted dynamically thus can be any expression
@@ -62,9 +62,9 @@ impl HintParser {
             parser.allow_in_ctx(SyntaxKind::operators().as_ref());
             // TODO: seems like a bad idea but solves a lot of problems :)
             parser.forbid_in_ctx(self.closing_kind);
-            thin_vec![SeparatedElement::Branched(
-                thin_vec![SeparatedElement::InSet([Int, Under].as_ref().into())],
-                thin_vec![SeparatedElement::ParseExprWith(starting_precedence())],
+            thin_vec![Element::Branched(
+                thin_vec![Element::InSet([Int, Under].as_ref().into())],
+                thin_vec![Element::ParseExprWith(starting_precedence())],
             )]
         };
         let stopper = [self.closing_kind, Semi, RBrace];

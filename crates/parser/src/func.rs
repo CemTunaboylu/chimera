@@ -1,7 +1,7 @@
 use crate::{
     marker::{Incomplete, Marker},
     operator::starting_precedence,
-    parse::{Finished, SeparatedElement},
+    parse::{Finished, Element},
     parser::{IsNext, Parser},
 };
 use syntax::{
@@ -154,9 +154,9 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_comma_separated_types_until(&self, until_false: fn(Syntax) -> bool) {
         let rollback_when_dropped = self.impose_comma_sep_typed_decl_restrictions();
-        use SeparatedElement::*;
+        use Element::*;
 
-        let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
+        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
         let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let arg_elements = thin_vec![ref_mut_with(Branched(
             thin_vec![KindAs(Ident, StructAsType)],
@@ -175,9 +175,9 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_comma_separated_typed_declarations_until(&self, until_false: fn(Syntax) -> bool) {
         let rollback_when_dropped = self.impose_comma_sep_typed_decl_restrictions();
-        use SeparatedElement::*;
+        use Element::*;
 
-        let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
+        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
         let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let arg_elements = thin_vec![
             Kind(Ident),
@@ -209,9 +209,9 @@ impl Parser<'_> {
         until_false: fn(Syntax) -> bool,
     ) {
         let rollback_when_dropped = self.impose_comma_sep_typed_decl_restrictions();
-        use SeparatedElement::*;
+        use Element::*;
 
-        let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
+        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
         let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let arg_elements = thin_vec![
             Kind(Ident),
@@ -235,7 +235,7 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_arg(&self, elements: &ThinVec<SeparatedElement>) {
+    fn parse_arg(&self, elements: &ThinVec<Element>) {
         let marker = self.start();
         self.parse_possible_ref_mut_arg_and_elms(elements);
         // since we stopped at Comma above, we need to consume Comma if there is one now to enable the following parse
@@ -243,7 +243,7 @@ impl Parser<'_> {
         self.complete_marker_with(marker, ParamDecl);
     }
 
-    pub fn parse_possible_ref_mut_arg_and_elms(&self, elements: &ThinVec<SeparatedElement>) {
+    pub fn parse_possible_ref_mut_arg_and_elms(&self, elements: &ThinVec<Element>) {
         if self.is_next(And) {
             self.parse_ref_arg(elements);
         } else if self.is_next(KwMut) {
@@ -252,7 +252,7 @@ impl Parser<'_> {
             self.parse_arg_with(elements);
         }
     }
-    fn parse_ref_arg(&self, elements: &ThinVec<SeparatedElement>) -> Finished {
+    fn parse_ref_arg(&self, elements: &ThinVec<Element>) -> Finished {
         let marker = self.start();
         self.expect_and_bump(And);
         if self.is_next(KwMut) {
@@ -263,14 +263,14 @@ impl Parser<'_> {
         self.complete_marker_with(marker, PrefixUnaryOp)
     }
 
-    fn parse_mut_arg(&self, elements: &ThinVec<SeparatedElement>) -> Finished {
+    fn parse_mut_arg(&self, elements: &ThinVec<Element>) -> Finished {
         let mut_marker = self.start();
         self.expect_and_bump(KwMut);
         self.parse_arg_with(elements);
         self.complete_marker_with(mut_marker, Mut)
     }
 
-    fn parse_arg_with(&self, elements: &ThinVec<SeparatedElement>) {
+    fn parse_arg_with(&self, elements: &ThinVec<Element>) {
         self.parse_with(elements);
     }
 
@@ -285,8 +285,8 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_comma_separated_arguments_until(&self, unwanted: impl Into<SyntaxKindBitSet>) {
         let rollback_when_dropped = self.impose_comma_sep_args_restrictions();
-        use SeparatedElement::*;
-        let ref_mut_with = |s: SeparatedElement| RefMut(thin_vec![s]);
+        use Element::*;
+        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
         let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];
 
         self.parse_separated_by(&can_be, FnArg, Comma, unwanted);

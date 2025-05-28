@@ -19,15 +19,15 @@ use SyntaxKind::*;
 pub type CustomExpectationOnSyntax = fn(&Syntax) -> bool;
 
 #[derive(Clone, Debug)]
-pub enum SeparatedElement {
+pub enum Element {
     Kind(SyntaxKind),
     KindAs(SyntaxKind, SyntaxKind),
     InSet(SyntaxKindBitSet),
     KindWithMarker(SyntaxKind, SyntaxKind),
     Optional(SyntaxKindBitSet),
-    RefMut(ThinVec<SeparatedElement>),
+    RefMut(ThinVec<Element>),
     Fn(CustomExpectationOnSyntax),
-    Branched(ThinVec<SeparatedElement>, ThinVec<SeparatedElement>),
+    Branched(ThinVec<Element>, ThinVec<Element>),
     ParseExprWith(Bound),
 }
 
@@ -46,7 +46,7 @@ impl Parser<'_> {
 
     pub fn bump_separated_by(
         &self,
-        elements_in_order: &ThinVec<SeparatedElement>,
+        elements_in_order: &ThinVec<Element>,
         separator: SyntaxKind,
         unwanted: impl Into<SyntaxKindBitSet>,
     ) {
@@ -58,7 +58,7 @@ impl Parser<'_> {
     }
     pub fn parse_separated_by(
         &self,
-        elements_in_order: &ThinVec<SeparatedElement>,
+        elements_in_order: &ThinVec<Element>,
         wrapping_kind_to_complete: SyntaxKind,
         separator: SyntaxKind,
         unwanted: impl Into<SyntaxKindBitSet>,
@@ -74,8 +74,8 @@ impl Parser<'_> {
         }
     }
 
-    fn does_first_element_pass(&self, s: &SeparatedElement) -> bool {
-        use SeparatedElement::*;
+    fn does_first_element_pass(&self, s: &Element) -> bool {
+        use Element::*;
         match s {
             &Kind(syntax_kind) => self.is_next(syntax_kind),
             &KindAs(syntax_kind, _) => self.is_next(syntax_kind),
@@ -88,8 +88,8 @@ impl Parser<'_> {
             &InSet(syntax_kind_bit_set) => self.is_next_in(syntax_kind_bit_set),
         }
     }
-    pub fn parse_with(&self, elements_in_order: &ThinVec<SeparatedElement>) {
-        use SeparatedElement::*;
+    pub fn parse_with(&self, elements_in_order: &ThinVec<Element>) {
+        use Element::*;
         for element in elements_in_order.iter() {
             match element {
                 &Kind(exp_kind) => {
@@ -276,7 +276,6 @@ impl Parser<'_> {
             self.parse_container_indexing();
             self.complete_marker_with(marker, ContainerRef)
         } else if self.is_next(LBrace) && self.is_allowed(StructLit) {
-            // self.expect_in_ctx(StructInit);
             self.parse_struct_init_block();
             self.complete_marker_with(marker, StructLit)
         } else if self.is_next(Colon) {
