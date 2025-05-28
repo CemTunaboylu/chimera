@@ -3,7 +3,7 @@ use std::{
     ops::{Add, AddAssign, BitAnd, BitAndAssign, Not, SubAssign},
 };
 
-use crate::{anchor::RollingBackAnchor, bitset::SyntaxKindBitSet};
+use crate::{anchor::RollingBackAnchor, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CelledBits {
@@ -55,7 +55,7 @@ impl CelledBits {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ParserContext {
-    expectations: CelledBits,
+    expectation: CelledBits,
     recovery_set: CelledBits,
     allowed: CelledBits,
     in_the_middle_of: CelledBits,
@@ -91,9 +91,13 @@ enum Op {
 impl ParserContext {
     pub fn new() -> Self {
         Self {
-            expectations: CelledBits::new(),
+            // expectation denotes the syntax kind that is expected to be parsed next, if a syntax kind is not in this set, AND it is not forbidden, it means it is time to stop parsing this branch without erroring. It is used to expect a single kind, if multiple kinds are expected, we use allowed set instead.
+            expectation: CelledBits::new(),
+            // recovery set is the set of syntax kinds that are allowed to be recovered from, i.e. the kind that we are at can be bumped into an error node, if it is in this set. Kinds that are in expectation set generally are not in recovery set, e.g. ')'.
             recovery_set: CelledBits::new(),
+            // allowed is the set of syntax kinds that are allowed to be parsed, for cases where we don't expect a specific kind, but multiple kinds are allowed to be parsed next. If a syntax kind is not in this set, it means we are in an error state, and we should recover from the error according to recovery set.
             allowed: CelledBits::new(),
+            // in_the_middle_of denotes the composite syntax kind that we are parsing at the moment. It is helpful to manage expectations and allowed kinds, and reporting the error. We populate this set with a specific syntax kind to enforce more granular control. E.g. when we are parsing a VarDef, we expect a semicolon at the end. Even though during parsing w.r.t. binding power we error on a semicolon, we allow it to be parsed, and not error by checking if we are parsing a VarDef.
             in_the_middle_of: CelledBits::new(),
         }
     }
@@ -103,7 +107,7 @@ impl ParserContext {
     }
 
     pub fn take(&self, ctx: ParserContext) {
-        self.expectations.take_bits_from(ctx.expectations);
+        self.expectation.take_bits_from(ctx.expectation);
         self.recovery_set.take_bits_from(ctx.recovery_set);
         self.allowed.take_bits_from(ctx.allowed);
         self.in_the_middle_of.take_bits_from(ctx.in_the_middle_of);
@@ -111,7 +115,7 @@ impl ParserContext {
 
     fn get_celled_as_ref(&self, cell: CellOf) -> &CelledBits {
         match cell {
-            CellOf::Expectations => &self.expectations,
+            CellOf::Expectations => &self.expectation,
             CellOf::RecoverySet => &self.recovery_set,
             CellOf::Allowed => &self.allowed,
             CellOf::InTheMiddleOf => &self.in_the_middle_of,
@@ -137,7 +141,7 @@ impl ParserContext {
         cell.not_cell();
     }
     pub fn get_expectations(&self) -> SyntaxKindBitSet {
-        self.expectations.get_cell_as_ref().get()
+        self.expectation.get_cell_as_ref().get()
     }
     pub fn expect(&self, exp: impl Into<SyntaxKindBitSet>) {
         self.add_cell(CellOf::Expectations, exp.into());
@@ -153,7 +157,7 @@ impl ParserContext {
         self.sub_cell(CellOf::Expectations, exp.into());
     }
     pub fn is_expected(&self, exp: impl Into<SyntaxKindBitSet>) -> bool {
-        self.expectations.get_cell_as_ref().get().intersect(exp)
+        self.expectation.get_cell_as_ref().get().intersect(exp)
     }
     pub fn get_recovery_set(&self) -> SyntaxKindBitSet {
         self.recovery_set.get_cell_as_ref().get()
