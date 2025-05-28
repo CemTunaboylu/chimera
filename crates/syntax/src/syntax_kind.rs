@@ -275,6 +275,10 @@ impl SyntaxKind {
         use SyntaxKind::*;
         let mut context_update = [RestrictionType::None; 4];
         match self {
+            Block => {
+                context_update[1] = RestrictionType::Add([RBrace].as_ref().into());
+                context_update[2] = RestrictionType::Sub([RBrace].as_ref().into());
+            }
             BufferLit | TensorLit => {
                 context_update[1] = RestrictionType::Sub([Semi, RBrack].as_ref().into());
                 context_update[2] = RestrictionType::Sub([RBrack].as_ref().into());
@@ -307,7 +311,7 @@ impl SyntaxKind {
                 context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
             }
             VarDef => {
-                // ! FIXME: this is a hack, I need to find a better way to do expect things IN ORDER
+                // ! FIXME: this is a hack, I need to find a better way to expect things IN ORDER
                 context_update[0] = RestrictionType::Add([Eq, Ident, Semi].as_slice().into());
                 let non_assignments: SyntaxKindBitSet = non_assigning_operators();
                 let can_be_parameter: SyntaxKindBitSet =
