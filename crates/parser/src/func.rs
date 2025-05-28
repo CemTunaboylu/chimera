@@ -1,7 +1,7 @@
 use crate::{
     marker::{Incomplete, Marker},
     operator::starting_precedence,
-    parse::{Finished, Element},
+    parse::{Element, Finished},
     parser::{IsNext, Parser},
 };
 use syntax::{
@@ -65,18 +65,22 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_lambda_def(&self) -> Option<Finished> {
         let marker = self.start();
-        self.expect_and_bump(Or);
-        if !self.is_next(Or) {
-            let rollback_after_drop = self.roll_back_context_after_drop();
-            self.dont_recover_in_ctx(Or);
-            self.parse_comma_separated_declarations_with_optional_type_declarations_until(
-                |syntax: Syntax| !syntax.is_of_kind(Or),
-            );
-        }
-
         let rollback_after_drop = self.roll_back_context_after_drop();
         self.dont_recover_in_ctx(LBrace);
-        self.expect_and_bump(Or);
+
+        if self.is_next(OrOr) {
+            self.expect_and_bump(OrOr);
+        } else {
+            self.expect_and_bump(Or);
+            if !self.is_next(Or) {
+                let rollback_after_drop = self.roll_back_context_after_drop();
+                self.dont_recover_in_ctx(Or);
+                self.parse_comma_separated_declarations_with_optional_type_declarations_until(
+                    |syntax: Syntax| !syntax.is_of_kind(Or),
+                );
+            }
+            self.expect_and_bump(Or);
+        }
 
         self.parse_return_type_if_any();
 
@@ -360,30 +364,27 @@ mod tests {
                       RBrace@12..13 "}""#]],
     ),
 
-    // During parsing lhs, we should check if OrOr is used as an operator (should not hit there in the first place though)
-    // or as a lambda with no parameters, if no parameters, we should separate OrOr into Or followed by another Or, and then
-    // continue with parsing a lambda, or we can bump it and directly continue with return type or lambda body parsing.
     lambda_with_no_parameters_not_handled: ("let empty = || {0}",
               expect![[r#"
                   Root@0..18
-                    VarDef@0..16
+                    VarDef@0..18
                       KwLet@0..3 "let"
                       Whitespace@3..4 " "
-                      InfixBinOp@4..14
+                      InfixBinOp@4..18
                         VarRef@4..10
                           Ident@4..9 "empty"
                           Whitespace@9..10 " "
                         Eq@10..11 "="
                         Whitespace@11..12 " "
-                        Recovered@12..14
-                          OrOr@12..14 "||"
-                      Whitespace@14..15 " "
-                      Recovered@15..16
-                        LBrace@15..16 "{"
-                    Literal@16..17
-                      Int@16..17 "0"
-                    Recovered@17..18
-                      RBrace@17..18 "}""#]],
+                        Literal@12..18
+                          Lambda@12..18
+                            OrOr@12..14 "||"
+                            Whitespace@14..15 " "
+                            Block@15..18
+                              LBrace@15..16 "{"
+                              Literal@16..17
+                                Int@16..17 "0"
+                              RBrace@17..18 "}""#]],
     ),
 
         call_on_lambda_literal: ("let two = |a| {2*a}(1);",

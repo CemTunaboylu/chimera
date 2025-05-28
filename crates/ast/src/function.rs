@@ -274,6 +274,10 @@ mod tests {
          "|a: &mut i32, b: i32| { a += b; }",
          DOES_NOT_RETURN, 2,
         ),
+        non_returning_no_parameter_lambda: (
+         "|| { a += b; }",
+         DOES_NOT_RETURN, 0,
+        ),
     }
 
     create! {

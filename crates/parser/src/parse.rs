@@ -214,7 +214,9 @@ impl Parser<'_> {
             Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
             // & (ref), ! (bool negate), - (negative), * (deref)
             And | Excl | Minus | Star => self.parse_prefix_unary_operation(kind),
-            Or => self.parse_lambda_def(),
+            // Note: OrOr is a special case for a lambda definition with no parameters, and since OrOr is a binary infix operator,
+            // we don't expect it to be in left-hand side expression, thus attempt to parse it as a lambda definition
+            Or | OrOr => self.parse_lambda_def(),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             typing if is_a_type(&typing) || matches!(typing, KwBuffer | KwTensor) => {
                 self.parse_type(&syntax)
