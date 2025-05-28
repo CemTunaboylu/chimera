@@ -58,6 +58,7 @@ pub struct ParserContext {
     expectations: CelledBits,
     recovery_set: CelledBits,
     allowed: CelledBits,
+    in_the_middle_of: CelledBits,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -65,6 +66,27 @@ enum CellOf {
     Expectations,
     RecoverySet,
     Allowed,
+    InTheMiddleOf,
+}
+
+impl CellOf {
+    fn iter() -> impl Iterator<Item = Self> {
+        [
+            CellOf::Expectations,
+            CellOf::RecoverySet,
+            CellOf::Allowed,
+            CellOf::InTheMiddleOf,
+        ]
+        .into_iter()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Op {
+    Add,
+    And,
+    Sub,
+    Not,
 }
 impl ParserContext {
     pub fn new() -> Self {
@@ -72,6 +94,7 @@ impl ParserContext {
             expectations: CelledBits::new(),
             recovery_set: CelledBits::new(),
             allowed: CelledBits::new(),
+            in_the_middle_of: CelledBits::new(),
         }
     }
 
@@ -83,6 +106,7 @@ impl ParserContext {
         self.expectations.take_bits_from(ctx.expectations);
         self.recovery_set.take_bits_from(ctx.recovery_set);
         self.allowed.take_bits_from(ctx.allowed);
+        self.in_the_middle_of.take_bits_from(ctx.in_the_middle_of);
     }
 
     fn get_celled_as_ref(&self, cell: CellOf) -> &CelledBits {
@@ -90,6 +114,7 @@ impl ParserContext {
             CellOf::Expectations => &self.expectations,
             CellOf::RecoverySet => &self.recovery_set,
             CellOf::Allowed => &self.allowed,
+            CellOf::InTheMiddleOf => &self.in_the_middle_of,
         }
     }
 
@@ -172,31 +197,52 @@ impl ParserContext {
     pub fn is_allowed(&self, res: impl Into<SyntaxKindBitSet>) -> bool {
         self.allowed.get_cell_as_ref().get().intersect(res)
     }
+
+    fn get_in_the_middle_of(&self) -> SyntaxKindBitSet {
+        self.in_the_middle_of.get_cell_as_ref().get()
+    }
+
+    fn op_on_ctx_cell(&self, op: Op, cell: CellOf, other: impl Into<SyntaxKindBitSet>) {
+        match op {
+            Op::Add => self.add_cell(cell, other.into()),
+            Op::And => self.and_cell(cell, other.into()),
+            Op::Sub => self.sub_cell(cell, other.into()),
+            Op::Not => self.not_cell(cell),
+        }
+    }
+    fn not_whole_ctx(&self) {
+        for cell in CellOf::iter() {
+            self.not_cell(cell)
+        }
+    }
+    fn op_on_whole_ctx(&self, op: Op, other: &ParserContext) {
+        for cell in CellOf::iter() {
+            self.op_on_ctx_cell(
+                op,
+                cell,
+                other.get_celled_as_ref(cell).get_cell_as_ref().get(),
+            );
+        }
+    }
 }
 impl Add for ParserContext {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
         let new = Self::new();
-        new.add_cell(CellOf::Expectations, rhs.get_expectations());
-        new.add_cell(CellOf::RecoverySet, rhs.get_recovery_set());
-        new.add_cell(CellOf::Allowed, rhs.get_allowed());
+        new.op_on_whole_ctx(Op::Add, &rhs);
         new
     }
 }
 
 impl AddAssign for ParserContext {
     fn add_assign(&mut self, rhs: Self) {
-        self.add_cell(CellOf::Expectations, rhs.get_expectations());
-        self.add_cell(CellOf::RecoverySet, rhs.get_recovery_set());
-        self.add_cell(CellOf::Allowed, rhs.get_allowed());
+        self.op_on_whole_ctx(Op::Add, &rhs);
     }
 }
 
 impl BitAndAssign for ParserContext {
     fn bitand_assign(&mut self, rhs: Self) {
-        self.and_cell(CellOf::Expectations, rhs.get_expectations());
-        self.and_cell(CellOf::RecoverySet, rhs.get_recovery_set());
-        self.and_cell(CellOf::Allowed, rhs.get_allowed());
+        self.op_on_whole_ctx(Op::And, &rhs);
     }
 }
 
@@ -205,42 +251,32 @@ impl BitAnd for ParserContext {
 
     fn bitand(self, rhs: Self) -> Self::Output {
         let new = Self::new();
-        new.and_cell(CellOf::Expectations, rhs.get_expectations());
-        new.and_cell(CellOf::RecoverySet, rhs.get_recovery_set());
-        new.and_cell(CellOf::Allowed, rhs.get_allowed());
+        new.op_on_whole_ctx(Op::And, &rhs);
         new
     }
 }
 
 impl SubAssign for ParserContext {
     fn sub_assign(&mut self, rhs: Self) {
-        self.sub_cell(CellOf::Expectations, rhs.get_expectations());
-        self.sub_cell(CellOf::RecoverySet, rhs.get_recovery_set());
-        self.sub_cell(CellOf::Allowed, rhs.get_allowed());
+        self.op_on_whole_ctx(Op::Sub, &rhs);
     }
 }
 
 impl AddAssign for &mut ParserContext {
     fn add_assign(&mut self, rhs: Self) {
-        self.add_cell(CellOf::Expectations, rhs.get_expectations());
-        self.add_cell(CellOf::RecoverySet, rhs.get_recovery_set());
-        self.add_cell(CellOf::Allowed, rhs.get_allowed());
+        self.op_on_whole_ctx(Op::Add, rhs);
     }
 }
 
 impl SubAssign for &mut ParserContext {
     fn sub_assign(&mut self, rhs: Self) {
-        self.sub_cell(CellOf::Expectations, rhs.get_expectations());
-        self.sub_cell(CellOf::RecoverySet, rhs.get_recovery_set());
-        self.sub_cell(CellOf::Allowed, rhs.get_allowed());
+        self.op_on_whole_ctx(Op::Sub, rhs);
     }
 }
 
 impl BitAndAssign for &mut ParserContext {
     fn bitand_assign(&mut self, rhs: Self) {
-        self.and_cell(CellOf::Expectations, rhs.get_expectations());
-        self.and_cell(CellOf::RecoverySet, rhs.get_recovery_set());
-        self.and_cell(CellOf::Allowed, rhs.get_allowed());
+        self.op_on_whole_ctx(Op::And, rhs);
     }
 }
 
@@ -249,9 +285,7 @@ impl Not for ParserContext {
 
     fn not(self) -> Self::Output {
         let flipped = Self::new();
-        flipped.not_cell(CellOf::Expectations);
-        flipped.not_cell(CellOf::RecoverySet);
-        flipped.not_cell(CellOf::Allowed);
+        flipped.not_whole_ctx();
         flipped
     }
 }
@@ -263,6 +297,7 @@ impl From<&[SyntaxKindBitSet]> for ParserContext {
             expectations: CelledBits::with(value[0]),
             recovery_set: CelledBits::with(value[1]),
             allowed: CelledBits::with(value[2]),
+            in_the_middle_of: CelledBits::new(),
         }
     }
 }
