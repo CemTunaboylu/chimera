@@ -275,6 +275,10 @@ impl SyntaxKind {
         use SyntaxKind::*;
         let mut context_update = [RestrictionType::None; 4];
         match self {
+            BufferLit | TensorLit => {
+                context_update[1] = RestrictionType::Sub([Semi, RBrack].as_ref().into());
+                context_update[2] = RestrictionType::Sub([RBrack].as_ref().into());
+            }
             Condition => {
                 context_update[1] = RestrictionType::Add([LBrace, KwElif, KwElse].as_ref().into());
                 let operators: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
@@ -287,6 +291,20 @@ impl SyntaxKind {
             }
             PrefixUnaryOp => {
                 context_update[2] = RestrictionType::Add(SyntaxKind::operators().as_ref().into());
+            }
+            Indexing => {
+                let non_assigning_operators: SyntaxKindBitSet = non_assigning_operators();
+                context_update[2] = RestrictionType::Add(non_assigning_operators);
+            }
+            LBrack => {
+                context_update[1] = RestrictionType::Sub([LBrack, RBrack].as_ref().into());
+            }
+            RBrack => {
+                context_update[1] = RestrictionType::Sub([LBrack, RBrack].as_ref().into());
+            }
+            TypeHint | DimHints => {
+                context_update[1] = RestrictionType::Sub([Gt].as_ref().into());
+                context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
             }
             VarDef => {
                 // ! FIXME: this is a hack, I need to find a better way to do expect things IN ORDER
