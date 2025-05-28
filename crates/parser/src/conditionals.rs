@@ -3,7 +3,7 @@ use crate::{
     parser::{IsNext, Parser},
 };
 
-use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
+use syntax::syntax_kind::SyntaxKind::*;
 
 #[allow(unused_variables)]
 impl Parser<'_> {
@@ -12,9 +12,8 @@ impl Parser<'_> {
         let marker = self.start();
         let cond_marker = self.start();
         self.expect_and_bump(KwIf);
-
         {
-            let anchor = self.impose_condition_parsing_restrictions_for_control_flow();
+            let anchor = self.impose_restrictions_of_currently_parsing_on_context(Condition);
             if self.parse_condition().is_none() {
                 self.recover_with_msg("if expects a condition", "");
             }
@@ -27,7 +26,7 @@ impl Parser<'_> {
             let cond_marker = self.start();
             self.expect_and_bump(KwElif);
             {
-                let anchor = self.impose_condition_parsing_restrictions_for_control_flow();
+                let anchor = self.impose_restrictions_of_currently_parsing_on_context(Condition);
                 if self.parse_condition().is_none() {
                     self.recover_with_msg("elif expects a condition", "");
                 }
@@ -45,15 +44,6 @@ impl Parser<'_> {
 
         let finished_as_expr = self.complete_marker_with(marker, ControlFlow);
         Some(finished_as_expr)
-    }
-
-    pub fn impose_condition_parsing_restrictions_for_control_flow(&self) -> RollingBackAnchor {
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.allow([KwTrue, KwFalse, LParen].as_ref());
-        ctx.forbid([StructLit, LBrace].as_ref());
-        ctx.disallow_recovery_of([LBrace, KwElif, KwElse].as_ref());
-        rollback_after_drop
     }
 }
 

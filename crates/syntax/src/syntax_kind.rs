@@ -276,7 +276,11 @@ impl SyntaxKind {
         let mut context_update = [RestrictionType::None; 4];
         match self {
             Condition => {
-                context_update[0] = RestrictionType::Add(SyntaxKind::operators().as_ref().into());
+                context_update[1] = RestrictionType::Add([LBrace, KwElif, KwElse].as_ref().into());
+                let operators: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+                let booleans_and_paren: SyntaxKindBitSet =
+                    [KwTrue, KwFalse, LParen].as_ref().into();
+                context_update[2] = RestrictionType::Override(operators + booleans_and_paren);
             }
             Jump | Return => {
                 context_update[0] = RestrictionType::Add(Semi.into());
