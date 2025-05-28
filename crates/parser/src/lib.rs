@@ -16,6 +16,7 @@ mod recovery;
 mod sink;
 pub mod statement;
 pub mod structure;
+pub mod var_def;
 
 #[cfg(test)]
 mod tests {
