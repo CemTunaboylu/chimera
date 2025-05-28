@@ -8,8 +8,8 @@ use std::cell::RefCell;
 
 use lexer::lexer::Lexer;
 use syntax::{
-    Syntax, anchor::RollingBackAnchor, bitset::SyntaxKindBitSet, context::ParserContext,
-    syntax_kind::SyntaxKind,
+    RestrictionType, Syntax, anchor::RollingBackAnchor, bitset::SyntaxKindBitSet,
+    context::ParserContext, syntax_kind::SyntaxKind,
 };
 
 use miette::Result as MietteResult;
@@ -87,27 +87,45 @@ impl<'input> Parser<'input> {
         anchor
     }
 
-    pub fn impose_restrictions_on_context(&self, syntax: Syntax) -> RollingBackAnchor {
+    fn rollback_anchor_with_new_restrictions(
+        &self,
+        context_updates: [RestrictionType; 4],
+    ) -> RollingBackAnchor {
         let rollback_when_dropped = self.roll_back_context_after_drop();
-
-        let context_updates = syntax.imposed_restrictions();
         let matching_bitsets = {
             let ctx = self.context.borrow();
             let e = ctx.get_expectations();
             let rc = ctx.get_recovery_set();
             let a = ctx.get_allowed();
+            let im = ctx.get_in_the_middle_of();
 
-            [e, rc, a]
+            [e, rc, a, im]
         };
-
         let applied: ThinVec<SyntaxKindBitSet> = matching_bitsets
             .into_iter()
             .zip(context_updates.iter())
             .map(|(bs, rtype)| rtype.apply(bs))
             .collect();
 
-        self.context.borrow().take(applied.as_ref().into());
+        let new: ParserContext = applied.as_ref().into();
+        // new.set_in_the_middle_of(self.context.borrow().get_in_the_middle_of());
+        self.context.borrow().take(new);
         rollback_when_dropped
+    }
+
+    pub fn impose_restrictions_on_context(&self, syntax: Syntax) -> RollingBackAnchor {
+        let context_updates = syntax.imposed_restrictions();
+        self.rollback_anchor_with_new_restrictions(context_updates)
+    }
+
+    pub fn impose_restrictions_of_currently_parsing_on_context(
+        &self,
+        kind: SyntaxKind,
+    ) -> RollingBackAnchor {
+        let context_updates = kind.imposed_restrictions();
+        let rollback_anchor = self.rollback_anchor_with_new_restrictions(context_updates);
+        self.context.borrow().set_in_the_middle_of(kind);
+        rollback_anchor
     }
 
     pub fn expect_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
@@ -140,6 +158,10 @@ impl<'input> Parser<'input> {
 
     pub fn is_expected(&self, e: impl Into<SyntaxKindBitSet>) -> bool {
         self.context.borrow().is_expected(e)
+    }
+
+    pub fn is_in_the_middle_of_parsing(&self, kind: SyntaxKind) -> bool {
+        self.context.borrow().is_in_the_middle_of(kind)
     }
 
     pub fn is_allowed(&self, e: impl Into<SyntaxKindBitSet>) -> bool {

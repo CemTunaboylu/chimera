@@ -1,11 +1,6 @@
 use crate::{operator::starting_precedence, parse::Finished, parser::Parser};
 
-use syntax::{
-    anchor::RollingBackAnchor,
-    bitset::SyntaxKindBitSet,
-    non_assigning_operators,
-    syntax_kind::SyntaxKind::{self, *},
-};
+use syntax::syntax_kind::SyntaxKind::*;
 
 impl Parser<'_> {
     pub fn parse_statement(&self) -> Option<Finished> {
@@ -39,25 +34,13 @@ impl Parser<'_> {
         marker
     }
 
-    fn impose_var_def_restrictions(&self) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.expect_in_ctx([Ident, Semi, VarDef, Eq].as_ref());
-        let ctx = self.context.borrow();
-        ctx.forbid_all();
-        let non_assignments: SyntaxKindBitSet = non_assigning_operators();
-        ctx.allow(non_assignments);
-        ctx.allow(SyntaxKind::can_be_parameter().as_ref());
-        ctx.allow(SyntaxKind::opening_delimiters().as_ref());
-        ctx.allow([Eq, Ident, Semi, VarDef, VarRef, SelfRef, StructLit].as_ref());
-        rollback_when_dropped
-    }
-
     #[allow(unused_variables)]
     pub fn parse_variable_def(&self) -> Option<Finished> {
         let marker = self.start();
         self.expect_and_bump(KwLet);
 
-        let rollback_when_dropped = self.impose_var_def_restrictions();
+        let rollback_when_dropped =
+            self.impose_restrictions_of_currently_parsing_on_context(VarDef);
 
         if self
             .parse_expression_until_binding_power(starting_precedence())

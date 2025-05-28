@@ -2,6 +2,8 @@ use lexer::token_kind::TokenKind;
 use num_derive::{FromPrimitive, ToPrimitive};
 use thin_vec::{ThinVec, thin_vec};
 
+use crate::{RestrictionType, bitset::SyntaxKindBitSet, non_assigning_operators};
+
 #[derive(Copy, Clone, Debug, FromPrimitive, Eq, Hash, Ord, PartialEq, PartialOrd, ToPrimitive)]
 pub enum SyntaxKind {
     // recovering
@@ -267,6 +269,32 @@ impl SyntaxKind {
     pub fn is_trivia(self) -> bool {
         use SyntaxKind::*;
         matches!(self, Whitespace | Comment | NullTerm)
+    }
+
+    pub fn imposed_restrictions(&self) -> [RestrictionType; 4] {
+        use SyntaxKind::*;
+        let mut context_update = [RestrictionType::None; 4];
+        match self {
+            Condition => {
+                context_update[0] = RestrictionType::Add(SyntaxKind::operators().as_ref().into());
+            }
+            VarDef => {
+                context_update[0] = RestrictionType::Add([Eq, Ident, Semi].as_slice().into());
+                let non_assignments: SyntaxKindBitSet = non_assigning_operators();
+                let can_be_parameter: SyntaxKindBitSet =
+                    SyntaxKind::can_be_parameter().as_ref().into();
+                let opening_delimiters: SyntaxKindBitSet =
+                    SyntaxKind::opening_delimiters().as_ref().into();
+                let exceptionals: SyntaxKindBitSet = [Eq, Ident, Semi, VarRef, SelfRef, StructLit]
+                    .as_ref()
+                    .into();
+                context_update[2] = RestrictionType::Override(
+                    non_assignments + can_be_parameter + opening_delimiters + exceptionals,
+                );
+            }
+            _ => {}
+        }
+        context_update
     }
 }
 

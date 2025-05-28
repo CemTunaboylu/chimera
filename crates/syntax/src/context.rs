@@ -202,8 +202,18 @@ impl ParserContext {
         self.allowed.get_cell_as_ref().get().intersect(res)
     }
 
-    fn get_in_the_middle_of(&self) -> SyntaxKindBitSet {
+    pub fn get_in_the_middle_of(&self) -> SyntaxKindBitSet {
         self.in_the_middle_of.get_cell_as_ref().get()
+    }
+    pub fn is_in_the_middle_of(&self, kind: SyntaxKind) -> bool {
+        self.in_the_middle_of
+            .get_cell_as_ref()
+            .get()
+            .contains(&kind)
+    }
+    pub fn set_in_the_middle_of(&self, to: impl Into<SyntaxKindBitSet>) {
+        let cell = self.in_the_middle_of.get_cell_as_ref();
+        cell.set(to.into());
     }
 
     fn op_on_ctx_cell(&self, op: Op, cell: CellOf, other: impl Into<SyntaxKindBitSet>) {
@@ -296,12 +306,13 @@ impl Not for ParserContext {
 
 impl From<&[SyntaxKindBitSet]> for ParserContext {
     fn from(value: &[SyntaxKindBitSet]) -> Self {
-        assert!(value.len() == 3);
+        assert!(value.len() == 4);
         Self {
-            expectations: CelledBits::with(value[0]),
+            expectation: CelledBits::with(value[0]),
             recovery_set: CelledBits::with(value[1]),
             allowed: CelledBits::with(value[2]),
-            in_the_middle_of: CelledBits::new(),
+            // in_the_middle_of: CelledBits::new(),
+            in_the_middle_of: CelledBits::with(value[3]),
         }
     }
 }

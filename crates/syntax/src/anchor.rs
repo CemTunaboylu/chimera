@@ -2,7 +2,7 @@ use crate::{bitset::SyntaxKindBitSet, context::ParserContext};
 
 pub struct RollingBackAnchor<'caller> {
     reference: &'caller ParserContext,
-    syntax_sets: [SyntaxKindBitSet; 3],
+    syntax_sets: [SyntaxKindBitSet; 4],
 }
 
 impl RollingBackAnchor<'_> {
@@ -12,6 +12,7 @@ impl RollingBackAnchor<'_> {
             as_ref.get_expectations(),
             as_ref.get_recovery_set(),
             as_ref.get_allowed(),
+            as_ref.get_in_the_middle_of(),
         ];
         Self {
             reference: as_ref,

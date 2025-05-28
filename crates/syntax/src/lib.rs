@@ -132,36 +132,21 @@ impl Syntax {
         self.token_type == token_type
     }
 
-    // TODO: fix this bullshit!
-    pub fn imposed_restrictions(&self) -> [RestrictionType; 3] {
+    pub fn imposed_restrictions(&self) -> [RestrictionType; 4] {
         use SyntaxKind::*;
-        let mut context_update = [RestrictionType::None; 3];
+        let mut context_update = [RestrictionType::None; 4];
         match self.token_type {
             TokenType::OpeningDelimiter(closing) => {
-                let mut expectations = SyntaxKindBitSet::empty();
                 let closing_syntax_kind = SyntaxKind::from(closing);
-                expectations += closing_syntax_kind.into();
-                context_update[0] = RestrictionType::Add(expectations);
-
-                let mut recovery_set = SyntaxKindBitSet::empty();
-                recovery_set += closing_syntax_kind.into();
-                // recovery_set += SyntaxKind::Semi.into();
-                // context_update[1] = RestrictionType::Override(recovery_set);
-                context_update[1] = RestrictionType::Add(recovery_set);
-
-                let mut allowed = SyntaxKindBitSet::empty();
-                allowed += closing_syntax_kind.into();
-                // context_update[2] = RestrictionType::Override(allowed);
-                context_update[2] = RestrictionType::Add(allowed);
+                // expectation
+                context_update[0] = RestrictionType::Add(closing_syntax_kind.into());
+                // recovery set
+                context_update[1] = RestrictionType::Add(closing_syntax_kind.into());
+                // allowed
+                context_update[2] = RestrictionType::Add(closing_syntax_kind.into());
             }
             TokenType::Operator if is_an_assignment(&self.kind) => {
-                let mut expectations = SyntaxKindBitSet::empty();
-                expectations += Semi.into();
-                context_update[0] = RestrictionType::Add(expectations);
-
-                // let mut recovery_set = SyntaxKindBitSet::empty();
-                // recovery_set += Semi.into();
-                // context_update[1] = RestrictionType::Add(recovery_set);
+                context_update[0] = RestrictionType::Add(Semi.into());
             }
             _ => {}
         }
