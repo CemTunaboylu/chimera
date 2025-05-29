@@ -86,7 +86,6 @@ enum Op {
     Add,
     And,
     Sub,
-    Not,
 }
 impl ParserContext {
     pub fn new() -> Self {
@@ -221,7 +220,6 @@ impl ParserContext {
             Op::Add => self.add_cell(cell, other.into()),
             Op::And => self.and_cell(cell, other.into()),
             Op::Sub => self.sub_cell(cell, other.into()),
-            Op::Not => self.not_cell(cell),
         }
     }
     fn not_whole_ctx(&self) {
