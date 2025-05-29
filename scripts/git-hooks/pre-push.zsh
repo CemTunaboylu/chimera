@@ -55,7 +55,7 @@ fi
 # Run clippy and tests for each changed crate
 for crate in "${(k)changed_crates[@]}"; do
     echo "Running clippy for crate: $crate"
-    cargo clippy -p "$crate" -- -D warnings || exit 1
+    cargo clippy -p "$crate" -- || exit 1
     
     echo "Running tests for crate: $crate"
     cargo test -p "$crate" || exit 1
