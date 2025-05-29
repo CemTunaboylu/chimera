@@ -264,8 +264,6 @@ impl Parser<'_> {
         let finished = if self.is_next(LParen) {
             self.parse_call(marker)
         } else if self.is_next(LBrack) {
-            // TODO: bring this in to the middle of instead
-            self.expect_in_ctx(ContainerRef);
             self.parse_container_indexing();
             self.complete_marker_with(marker, ContainerRef)
         } else if self.is_next(LBrace) && self.is_allowed(StructLit) {
