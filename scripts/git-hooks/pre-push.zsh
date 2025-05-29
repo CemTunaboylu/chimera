@@ -5,16 +5,29 @@ set -e
 
 # Get the remote branch we're pushing to
 remote="$1"
-remote_ref="$2"
+url="$2"
 
-# Get the remote branch name
-while read local_ref local_sha remote_ref remote_sha
-do
-    remote_branch=${remote_ref#refs/heads/}
-done
+# Get the current branch name
+current_branch=$(git symbolic-ref --short HEAD)
 
-# Get list of changed files compared to remote HEAD
-changed_files=$(git diff --name-only origin/"$remote_branch"...HEAD)
+# Get list of changed files compared to remote branch
+# First try to get the remote tracking branch
+tracking_branch=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null || echo "")
+
+if [ -z "$tracking_branch" ]; then
+    # If no tracking branch, compare with master/main
+    if git show-ref --verify --quiet refs/remotes/origin/main; then
+        tracking_branch="origin/main"
+    elif git show-ref --verify --quiet refs/remotes/origin/master; then
+        tracking_branch="origin/master"
+    else
+        echo "No tracking branch found and neither main nor master exists on remote"
+        exit 1
+    fi
+fi
+
+# Get changed files
+changed_files=$(git diff --name-only $tracking_branch...HEAD)
 
 # Function to extract crate name from path
 get_crate_name() {
@@ -25,22 +38,22 @@ get_crate_name() {
 }
 
 # Get unique crate names that have changes
-declare -A changed_crates
-for file in $changed_files; do
+typeset -A changed_crates
+for file in ${(f)changed_files}; do
     crate_name=$(get_crate_name "$file")
     if [ ! -z "$crate_name" ]; then
-        changed_crates["$crate_name"]=1
+        changed_crates[$crate_name]=1
     fi
 done
 
 # If no crates have changes, exit successfully
-if [ ${#changed_crates[@]} -eq 0 ]; then
+if [ ${#changed_crates} -eq 0 ]; then
     echo "No changes in any crates, skipping checks"
     exit 0
 fi
 
 # Run clippy and tests for each changed crate
-for crate in "${!changed_crates[@]}"; do
+for crate in "${(k)changed_crates[@]}"; do
     echo "Running clippy for crate: $crate"
     cargo clippy -p "$crate" -- -D warnings || exit 1
     

@@ -4,7 +4,7 @@
 set -e
 
 # Get the directory where this script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="${0:A:h}"
 HOOKS_DIR="$SCRIPT_DIR/git-hooks"
 GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
 
