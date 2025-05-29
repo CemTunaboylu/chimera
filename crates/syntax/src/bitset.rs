@@ -127,6 +127,7 @@ impl Not for SyntaxKindBitSet {
     }
 }
 
+#[deny(clippy::from_over_into)]
 impl Into<ThinVec<SyntaxKind>> for SyntaxKindBitSet {
     fn into(self) -> ThinVec<SyntaxKind> {
         let mut bits = self.0;
