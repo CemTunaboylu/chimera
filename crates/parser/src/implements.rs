@@ -3,7 +3,7 @@ use crate::{
     parser::{IsNext, Parser},
 };
 
-use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
+use syntax::syntax_kind::SyntaxKind::*;
 
 #[allow(unused_variables)]
 impl Parser<'_> {
@@ -13,54 +13,28 @@ impl Parser<'_> {
         let marker = self.start();
         self.expect_and_bump(KwImpl);
         {
-            let rollback_when_dropped = self.impose_restrictions_for_identifier();
+            let rollback_when_dropped = self.impose_restrictions_of_kind_on_context(Ident);
             self.expect_and_bump_as(Ident, StructAsType);
         }
         {
-            let rollback_when_dropped = self.impose_restrictions_for_lbrace();
+            let rollback_when_dropped = self.impose_restrictions_of_kind_on_context(LBrace);
             self.expect_and_bump(LBrace);
         }
 
         self.parse_methods();
 
         {
-            let rollback_when_dropped = self.impose_restrictions_for_rbrace();
+            let rollback_when_dropped = self.impose_restrictions_of_kind_on_context(RBrace);
             self.expect_and_bump(RBrace);
         }
 
         Some(self.complete_marker_with(marker, ImplBlock))
     }
 
-    fn impose_restrictions_for_identifier(&self) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.disallow_recovery_of(LBrace);
-        ctx.allow_only(Ident);
-        rollback_when_dropped
-    }
-
-    fn impose_restrictions_for_lbrace(&self) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.disallow_recovery_of(RBrace);
-        ctx.allow_only(LBrace);
-        rollback_when_dropped
-    }
-
-    fn impose_restrictions_for_rbrace(&self) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.allow_only(RBrace);
-        rollback_when_dropped
-    }
-
     #[allow(unused_variables)]
     pub fn parse_methods(&self) {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.dont_recover_in_ctx(RBrace);
-
+        let rollback_when_dropped = self.impose_restrictions_of_kind_on_context(RBrace);
         while IsNext::No == self.is_next_strict(RBrace) {
-            println!("next: {:?}", self.peek());
             self.parse_function_def();
         }
     }

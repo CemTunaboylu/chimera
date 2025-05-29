@@ -19,15 +19,15 @@ use SyntaxKind::*;
 pub type CustomExpectationOnSyntax = fn(&Syntax) -> bool;
 
 #[derive(Clone, Debug)]
-pub enum SeparatedElement {
+pub enum Element {
     Kind(SyntaxKind),
     KindAs(SyntaxKind, SyntaxKind),
     InSet(SyntaxKindBitSet),
     KindWithMarker(SyntaxKind, SyntaxKind),
     Optional(SyntaxKindBitSet),
-    RefMut(ThinVec<SeparatedElement>),
+    RefMut(ThinVec<Element>),
     Fn(CustomExpectationOnSyntax),
-    Branched(ThinVec<SeparatedElement>, ThinVec<SeparatedElement>),
+    Branched(ThinVec<Element>, ThinVec<Element>),
     ParseExprWith(Bound),
 }
 
@@ -46,7 +46,7 @@ impl Parser<'_> {
 
     pub fn bump_separated_by(
         &self,
-        elements_in_order: &ThinVec<SeparatedElement>,
+        elements_in_order: &ThinVec<Element>,
         separator: SyntaxKind,
         unwanted: impl Into<SyntaxKindBitSet>,
     ) {
@@ -58,7 +58,7 @@ impl Parser<'_> {
     }
     pub fn parse_separated_by(
         &self,
-        elements_in_order: &ThinVec<SeparatedElement>,
+        elements_in_order: &ThinVec<Element>,
         wrapping_kind_to_complete: SyntaxKind,
         separator: SyntaxKind,
         unwanted: impl Into<SyntaxKindBitSet>,
@@ -74,8 +74,8 @@ impl Parser<'_> {
         }
     }
 
-    fn does_first_element_pass(&self, s: &SeparatedElement) -> bool {
-        use SeparatedElement::*;
+    fn does_first_element_pass(&self, s: &Element) -> bool {
+        use Element::*;
         match s {
             &Kind(syntax_kind) => self.is_next(syntax_kind),
             &KindAs(syntax_kind, _) => self.is_next(syntax_kind),
@@ -88,8 +88,8 @@ impl Parser<'_> {
             &InSet(syntax_kind_bit_set) => self.is_next_in(syntax_kind_bit_set),
         }
     }
-    pub fn parse_with(&self, elements_in_order: &ThinVec<SeparatedElement>) {
-        use SeparatedElement::*;
+    pub fn parse_with(&self, elements_in_order: &ThinVec<Element>) {
+        use Element::*;
         for element in elements_in_order.iter() {
             match element {
                 &Kind(exp_kind) => {
@@ -138,8 +138,8 @@ impl Parser<'_> {
             self.bump_with_marker(Condition)
         } else {
             let cond_marker = self.start();
-            let rollback_when_dropped = self.roll_back_context_after_drop();
-            self.expect_in_ctx(SyntaxKind::operators().as_ref());
+            let rollback_when_dropped =
+                self.impose_restrictions_of_currently_parsing_on_context(SyntaxKind::Condition);
             self.parse_expression_until_binding_power(starting_precedence());
             self.complete_marker_with(cond_marker, Condition)
         };
@@ -158,13 +158,10 @@ impl Parser<'_> {
                 }
                 Ok(syntax) => {
                     let kind = syntax.get_kind();
-                    if !is_an_operator(&kind) {
+                    if !is_an_operator(kind) {
                         break;
                     }
-                    if !self.is_allowed(kind) {
-                        if self.is_expected(kind) {
-                            break;
-                        }
+                    if !self.is_allowed(kind) && !self.is_expected(kind) {
                         // note: returns None thus shortcircuits from here
                         self.recover_restricted(kind)?;
                     }
@@ -182,8 +179,8 @@ impl Parser<'_> {
                             self.parse_binary_operation(syntax, &min_precedence, &lhs_marker)
                         {
                             lhs_marker = marker;
-                            if is_an_assignment(&kind)
-                                && !self.context.borrow().is_expected(VarDef)
+                            if is_an_assignment(kind)
+                                && !self.is_in_the_middle_of_parsing(VarDef)
                                 && self.is_next(Semi)
                             {
                                 let semi_marker = self.precede_marker_with(&lhs_marker);
@@ -217,21 +214,16 @@ impl Parser<'_> {
             Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
             // & (ref), ! (bool negate), - (negative), * (deref)
             And | Excl | Minus | Star => self.parse_prefix_unary_operation(kind),
-            Or => self.parse_lambda_def(),
+            // Note: OrOr is a special case for a lambda definition with no parameters, and since OrOr is a binary infix operator,
+            // we don't expect it to be in left-hand side expression, thus attempt to parse it as a lambda definition
+            Or | OrOr => self.parse_lambda_def(),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
-            typing if is_a_type(&typing) || matches!(typing, KwBuffer | KwTensor) => {
+            typing if is_a_type(typing) || matches!(typing, KwBuffer | KwTensor) => {
                 self.parse_type(&syntax)
             }
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
-            operator if is_an_operator(&operator) => {
-                // TODO: check this one
-                println!("DIRTY WATERS : {:?}", self.peek());
-                if !self.is_expected(operator) {
-                    self.recover_unmet_expectation();
-                } else if !self.is_allowed(operator) {
-                    // note: returns None thus shortcircuits from here
-                    self.recover_restricted(operator);
-                }
+            operator if is_an_operator(operator) => {
+                self.recover();
                 None
             }
             _ => None,
@@ -240,7 +232,7 @@ impl Parser<'_> {
 
     pub fn parse_type(&self, syntax: &Syntax) -> Option<Finished> {
         let kind = syntax.get_kind();
-        if !self.is_allowed(kind) {
+        if !self.is_allowed(kind) && !self.is_expected(kind) {
             // it returns None thus acts as an early return
             self.recover_restricted(kind)?;
         }
@@ -248,7 +240,7 @@ impl Parser<'_> {
             KwTensor | KwBuffer => return self.parse_container_constructs(syntax),
             // note: a lambda is typed as a function when hinted or as a parameter as in Rust
             KwFn => return self.parse_function_as_type(),
-            t if is_a_type(&t) => {
+            t if is_a_type(t) => {
                 self.bump();
             }
             _ => {}
@@ -272,11 +264,9 @@ impl Parser<'_> {
         let finished = if self.is_next(LParen) {
             self.parse_call(marker)
         } else if self.is_next(LBrack) {
-            self.expect_in_ctx(ContainerRef);
             self.parse_container_indexing();
             self.complete_marker_with(marker, ContainerRef)
         } else if self.is_next(LBrace) && self.is_allowed(StructLit) {
-            // self.expect_in_ctx(StructInit);
             self.parse_struct_init_block();
             self.complete_marker_with(marker, StructLit)
         } else if self.is_next(Colon) {
@@ -295,15 +285,11 @@ impl Parser<'_> {
 
         if IsNext::Yes == self.is_next_strict(Ident) {
             self.expect_and_bump_as(Ident, StructAsType);
-        // } else if IsNext::Yes == self.is_next_strict(KwFn) {
-        //     self.parse_function_as_type();
-        // } else if IsNext::Yes == self.is_next_in_strict(SyntaxKind::types().into()) {
         } else {
             let syntax = self
                 .peek()
                 .expect("to be able to peek")
                 .expect("an ok peeked");
-            // self.bump();
             self.parse_type(&syntax);
         }
         self.complete_marker_with(marker, TypeHint)
@@ -318,11 +304,9 @@ impl Parser<'_> {
         let marker = self.start();
         self.expect_and_bump(KwBreak);
 
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        self.expect_in_ctx(Semi);
+        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Jump);
 
         self.parse_expression_until_binding_power(starting_precedence());
-
         self.expect_and_bump(Semi);
 
         Some(self.complete_marker_with(marker, Jump))
@@ -333,9 +317,7 @@ impl Parser<'_> {
         let marker = self.start();
         self.expect_and_bump(KwReturn);
 
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        self.expect_in_ctx(Semi);
-
+        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Return);
         self.parse_expression_until_binding_power(starting_precedence());
         self.expect_and_bump(Semi);
 
@@ -369,17 +351,6 @@ impl Parser<'_> {
             KwReturn => self.parse_return(),
             KwStruct => self.parse_struct_definition(),
             KwSelf | Kwself => Some(self.bump_with_marker(SelfRef)),
-
-            // Kwself => {
-            //     if self.is_expected([FnCall, FnDef].as_ref()) {
-            //         let marker = self.start();
-            //         self.bump_with_marker(SelfRef);
-            //         Some(self.complete_marker_with(marker, StructAsType))
-            //     } else {
-            //         Some(self.bump_with_marker(SelfRef))
-            //     }
-            // }
-            // KwSelf => Some(self.bump_with_marker(SelfRef)),
             nope => {
                 println!("{:?} is not implemented yet", nope);
                 todo!()
@@ -391,8 +362,8 @@ impl Parser<'_> {
     pub fn parse_prefix_unary_operation(&self, kind: SyntaxKind) -> Option<Finished> {
         let prefix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let marker = self.start();
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        self.expect_in_ctx(SyntaxKind::operators().as_ref());
+        let rollback_after_drop =
+            self.impose_restrictions_of_currently_parsing_on_context(PrefixUnaryOp);
         self.expect_and_bump(kind);
         let bounded_precedence = Bound::from_op(prefix_unary_op.clone());
         _ = self.parse_expression_until_binding_power(bounded_precedence);
@@ -407,7 +378,6 @@ impl Parser<'_> {
     ) -> Option<Finished> {
         let postfix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let precedence = postfix_unary_op.precedence();
-        // note: ? has lower precedence then prefix operators to ensure that &opt? behaves like opt.as_ref().unwrap()
         if min_precedence.gt(&precedence) {
             return None;
         }
@@ -440,14 +410,9 @@ impl Parser<'_> {
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use crate::errors::ParseError;
-
     use super::*;
     use expect_test::{Expect, expect};
-    use miette::Report;
     use parameterized_test::create;
-    use std::ops::Range;
-    use thin_vec::{ThinVec, thin_vec};
 
     pub(crate) fn check(prog: &str, expect: Expect) {
         let parse = Parser::new(prog).parse();

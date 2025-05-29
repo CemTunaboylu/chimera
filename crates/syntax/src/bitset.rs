@@ -28,7 +28,7 @@ impl SyntaxKindBitSet {
     pub fn clear(&mut self) {
         self.0 = 0;
     }
-    pub fn contains(&self, kind: &SyntaxKind) -> bool {
+    pub fn contains(&self, kind: SyntaxKind) -> bool {
         self.0 & (1 << kind.to_u16().unwrap()) != 0
     }
 
@@ -126,12 +126,12 @@ impl Not for SyntaxKindBitSet {
     }
 }
 
-impl Into<ThinVec<SyntaxKind>> for SyntaxKindBitSet {
-    fn into(self) -> ThinVec<SyntaxKind> {
-        let mut bits = self.0;
+impl From<SyntaxKindBitSet> for ThinVec<SyntaxKind> {
+    fn from(val: SyntaxKindBitSet) -> Self {
+        let mut bits = val.0;
         let mut kinds = thin_vec![];
         while !bits.is_zero() {
-            let from_right = (Self::LARGEST_INDEX - bits.leading_zeros()) as i128;
+            let from_right = (SyntaxKindBitSet::LARGEST_INDEX - bits.leading_zeros()) as i128;
             if let Some(kind) = SyntaxKind::from_u16(from_right as u16) {
                 kinds.push(kind);
             }

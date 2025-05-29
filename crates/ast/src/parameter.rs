@@ -111,7 +111,7 @@ impl Param {
             }
             StructAsType => ParamType(By::Value, Type::try_from(node)?),
             SelfRef => ParamType(By::Value, Type::try_from(node)?),
-            type_ if is_a_type(&type_) => ParamType(By::Value, Type::try_from(node)?),
+            type_ if is_a_type(type_) => ParamType(By::Value, Type::try_from(node)?),
             no => {
                 let mut types = SyntaxKind::types();
                 types.extend_from_slice(&[PrefixUnaryOp, Mut, SelfRef]);

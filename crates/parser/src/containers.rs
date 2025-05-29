@@ -1,14 +1,12 @@
 use crate::{
     operator::starting_precedence,
-    parse::{Finished, SeparatedElement, Started},
+    parse::{Element, Finished, Started},
     parser::{IsNext, Parser},
 };
 
 use syntax::{
     Syntax,
-    anchor::RollingBackAnchor,
     bitset::SyntaxKindBitSet,
-    non_assigning_operators,
     syntax_kind::SyntaxKind::{self, *},
 };
 
@@ -46,13 +44,12 @@ impl HintParser {
             parser.recover_until(self.closing_kind);
             return None;
         }
-        let rollback_when_dropped = parser.forbid_all();
-        parser.dont_recover_in_ctx([self.closing_kind].as_ref());
+        let rollback_when_dropped = parser.impose_restrictions_of_kind_on_context(DimHints);
         let elements = if self.parsing_buffer {
             // for buffer to be a static type (allocated on the stack)
             // its size must be known at compile time
             parser.allow_in_ctx([Int, Comma].as_ref());
-            thin_vec![SeparatedElement::Kind(Int)]
+            thin_vec![Element::Kind(Int)]
         } else {
             // tensor, since it is a dynamic type (allocated on the heap)
             // its size can be adjusted dynamically thus can be any expression
@@ -62,9 +59,9 @@ impl HintParser {
             parser.allow_in_ctx(SyntaxKind::operators().as_ref());
             // TODO: seems like a bad idea but solves a lot of problems :)
             parser.forbid_in_ctx(self.closing_kind);
-            thin_vec![SeparatedElement::Branched(
-                thin_vec![SeparatedElement::InSet([Int, Under].as_ref().into())],
-                thin_vec![SeparatedElement::ParseExprWith(starting_precedence())],
+            thin_vec![Element::Branched(
+                thin_vec![Element::InSet([Int, Under].as_ref().into())],
+                thin_vec![Element::ParseExprWith(starting_precedence())],
             )]
         };
         let stopper = [self.closing_kind, Semi, RBrace];
@@ -73,12 +70,14 @@ impl HintParser {
         Some(DimHints)
     }
 
+    #[allow(unused_variables)]
     fn parse_type_hint(&mut self, parser: &Parser) -> Option<SyntaxKind> {
         if self.parsed_type_hint {
             parser.recover_until(self.closing_kind);
             return None;
         }
         // TODO: in case of buffers, we should return an error
+        let rollback_when_dropped = parser.impose_restrictions_of_kind_on_context(TypeHint);
         parser.parse_type(
             &parser
                 .peek()
@@ -94,20 +93,19 @@ impl HintParser {
         if !parser.is_next(self.opening_kind) {
             return;
         }
-        let rollback_when_dropped = parser.impose_tensor_hinting_restrictions(self.closing_kind);
-        let expectations = if self.parsing_buffer {
+        let rollback_when_dropped = parser.impose_restrictions_of_kind_on_context(Gt);
+        let allowed = if self.parsing_buffer {
             [Int, TyBuffer].as_ref()
         } else {
             [Int, TyBuffer, TyTensor, Ident].as_ref()
         };
-        parser.expect_in_ctx(expectations);
+        parser.allow_in_ctx(allowed);
         for _ in 0..2 {
             if !parser.is_next(self.opening_kind) {
                 break;
             }
             parser.expect_and_bump(self.opening_kind);
             let marker = parser.start();
-
             let kind = if let Some(kind) = self.parse(parser) {
                 kind
             } else {
@@ -124,17 +122,14 @@ impl HintParser {
     }
     fn parse(&mut self, parser: &Parser) -> Option<SyntaxKind> {
         let peeked = parser.peek()?.expect("ok to peek");
-
-        use SyntaxKind::*;
-
         match peeked.get_kind() {
-            // note: we can allow any expression since the type inference pass will catch those that
+            // note: we can allow any expression, type inference pass will catch all
             // do not evaluate to Int (usize actually) but it would be more cumbersome, thus this granularity
             op if op.is_unary_operator() && !self.parsing_buffer => self.parse_dim_hints(parser),
             Ident | Under if !self.parsing_buffer => self.parse_dim_hints(parser),
             Int => self.parse_dim_hints(parser),
             // including KwBuffer, KwFn, and KwTensor
-            t if SyntaxKindBitSet::from(SyntaxKind::can_be_parameter().as_ref()).contains(&t) => {
+            t if SyntaxKindBitSet::from(SyntaxKind::can_be_parameter().as_ref()).contains(t) => {
                 self.parse_type_hint(parser)
             }
             _ => {
@@ -151,18 +146,18 @@ impl Parser<'_> {
     // from parsing an identifier and saw a LBrack as well.
     #[allow(unused_variables)]
     pub fn parse_container_indexing(&self) {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.expect_in_ctx(SyntaxKind::operators().as_ref());
-        self.allow_in_ctx(non_assigning_operators());
+        let rollback_when_dropped =
+            self.impose_restrictions_of_currently_parsing_on_context(Indexing);
         while IsNext::Yes == self.is_next_strict(LBrack) {
             let marker = self.start();
             {
-                let rollback_when_dropped = self.disallow_recovery_of_for_indexing(RBrack);
+                let rollback_when_dropped =
+                    self.impose_restrictions_of_currently_parsing_on_context(LBrack);
                 self.expect_and_bump(LBrack);
                 self.parse_expression_until_binding_power(starting_precedence());
             }
             {
-                let rollback_when_dropped = self.disallow_recovery_of_for_indexing(LBrack);
+                self.impose_restrictions_of_currently_parsing_on_context(RBrack);
                 self.expect_and_bump(RBrack);
             }
             self.complete_marker_with(marker, Indexing);
@@ -174,41 +169,23 @@ impl Parser<'_> {
             self.recover();
         }
     }
-    fn disallow_recovery_of_for_indexing(&self, kind: SyntaxKind) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.dont_recover_in_ctx(kind);
-        rollback_when_dropped
-    }
-
     #[allow(unused_variables)]
     pub fn parse_buffer_literal(&self) {
         let marker = self.start();
         {
-            let rollback_when_dropped = self.disallow_recovery_of_for_indexing(RBrack);
+            let rollback_when_dropped =
+                self.impose_restrictions_of_currently_parsing_on_context(LBrack);
             self.expect_and_bump(LBrack);
             self.comma_separated_expressions_until(RBrack, DimValue);
         }
         {
-            let rollback_when_dropped = self.disallow_recovery_of_for_indexing(LBrack);
+            let rollback_when_dropped =
+                self.impose_restrictions_of_currently_parsing_on_context(RBrack);
             self.expect_and_bump(RBrack);
         }
         let dim_values_marker = self.complete_marker_with(marker, BufferLit);
         let literal_marker = self.precede_marker_with(&dim_values_marker);
         self.complete_marker_with(literal_marker, Literal);
-    }
-
-    fn impose_initializer_restrictions(&self, closing: SyntaxKind) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.dont_recover_in_ctx([Semi, closing].as_ref());
-        self.forbid_in_ctx(closing);
-        self.allow_in_ctx(Semi);
-        rollback_when_dropped
-    }
-    fn impose_tensor_hinting_restrictions(&self, closing: SyntaxKind) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.forbid_in_ctx(closing);
-        self.dont_recover_in_ctx([closing].as_ref());
-        rollback_when_dropped
     }
 
     fn comma_separated_expressions_until(
@@ -293,7 +270,13 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_initializer(&self, kind: SyntaxKind, marker: Started) -> Option<Finished> {
         let (opening, closing) = (LBrack, RBrack);
-        let rollback_when_dropped = self.impose_initializer_restrictions(closing);
+        let container_specific_lit = if kind == KwBuffer {
+            BufferLit
+        } else {
+            TensorLit
+        };
+        let rollback_when_dropped = self.impose_restrictions_of_currently_parsing_on_context(kind);
+        self.allow_in_ctx(Semi);
         self.expect_and_bump(opening);
 
         self.parse_expression_until_binding_power(starting_precedence());
@@ -306,6 +289,7 @@ impl Parser<'_> {
             } else if !is_buffer && self.is_next(Ident) {
                 self.parse_starting_with_identifier();
             } else {
+                let rollback_when_dropped = self.impose_restrictions_of_kind_on_context(DimHints);
                 let mut hint_parser = HintParser::dim_hinting(opening, closing, is_buffer);
                 hint_parser.parse_hints(self);
             }
@@ -313,11 +297,6 @@ impl Parser<'_> {
             self.recover_until(closing);
         }
         self.expect_and_bump(closing);
-        let container_specific_lit = if kind == KwBuffer {
-            BufferLit
-        } else {
-            TensorLit
-        };
         let complete = self.complete_marker_with(marker, container_specific_lit);
         let wrapping_lit_marker = self.precede_marker_with(&complete);
         Some(self.complete_marker_with(wrapping_lit_marker, Literal))

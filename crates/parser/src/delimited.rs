@@ -7,7 +7,6 @@ use crate::{
 use lexer::token_type::TokenType;
 use syntax::{
     Syntax,
-    anchor::RollingBackAnchor,
     syntax_kind::SyntaxKind::{self, *},
 };
 
@@ -57,21 +56,14 @@ impl Parser<'_> {
     pub fn parse_block(&self) -> Option<Finished> {
         let marker = self.start();
         {
-            let rollback_when_dropped = self.impose_block_restrictions();
+            let rollback_when_dropped =
+                self.impose_restrictions_of_currently_parsing_on_context(Block);
             self.expect_and_bump(LBrace);
             while IsNext::No == self.is_next_strict(RBrace) && self.parse_statement().is_some() {}
         }
 
         self.expect_and_bump(RBrace);
         Some(self.complete_marker_with(marker, Block))
-    }
-    fn impose_block_restrictions(&self) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.forbid(RBrace);
-        ctx.disallow_recovery_of(RBrace);
-        self.expect_in_ctx(SyntaxKind::operators().as_ref());
-        rollback_when_dropped
     }
 }
 

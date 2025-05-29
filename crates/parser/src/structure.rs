@@ -1,6 +1,6 @@
 use crate::{
     operator::starting_precedence,
-    parse::{Finished, SeparatedElement},
+    parse::{Finished, Element},
     parser::Parser,
 };
 
@@ -41,7 +41,7 @@ impl Parser<'_> {
 
     #[allow(unused_variables)]
     pub fn parse_fields(&self) {
-        use SeparatedElement::*;
+        use Element::*;
         let idents = thin_vec![
             Kind(Ident),
             Kind(Colon),
@@ -61,7 +61,7 @@ impl Parser<'_> {
         let rollback_when_dropped = self.roll_back_context_after_drop();
         self.dont_recover_in_ctx(RBrace);
 
-        use SeparatedElement::*;
+        use Element::*;
         let idents = thin_vec![
             Kind(Ident),
             Kind(Colon),

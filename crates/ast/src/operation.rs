@@ -47,7 +47,7 @@ impl Binary {
             ));
         }
         let op = get_token_with(infix_bin_op_node, |token: &SyntaxToken| {
-            is_a_binary_operator(&token.kind())
+            is_a_binary_operator(token.kind())
         })
         .map(|t| t.kind());
         Ok(Self::Infix(PreComputed {

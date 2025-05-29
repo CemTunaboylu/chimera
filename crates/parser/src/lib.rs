@@ -16,6 +16,7 @@ mod recovery;
 mod sink;
 pub mod statement;
 pub mod structure;
+pub mod var_def;
 
 #[cfg(test)]
 mod tests {
@@ -26,8 +27,6 @@ mod tests {
     };
 
     use crate::parser::Parser;
-
-    // use crate::{parse_behaviors::IgnoreTrivia, parser::Parser};
 
     const TEST_DIR: &str = "test_programs";
     const OK: &str = "ok";
@@ -40,7 +39,6 @@ mod tests {
         Ok(file_contents)
     }
 
-    // fn parse_file_contents(file_path: PathBuf, expect_errs: bool) {
     fn parse_file_contents(file_path: PathBuf, expect_errs: bool) {
         assert!(
             file_path.to_str().unwrap().ends_with(".chi"),

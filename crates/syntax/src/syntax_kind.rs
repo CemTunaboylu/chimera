@@ -2,6 +2,8 @@ use lexer::token_kind::TokenKind;
 use num_derive::{FromPrimitive, ToPrimitive};
 use thin_vec::{ThinVec, thin_vec};
 
+use crate::{RestrictionType, bitset::SyntaxKindBitSet, non_assigning_operators};
+
 #[derive(Copy, Clone, Debug, FromPrimitive, Eq, Hash, Ord, PartialEq, PartialOrd, ToPrimitive)]
 pub enum SyntaxKind {
     // recovering
@@ -256,6 +258,11 @@ impl SyntaxKind {
             RArrow, RShift, RShiftEq, Slash, SlashEq, Star, StarEq, Under, Xor,
         ]
     }
+
+    pub fn prefix_unary_operators() -> ThinVec<Self> {
+        use SyntaxKind::*;
+        thin_vec![And, Minus, Excl, Star]
+    }
     pub fn assignments() -> ThinVec<Self> {
         use SyntaxKind::*;
         thin_vec![
@@ -267,6 +274,113 @@ impl SyntaxKind {
     pub fn is_trivia(self) -> bool {
         use SyntaxKind::*;
         matches!(self, Whitespace | Comment | NullTerm)
+    }
+
+    pub fn imposed_restrictions(&self) -> [RestrictionType; 4] {
+        use SyntaxKind::*;
+        let mut context_update = [RestrictionType::None; 4];
+        match self {
+            Block => {
+                context_update[1] = RestrictionType::Add([RBrace].as_ref().into());
+                context_update[2] = RestrictionType::Sub([RBrace, StructAsType].as_ref().into());
+            }
+            BufferLit | TensorLit => {
+                context_update[1] = RestrictionType::Add([Semi, RBrack].as_ref().into());
+                context_update[2] = RestrictionType::Sub([RBrack].as_ref().into());
+            }
+            Call => {
+                let operators: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+                context_update[2] = RestrictionType::Add(operators);
+            }
+            Condition => {
+                context_update[1] = RestrictionType::Add([LBrace, KwElif, KwElse].as_ref().into());
+                let operators: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+                let booleans_and_paren: SyntaxKindBitSet =
+                    [KwTrue, KwFalse, LParen].as_ref().into();
+                context_update[2] = RestrictionType::Override(operators + booleans_and_paren);
+            }
+            FnArg => {
+                context_update[2] = RestrictionType::Add([RParen, StructAsType].as_ref().into());
+            }
+            Ident => {
+                context_update[1] = RestrictionType::Add([LParen, LBrace, LBrack].as_ref().into());
+                context_update[2] = RestrictionType::Sub([LParen, LBrace, LBrack].as_ref().into());
+            }
+            // Note: Prevents for i in arr{} to be parsed as ..., StructLit (arr{})
+            In => context_update[2] = RestrictionType::Sub(StructLit.into()),
+            Indexing => {
+                let non_assigning_operators: SyntaxKindBitSet = non_assigning_operators();
+                context_update[2] = RestrictionType::Add(non_assigning_operators);
+            }
+            Jump | Return => {
+                context_update[0] = RestrictionType::Add(Semi.into());
+            }
+            ParamDecl => {
+                let misc: SyntaxKindBitSet =
+                    [And, Colon, Comma, Ident, KwMut, RParen].as_ref().into();
+                let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
+                context_update[2] = RestrictionType::Override(misc + types);
+            }
+            PrefixUnaryOp => {
+                context_update[2] =
+                    RestrictionType::Add(SyntaxKind::prefix_unary_operators().as_ref().into());
+            }
+            Lambda => {
+                context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
+            }
+            LBrace => {
+                context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
+            }
+            LBrack => {
+                context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
+            }
+            RBrack => {
+                context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
+            }
+            RetType => {
+                context_update[0] = RestrictionType::Add([StructAsType].as_ref().into());
+                let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
+                let ref_mut_struct_as_type: SyntaxKindBitSet =
+                    [And, Mut, StructAsType].as_ref().into();
+                context_update[2] = RestrictionType::Add(types + ref_mut_struct_as_type);
+            }
+            RParen => {
+                context_update[1] = RestrictionType::Add([LParen, RParen].as_ref().into());
+            }
+            Gt => {
+                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
+                context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
+            }
+            TypeHint => {
+                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
+                context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
+            }
+            DimHints => {
+                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
+                context_update[2] = RestrictionType::Override([].as_ref().into());
+            }
+            VarDef => {
+                // ! FIXME: this is a hack, I need to find a better way to expect things IN ORDER
+                context_update[0] = RestrictionType::Add([Eq, Ident, Semi].as_slice().into());
+                let non_assignments: SyntaxKindBitSet = non_assigning_operators();
+                let can_be_parameter: SyntaxKindBitSet =
+                    SyntaxKind::can_be_parameter().as_ref().into();
+                let opening_delimiters: SyntaxKindBitSet =
+                    SyntaxKind::opening_delimiters().as_ref().into();
+                let exceptionals: SyntaxKindBitSet = [Eq, Ident, Semi, VarRef, SelfRef, StructLit]
+                    .as_ref()
+                    .into();
+                context_update[2] = RestrictionType::Override(
+                    non_assignments + can_be_parameter + opening_delimiters + exceptionals,
+                );
+            }
+            WhileLoop => {
+                context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
+                context_update[2] = RestrictionType::Add([KwTrue, KwFalse, LParen].as_ref().into());
+            }
+            _ => {}
+        }
+        context_update
     }
 }
 
