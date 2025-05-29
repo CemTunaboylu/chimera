@@ -253,7 +253,6 @@ impl Parser<'_> {
     // Possible options: a variable reference, function/method call or an iterable indexing
     #[allow(unused_variables)]
     pub fn parse_starting_with_identifier(&self) -> Option<Finished> {
-        // TODO: bring this in to the middle of instead
         if self.is_expected(StructAsType) {
             self.expect_and_bump_as(Ident, StructAsType);
             return None;
@@ -288,15 +287,11 @@ impl Parser<'_> {
 
         if IsNext::Yes == self.is_next_strict(Ident) {
             self.expect_and_bump_as(Ident, StructAsType);
-        // } else if IsNext::Yes == self.is_next_strict(KwFn) {
-        //     self.parse_function_as_type();
-        // } else if IsNext::Yes == self.is_next_in_strict(SyntaxKind::types().into()) {
         } else {
             let syntax = self
                 .peek()
                 .expect("to be able to peek")
                 .expect("an ok peeked");
-            // self.bump();
             self.parse_type(&syntax);
         }
         self.complete_marker_with(marker, TypeHint)

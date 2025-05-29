@@ -44,8 +44,7 @@ impl HintParser {
             parser.recover_until(self.closing_kind);
             return None;
         }
-        let rollback_when_dropped = parser.forbid_all();
-        parser.dont_recover_in_ctx([self.closing_kind].as_ref());
+        let rollback_when_dropped = parser.impose_restrictions_of_kind_on_context(DimHints);
         let elements = if self.parsing_buffer {
             // for buffer to be a static type (allocated on the stack)
             // its size must be known at compile time
@@ -71,12 +70,14 @@ impl HintParser {
         Some(DimHints)
     }
 
+    #[allow(unused_variables)]
     fn parse_type_hint(&mut self, parser: &Parser) -> Option<SyntaxKind> {
         if self.parsed_type_hint {
             parser.recover_until(self.closing_kind);
             return None;
         }
         // TODO: in case of buffers, we should return an error
+        let rollback_when_dropped = parser.impose_restrictions_of_kind_on_context(TypeHint);
         parser.parse_type(
             &parser
                 .peek()
@@ -92,8 +93,7 @@ impl HintParser {
         if !parser.is_next(self.opening_kind) {
             return;
         }
-        let rollback_when_dropped =
-            parser.impose_restrictions_of_currently_parsing_on_context(TypeHint);
+        let rollback_when_dropped = parser.impose_restrictions_of_kind_on_context(Gt);
         let allowed = if self.parsing_buffer {
             [Int, TyBuffer].as_ref()
         } else {
@@ -289,6 +289,7 @@ impl Parser<'_> {
             } else if !is_buffer && self.is_next(Ident) {
                 self.parse_starting_with_identifier();
             } else {
+                let rollback_when_dropped = self.impose_restrictions_of_kind_on_context(DimHints);
                 let mut hint_parser = HintParser::dim_hinting(opening, closing, is_buffer);
                 hint_parser.parse_hints(self);
             }

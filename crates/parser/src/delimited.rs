@@ -7,7 +7,6 @@ use crate::{
 use lexer::token_type::TokenType;
 use syntax::{
     Syntax,
-    anchor::RollingBackAnchor,
     syntax_kind::SyntaxKind::{self, *},
 };
 

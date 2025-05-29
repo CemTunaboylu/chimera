@@ -4,9 +4,7 @@ use crate::{
     parse::{Element, Finished},
     parser::{IsNext, Parser},
 };
-use syntax::{
-    Syntax, anchor::RollingBackAnchor, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind,
-};
+use syntax::{Syntax, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
 
 use SyntaxKind::*;
 use thin_vec::{ThinVec, thin_vec};
@@ -16,24 +14,21 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_function_def(&self) -> Option<Finished> {
         let marker = self.start();
+        let rollback_after_drop = self.parsing(KwFn);
         self.expect_and_bump(KwFn);
         {
-            let rollback_after_drop = self.roll_back_context_after_drop();
-            self.dont_recover_in_ctx(LParen);
+            let rollback_after_drop = self.impose_restrictions_of_kind_on_context(Ident);
             self.expect_and_bump(Ident);
         }
         self.expect_and_bump(LParen);
         if !self.is_next(RParen) {
-            let rollback_after_drop = self.roll_back_context_after_drop();
-            self.dont_recover_in_ctx(RParen);
-            self.expect_in_ctx(FnDef);
+            let rollback_after_drop = self.impose_restrictions_of_kind_on_context(RParen);
             self.parse_comma_separated_typed_declarations_until(|syntax: Syntax| {
                 !syntax.is_of_kind(RParen)
             });
         }
 
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        self.dont_recover_in_ctx(LBrace);
+        let rollback_after_drop = self.impose_restrictions_of_kind_on_context(LBrace);
         self.expect_and_bump(RParen);
 
         self.parse_return_type_if_any();
@@ -46,11 +41,9 @@ impl Parser<'_> {
     fn parse_return_type_if_any(&self) {
         if self.is_next(RArrow) {
             let ret_type_marker = self.start();
-            let rollback_after_drop = self.roll_back_context_after_drop();
             self.expect_and_bump(RArrow);
-            self.allow_only_in_ctx(SyntaxKind::types().as_ref());
-            self.allow_in_ctx([And, Mut].as_ref());
-            self.expect_in_ctx(StructAsType);
+            let rollback_after_drop =
+                self.impose_restrictions_of_currently_parsing_on_context(RetType);
 
             if self.is_next(And) {
                 self.parse_prefix_unary_operation(And);
@@ -65,8 +58,7 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_lambda_def(&self) -> Option<Finished> {
         let marker = self.start();
-        let rollback_after_drop = self.roll_back_context_after_drop();
-        self.dont_recover_in_ctx(LBrace);
+        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Lambda);
 
         if self.is_next(OrOr) {
             self.expect_and_bump(OrOr);
@@ -98,18 +90,16 @@ impl Parser<'_> {
 
     #[allow(unused_variables)]
     pub fn parse_function_as_type(&self) -> Option<Finished> {
+        let rollback_after_drop = self.parsing(TyFn);
         let marker = self.start();
         self.expect_and_bump(KwFn);
         {
-            let rollback_after_drop = self.roll_back_context_after_drop();
-            self.dont_recover_in_ctx(LParen);
+            let rollback_after_drop = self.impose_restrictions_of_kind_on_context(Ident);
             self.expect_and_bump(Ident);
         }
         self.expect_and_bump(LParen);
         if !self.is_next(RParen) {
-            let rollback_after_drop = self.roll_back_context_after_drop();
-            self.dont_recover_in_ctx(RParen);
-            self.expect_in_ctx(FnDef);
+            let rollback_after_drop = self.impose_restrictions_of_kind_on_context(RParen);
             self.parse_comma_separated_types_until(|syntax: Syntax| !syntax.is_of_kind(RParen));
         }
 
@@ -117,11 +107,9 @@ impl Parser<'_> {
 
         if self.is_next(RArrow) {
             let ret_type_marker = self.start();
-            let rollback_after_drop = self.roll_back_context_after_drop();
             self.expect_and_bump(RArrow);
-            self.allow_only_in_ctx(SyntaxKind::types().as_ref());
-            self.allow_in_ctx([And, Mut].as_ref());
-            self.expect_in_ctx(StructAsType);
+            let rollback_after_drop =
+                self.impose_restrictions_of_currently_parsing_on_context(RetType);
 
             if self.is_next(And) {
                 self.parse_prefix_unary_operation(And);
@@ -139,25 +127,16 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_call(&self, marker: Marker<Incomplete>) -> Finished {
         self.expect_and_bump(LParen);
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        self.expect_in_ctx(SyntaxKind::operators().as_ref());
+        let rollback_when_dropped = self.impose_restrictions_of_currently_parsing_on_context(Call);
         self.parse_comma_separated_arguments_until(RParen);
         self.expect_and_bump(RParen);
         self.complete_marker_with(marker, Call)
     }
 
-    fn impose_comma_sep_typed_decl_restrictions(&self) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.forbid_all();
-        ctx.allow([And, Colon, Comma, Ident, KwMut, RParen].as_ref());
-        ctx.allow(SyntaxKind::types().as_ref());
-        rollback_when_dropped
-    }
-
     #[allow(unused_variables)]
     pub fn parse_comma_separated_types_until(&self, until_false: fn(Syntax) -> bool) {
-        let rollback_when_dropped = self.impose_comma_sep_typed_decl_restrictions();
+        let rollback_when_dropped =
+            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
         use Element::*;
 
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
@@ -178,7 +157,8 @@ impl Parser<'_> {
 
     #[allow(unused_variables)]
     pub fn parse_comma_separated_typed_declarations_until(&self, until_false: fn(Syntax) -> bool) {
-        let rollback_when_dropped = self.impose_comma_sep_typed_decl_restrictions();
+        let rollback_when_dropped =
+            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
         use Element::*;
 
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
@@ -212,7 +192,8 @@ impl Parser<'_> {
         &self,
         until_false: fn(Syntax) -> bool,
     ) {
-        let rollback_when_dropped = self.impose_comma_sep_typed_decl_restrictions();
+        let rollback_when_dropped =
+            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
         use Element::*;
 
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
@@ -278,17 +259,9 @@ impl Parser<'_> {
         self.parse_with(elements);
     }
 
-    fn impose_comma_sep_args_restrictions(&self) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.allow(RParen);
-        ctx.expect(Call);
-        rollback_when_dropped
-    }
-
     #[allow(unused_variables)]
     pub fn parse_comma_separated_arguments_until(&self, unwanted: impl Into<SyntaxKindBitSet>) {
-        let rollback_when_dropped = self.impose_comma_sep_args_restrictions();
+        let rollback_when_dropped = self.impose_restrictions_of_currently_parsing_on_context(FnArg);
         use Element::*;
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
         let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];

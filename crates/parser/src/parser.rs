@@ -133,6 +133,17 @@ impl<'input> Parser<'input> {
         rollback_anchor
     }
 
+    pub fn impose_restrictions_of_kind_on_context(&self, kind: SyntaxKind) -> RollingBackAnchor {
+        let context_updates = kind.imposed_restrictions();
+        self.rollback_anchor_with_new_restrictions(context_updates)
+    }
+
+    pub fn parsing(&self, kind: SyntaxKind) -> RollingBackAnchor {
+        let rollback_anchor = self.roll_back_context_after_drop();
+        self.context.borrow().set_in_the_middle_of(kind);
+        rollback_anchor
+    }
+
     pub fn expect_in_ctx(&self, e: impl Into<SyntaxKindBitSet>) {
         self.context.borrow().expect(e);
     }
