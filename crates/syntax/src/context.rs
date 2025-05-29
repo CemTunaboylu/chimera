@@ -219,10 +219,7 @@ impl ParserContext {
         self.in_the_middle_of.get_cell_as_ref().get()
     }
     pub fn is_in_the_middle_of(&self, kind: SyntaxKind) -> bool {
-        self.in_the_middle_of
-            .get_cell_as_ref()
-            .get()
-            .contains(&kind)
+        self.in_the_middle_of.get_cell_as_ref().get().contains(kind)
     }
     pub fn set_in_the_middle_of(&self, to: impl Into<SyntaxKindBitSet>) {
         let cell = self.in_the_middle_of.get_cell_as_ref();

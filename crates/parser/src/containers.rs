@@ -129,7 +129,7 @@ impl HintParser {
             Ident | Under if !self.parsing_buffer => self.parse_dim_hints(parser),
             Int => self.parse_dim_hints(parser),
             // including KwBuffer, KwFn, and KwTensor
-            t if SyntaxKindBitSet::from(SyntaxKind::can_be_parameter().as_ref()).contains(&t) => {
+            t if SyntaxKindBitSet::from(SyntaxKind::can_be_parameter().as_ref()).contains(t) => {
                 self.parse_type_hint(parser)
             }
             _ => {

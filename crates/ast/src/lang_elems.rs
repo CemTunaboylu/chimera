@@ -35,7 +35,7 @@ pub fn first_token_expect(
 ) -> ASTResult<SyntaxToken> {
     let set: SyntaxKindBitSet = set.into();
     if let Some(first_token) = node.first_token() {
-        if set.contains(&first_token.kind()) {
+        if set.contains(first_token.kind()) {
             Ok(first_token)
         } else {
             Err(error_for_token(&first_token, set))
@@ -77,7 +77,7 @@ pub fn ensure_node_kind_is_any(
     set: impl Into<SyntaxKindBitSet>,
 ) -> ASTResult<()> {
     let set: SyntaxKindBitSet = set.into();
-    if !set.contains(&node.kind()) {
+    if !set.contains(node.kind()) {
         return Err(error_for_node(node, set));
     }
     Ok(())
@@ -94,7 +94,7 @@ pub fn first_child_of_kind(
     set: impl Into<SyntaxKindBitSet>,
 ) -> Option<SyntaxNode> {
     let set: SyntaxKindBitSet = set.into();
-    node.children().find(|node| set.contains(&node.kind()))
+    node.children().find(|node| set.contains(node.kind()))
 }
 
 pub fn first_child_of_kind_errs(
@@ -116,7 +116,7 @@ pub fn filtered_children_with_tokens(
 ) -> ThinVec<NodeOrToken> {
     let set = set.into();
     node.children_with_tokens()
-        .filter(|node_or_token| set.contains(&node_or_token.kind()))
+        .filter(|node_or_token| set.contains(node_or_token.kind()))
         .collect::<ThinVec<_>>()
 }
 
@@ -126,7 +126,7 @@ pub fn children_with_tokens_without_unwanted(
 ) -> ThinVec<NodeOrToken> {
     let set = unwanted.into();
     node.children_with_tokens()
-        .filter(|node_or_token| !set.contains(&node_or_token.kind()))
+        .filter(|node_or_token| !set.contains(node_or_token.kind()))
         .collect::<ThinVec<_>>()
 }
 
@@ -150,7 +150,7 @@ where
 pub fn get_children_in(node: &SyntaxNode, set: impl Into<SyntaxKindBitSet>) -> ThinVec<SyntaxNode> {
     let set: SyntaxKindBitSet = set.into();
     node.children()
-        .filter(|node| set.contains(&node.kind()))
+        .filter(|node| set.contains(node.kind()))
         .collect::<ThinVec<_>>()
 }
 
@@ -161,7 +161,7 @@ pub fn get_children_in_errs(
     let set: SyntaxKindBitSet = set.into();
     let children = node
         .children()
-        .filter(|node| set.contains(&node.kind()))
+        .filter(|node| set.contains(node.kind()))
         .collect::<ThinVec<_>>();
     if children.is_empty() {
         Err(error_for_node(node, set))
@@ -175,7 +175,7 @@ pub fn get_first_child_in(
     set: impl Into<SyntaxKindBitSet>,
 ) -> Option<SyntaxNode> {
     let set: SyntaxKindBitSet = set.into();
-    node.children().find(|node| set.contains(&node.kind()))
+    node.children().find(|node| set.contains(node.kind()))
 }
 
 pub fn get_token(node: &SyntaxNode) -> Option<SyntaxToken> {
@@ -187,7 +187,7 @@ pub fn get_token_of(node: &SyntaxNode, set: impl Into<SyntaxKindBitSet>) -> Opti
     let set: SyntaxKindBitSet = set.into();
     node.children_with_tokens()
         .filter_map(SyntaxElement::into_token)
-        .find(|t| set.contains(&t.kind()))
+        .find(|t| set.contains(t.kind()))
 }
 
 pub fn get_token_of_errs(
@@ -206,7 +206,7 @@ pub fn get_tokens_in(node: &SyntaxNode, set: impl Into<SyntaxKindBitSet>) -> Thi
     let set: SyntaxKindBitSet = set.into();
     node.children_with_tokens()
         .filter_map(SyntaxElement::into_token)
-        .filter(|t| set.contains(&t.kind()))
+        .filter(|t| set.contains(t.kind()))
         .collect()
 }
 
@@ -225,10 +225,10 @@ pub fn get_tokens_in_errs(
 
 pub fn get_children_with_tokens_in_f(
     node: &SyntaxNode,
-    f: fn(&SyntaxKind) -> bool,
+    f: fn(SyntaxKind) -> bool,
 ) -> ThinVec<NodeOrToken> {
     node.children_with_tokens()
-        .filter(|node_or_token| f(&node_or_token.kind()))
+        .filter(|node_or_token| f(node_or_token.kind()))
         .collect::<ThinVec<_>>()
 }
 

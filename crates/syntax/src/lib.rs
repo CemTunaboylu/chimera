@@ -43,21 +43,21 @@ lazy_static! {
     pub static ref TYPES: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
 }
 
-pub fn is_an_assignment(kind: &SyntaxKind) -> bool {
+pub fn is_an_assignment(kind: SyntaxKind) -> bool {
     ASSIGNMENTS.contains(kind)
 }
-pub fn is_an_operator(kind: &SyntaxKind) -> bool {
+pub fn is_an_operator(kind: SyntaxKind) -> bool {
     OPERATORS.contains(kind)
 }
-pub fn is_a_binary_operator(kind: &SyntaxKind) -> bool {
+pub fn is_a_binary_operator(kind: SyntaxKind) -> bool {
     BINARY_OPERATORS.contains(kind)
 }
-pub fn can_be_a_parameter(kind: &SyntaxKind) -> bool {
+pub fn can_be_a_parameter(kind: SyntaxKind) -> bool {
     CAN_BE_PARAMETERS.contains(kind)
 }
 
-pub fn can_be_a_parameter_with_mut(kind: &SyntaxKind) -> bool {
-    CAN_BE_PARAMETERS.contains(kind) || kind == &SyntaxKind::Mut
+pub fn can_be_a_parameter_with_mut(kind: SyntaxKind) -> bool {
+    CAN_BE_PARAMETERS.contains(kind) || kind == SyntaxKind::Mut
 }
 
 pub fn non_assigning_operators() -> SyntaxKindBitSet {
@@ -66,12 +66,12 @@ pub fn non_assigning_operators() -> SyntaxKindBitSet {
     o - a
 }
 
-pub fn is_a_type(kind: &SyntaxKind) -> bool {
+pub fn is_a_type(kind: SyntaxKind) -> bool {
     TYPES.contains(kind)
 }
 
 pub fn is_of_type(syntax: &Syntax) -> bool {
-    TYPES.contains(&syntax.get_kind())
+    TYPES.contains(syntax.get_kind())
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -145,7 +145,7 @@ impl Syntax {
                 // allowed
                 context_update[2] = RestrictionType::Add(closing_syntax_kind.into());
             }
-            TokenType::Operator if is_an_assignment(&self.kind) => {
+            TokenType::Operator if is_an_assignment(self.kind) => {
                 context_update[0] = RestrictionType::Add(Semi.into());
             }
             _ => {}

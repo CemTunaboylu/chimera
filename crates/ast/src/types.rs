@@ -75,7 +75,7 @@ fn filter_dim_hints(dim_hints_node: &SyntaxNode, err: bool) -> ASTResult<ThinVec
     }
     Ok(children
         .iter()
-        .filter(|c| !unwanted.contains(&c.kind()))
+        .filter(|c| !unwanted.contains(c.kind()))
         .cloned()
         .collect())
 }

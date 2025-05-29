@@ -158,7 +158,7 @@ impl Parser<'_> {
                 }
                 Ok(syntax) => {
                     let kind = syntax.get_kind();
-                    if !is_an_operator(&kind) {
+                    if !is_an_operator(kind) {
                         break;
                     }
                     if !self.is_allowed(kind) && !self.is_expected(kind) {
@@ -179,7 +179,7 @@ impl Parser<'_> {
                             self.parse_binary_operation(syntax, &min_precedence, &lhs_marker)
                         {
                             lhs_marker = marker;
-                            if is_an_assignment(&kind)
+                            if is_an_assignment(kind)
                                 && !self.is_in_the_middle_of_parsing(VarDef)
                                 && self.is_next(Semi)
                             {
@@ -218,11 +218,11 @@ impl Parser<'_> {
             // we don't expect it to be in left-hand side expression, thus attempt to parse it as a lambda definition
             Or | OrOr => self.parse_lambda_def(),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
-            typing if is_a_type(&typing) || matches!(typing, KwBuffer | KwTensor) => {
+            typing if is_a_type(typing) || matches!(typing, KwBuffer | KwTensor) => {
                 self.parse_type(&syntax)
             }
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
-            operator if is_an_operator(&operator) => {
+            operator if is_an_operator(operator) => {
                 self.recover();
                 None
             }
@@ -240,7 +240,7 @@ impl Parser<'_> {
             KwTensor | KwBuffer => return self.parse_container_constructs(syntax),
             // note: a lambda is typed as a function when hinted or as a parameter as in Rust
             KwFn => return self.parse_function_as_type(),
-            t if is_a_type(&t) => {
+            t if is_a_type(t) => {
                 self.bump();
             }
             _ => {}

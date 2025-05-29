@@ -232,7 +232,7 @@ impl<'input> Parser<'input> {
     pub fn is_next_in_strict(&self, set: SyntaxKindBitSet) -> IsNext {
         if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;
-            match set.contains(&syntax.get_kind()) {
+            match set.contains(syntax.get_kind()) {
                 true => IsNext::Yes,
                 false => IsNext::No,
             }
@@ -253,7 +253,7 @@ impl<'input> Parser<'input> {
     pub fn is_next_in(&self, set: SyntaxKindBitSet) -> bool {
         if let Some(Ok(token)) = self.peek() {
             let syntax: Syntax = token;
-            set.contains(&syntax.get_kind())
+            set.contains(syntax.get_kind())
         } else {
             false
         }
