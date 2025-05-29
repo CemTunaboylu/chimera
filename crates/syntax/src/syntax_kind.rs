@@ -306,6 +306,8 @@ impl SyntaxKind {
                 context_update[1] = RestrictionType::Add([LParen, LBrace, LBrack].as_ref().into());
                 context_update[2] = RestrictionType::Sub([LParen, LBrace, LBrack].as_ref().into());
             }
+            // Note: Prevents for i in arr{} to be parsed as ..., StructLit (arr{})
+            In => context_update[2] = RestrictionType::Sub(StructLit.into()),
             Indexing => {
                 let non_assigning_operators: SyntaxKindBitSet = non_assigning_operators();
                 context_update[2] = RestrictionType::Add(non_assigning_operators);
@@ -371,6 +373,10 @@ impl SyntaxKind {
                 context_update[2] = RestrictionType::Override(
                     non_assignments + can_be_parameter + opening_delimiters + exceptionals,
                 );
+            }
+            WhileLoop => {
+                context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
+                context_update[2] = RestrictionType::Add([KwTrue, KwFalse, LParen].as_ref().into());
             }
             _ => {}
         }

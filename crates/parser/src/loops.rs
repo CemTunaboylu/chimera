@@ -4,7 +4,7 @@ use crate::{
     parser::Parser,
 };
 
-use syntax::{anchor::RollingBackAnchor, syntax_kind::SyntaxKind::*};
+use syntax::syntax_kind::SyntaxKind::*;
 
 use thin_vec::thin_vec;
 
@@ -16,23 +16,14 @@ impl Parser<'_> {
         self.expect_and_bump(KwWhile);
 
         {
-            let rollback_when_dropped = self.impose_condition_parsing_restrictions_for_while();
+            let rollback_when_dropped =
+                self.impose_restrictions_of_currently_parsing_on_context(WhileLoop);
             if self.parse_condition().is_none() {
                 self.recover_with_msg("while loop expects a condition", "");
             }
         }
         self.parse_block();
-
         Some(self.complete_marker_with(marker, WhileLoop))
-    }
-
-    fn impose_condition_parsing_restrictions_for_while(&self) -> RollingBackAnchor {
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.allow([KwTrue, KwFalse, LParen].as_ref());
-        ctx.forbid([LBrace, StructLit].as_ref());
-        ctx.disallow_recovery_of([LBrace].as_ref());
-        rollback_when_dropped
     }
 
     #[allow(unused_variables)]
@@ -40,12 +31,10 @@ impl Parser<'_> {
         let marker = self.start();
         self.expect_and_bump(KwFor);
 
-        let rollback_when_dropped = self.roll_back_context_after_drop();
-        let ctx = self.context.borrow();
-        ctx.forbid(StructLit);
-
         self.parse_loop_identifiers();
         {
+            let rollback_when_dropped =
+                self.impose_restrictions_of_currently_parsing_on_context(In);
             let in_marker = self.start();
             self.expect_and_bump(KwIn);
             // this can be 0_10, <iterable>, <iterable>.<method>,
@@ -53,7 +42,6 @@ impl Parser<'_> {
             self.complete_marker_with(in_marker, In);
         }
         self.parse_block();
-
         Some(self.complete_marker_with(marker, ForLoop))
     }
 
@@ -291,7 +279,6 @@ mod tests {
                       Whitespace@44..45 " "
                       RBrace@45..46 "}""#]],
         ),
-
         while_loop_with_break: ("while true { break; }",
             expect![[r#"
                 Root@0..21
@@ -310,7 +297,6 @@ mod tests {
                       Whitespace@19..20 " "
                       RBrace@20..21 "}""#]],
         ),
-
         while_loop_with_complex_cond_and_break: ("while human.age < 18{ break; }",
             expect![[r#"
                 Root@0..30
@@ -339,8 +325,6 @@ mod tests {
                       Whitespace@28..29 " "
                       RBrace@29..30 "}""#]],
         ),
-
-
         while_loop_with_continue: ("while true { continue; }",
             expect![[r#"
                 Root@0..24
@@ -359,7 +343,6 @@ mod tests {
                       Whitespace@22..23 " "
                       RBrace@23..24 "}""#]],
         ),
-
         while_loop_to_be_recovered: ("while { break; }",
             expect![[r#"
                 Root@0..16
