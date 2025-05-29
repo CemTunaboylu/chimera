@@ -34,6 +34,3 @@ for crate in "${(k)changed_crates[@]}"; do
     echo "Running tests for crate: $crate"
     cargo test -p "$crate" || exit 1
 done
-
-if git rev-parse --verify HEAD >/dev/null 2>&1
-then
