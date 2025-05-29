@@ -3,7 +3,7 @@ use thin_vec::ThinVec;
 use thiserror::Error;
 
 use std::ops::Range;
-use syntax::{Syntax, syntax_kind::SyntaxKind};
+use syntax::{Syntax, context::ParserContext, syntax_kind::SyntaxKind};
 
 #[derive(Clone, Diagnostic, Debug, PartialEq, Error)]
 #[diagnostic()]
@@ -106,6 +106,23 @@ impl ParseError {
         Self {
             err_span,
             expected_but_found,
+        }
+    }
+    pub fn from(err_span: Range<usize>, got: impl Stringer, ctx: &ParserContext) -> Self {
+        let kinds: ThinVec<SyntaxKind> = if ctx.get_allowed().has_any() {
+            ctx.get_allowed().into()
+        } else {
+            let expectations = ctx.get_expectations();
+            ctx.del_expectation(expectations);
+            expectations.into()
+        };
+
+        let during = ctx.get_in_the_middle_of();
+        if during.has_any() {
+            let during_kinds: ThinVec<SyntaxKind> = during.into();
+            Self::during(err_span, kinds, got, during_kinds)
+        } else {
+            Self::new(err_span, kinds, got)
         }
     }
 }

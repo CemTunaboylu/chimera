@@ -1,6 +1,6 @@
 use miette::Report;
 use syntax::syntax_kind::SyntaxKind;
-use thin_vec::{ThinVec, thin_vec};
+use thin_vec::ThinVec;
 
 use crate::{
     errors::{ParseError, Stringer},
@@ -15,63 +15,38 @@ impl Parser<'_> {
         })
     }
 
-    // an unmet expectation is meaningful at the first incident, after that it stops being an expectation
-    fn take_expectation(&self) -> ThinVec<SyntaxKind> {
-        let expectations = self.context.borrow().get_expectations();
-        self.context.borrow().del_expectation(expectations);
-        expectations.into()
+    fn move_lexer_to_the_next(&self) {
+        if self.can_recover() {
+            self.lexer.borrow_mut().next();
+        }
     }
 
     pub fn recover_from_err(&self, err: Report) {
-        let kinds: ThinVec<SyntaxKind> = self.take_expectation();
-        let was_in_the_middle_of: ThinVec<SyntaxKind> =
-            self.context.borrow().get_in_the_middle_of().into();
-        let msg = if let Some(kind) = was_in_the_middle_of.first() {
-            format!("{:?} while parsing {:?}", err, kind)
-        } else {
-            format!("{:?}", err)
-        };
-        self.push_event(Event::Error {
-            err: ParseError::new(self.lexer.borrow().span().clone(), kinds, msg.as_str()),
-        });
-        if self.can_recover() {
-            self.lexer.borrow_mut().next();
-        }
+        let err_span = self.lexer.borrow().span().clone();
+        let parse_err = ParseError::from(
+            err_span,
+            format!("{:?}", err).as_str(),
+            &self.context.borrow(),
+        );
+        self.push_event(Event::Error { err: parse_err });
+        self.move_lexer_to_the_next();
     }
 
     pub fn recover_with_msg(&self, msg: &str, got: impl Stringer) {
-        self.push_event(Event::Error {
-            err: ParseError::new(self.lexer.borrow().span().clone(), msg, got),
-        });
-        if self.can_recover() {
-            self.lexer.borrow_mut().next();
-        }
+        let err_span = self.lexer.borrow().span().clone();
+        let parse_err = ParseError::from(
+            err_span,
+            format!("{}, got {}", msg, got.into()).as_str(),
+            &self.context.borrow(),
+        );
+        self.push_event(Event::Error { err: parse_err });
+        self.move_lexer_to_the_next();
     }
 
     pub fn recover(&self) {
-        let exps = if let Some(Ok(_)) = self.peek() {
-            let ctx = self.context.borrow();
-            let kinds: ThinVec<SyntaxKind> = if ctx.get_allowed().has_any() {
-                ctx.get_allowed().into()
-            } else {
-                self.take_expectation()
-            };
-            kinds
-        } else {
-            thin_vec![]
-        };
-
         let err_span = self.lexer.borrow().span().clone();
-
-        if let Some(during) = self.get_in_the_middle_of_parsing() {
-            self.push_event(Event::Error {
-                err: ParseError::during(err_span, exps, self.peek(), during),
-            });
-        } else {
-            self.push_event(Event::Error {
-                err: ParseError::new(err_span, exps, self.peek()),
-            });
-        }
+        let parse_err = ParseError::from(err_span, self.peek(), &self.context.borrow());
+        self.push_event(Event::Error { err: parse_err });
 
         if self.can_recover() {
             self.bump_with_marker(SyntaxKind::Recovered);
