@@ -189,6 +189,7 @@ impl Op for AssocBinOp {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<SyntaxKind> for AssocBinOp {
     fn into(self) -> SyntaxKind {
         SyntaxKind::InfixBinOp
@@ -245,6 +246,7 @@ impl Op for AssocUnOp {
     }
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<SyntaxKind> for AssocUnOp {
     fn into(self) -> SyntaxKind {
         use AssocUnOp::*;
