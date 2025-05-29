@@ -101,6 +101,20 @@ impl ParserContext {
         }
     }
 
+    /// Creates a new `RollingBackAnchor` that will restore the parser context state when dropped.
+    ///
+    /// This function is used to create temporary modifications to the parser context that will be
+    /// automatically rolled back when the anchor is dropped. This is useful for parsing constructs
+    /// that temporarily need different parsing rules.
+    ///
+    /// # Safety
+    ///
+    /// The caller must guarantee that:
+    /// - The `raw_ptr` points to a valid, properly aligned `ParserContext` instance
+    /// - The `ParserContext` instance must outlive the returned `RollingBackAnchor`
+    /// - No other code can modify the `ParserContext` through mutable references while the
+    ///   `RollingBackAnchor` exists
+    /// - The `raw_ptr` must remain valid for the entire lifetime of the returned `RollingBackAnchor`
     pub unsafe fn rolling_back_anchor<'caller>(raw_ptr: *mut Self) -> RollingBackAnchor<'caller> {
         unsafe { RollingBackAnchor::with(raw_ptr) }
     }
