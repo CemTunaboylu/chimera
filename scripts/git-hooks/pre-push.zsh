@@ -60,3 +60,9 @@ for crate in "${(k)changed_crates[@]}"; do
     echo "Running tests for crate: $crate"
     cargo test -p "$crate" || exit 1
 done
+
+# Check for changes in .github/workflows between tracking branch and HEAD
+if echo "$changed_files" | grep -q '^\.github/workflows/'; then
+    echo "Detected changes in .github/workflows. Running act for local workflow test..."
+    ./scripts/test-workflow.sh
+fi
