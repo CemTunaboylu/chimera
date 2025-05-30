@@ -1,14 +1,10 @@
 use crate::{
-    operator::starting_precedence,
     parse::Finished,
     parser::{IsNext, Parser},
 };
 
 use lexer::token_type::TokenType;
-use syntax::{
-    Syntax,
-    syntax_kind::SyntaxKind::{self, *},
-};
+use syntax::{Syntax, syntax_kind::SyntaxKind::*};
 
 #[allow(unused_variables)]
 impl Parser<'_> {
@@ -37,19 +33,6 @@ impl Parser<'_> {
             ClosingDelimiter(expected_token_kind) => None,
             _ => unreachable!(),
         }
-    }
-
-    #[allow(unused_variables)] // for rollback anchor
-    pub fn parse_paren_expr(&self, syntax: Syntax) -> Option<Finished> {
-        use SyntaxKind::*;
-        let marker = self.start();
-        self.expect_and_bump(LParen);
-        // restricts ']', '}' (recovers them by erroring), expects and allows ')'
-        let rollback_when_dropped = self.impose_restrictions_on_context(syntax);
-        _ = self.parse_expression_until_binding_power(starting_precedence());
-        self.expect_and_bump(RParen);
-        let finished = self.complete_marker_with(marker, SyntaxKind::ParenExpr);
-        Some(finished)
     }
 
     #[allow(unused_variables)] // for rollback anchor
