@@ -37,6 +37,7 @@ pub enum SyntaxKind {
     StructLit,
     StructRef,
     TensorLit,
+    Tuple,
     TypeHint,
     VarRef,
     // token-tree roots for statements
@@ -354,6 +355,17 @@ impl SyntaxKind {
             }
             RParen => {
                 context_update[1] = RestrictionType::Add([LParen, RParen].as_ref().into());
+            }
+            Tuple => {
+                let closing_delimiters: SyntaxKindBitSet =
+                    SyntaxKind::closing_delimiters().as_ref().into();
+                context_update[1] =
+                    RestrictionType::Add(closing_delimiters + [Comma].as_ref().into());
+                let allowed_operations: SyntaxKindBitSet = [And, Dot, Colon, Star].as_ref().into();
+                let opening_delimiters = SyntaxKind::opening_delimiters().as_ref().into();
+                let misc = [Ident, KwMut].as_ref().into();
+                context_update[2] =
+                    RestrictionType::Override(allowed_operations + opening_delimiters + misc);
             }
             TypeHint => {
                 context_update[1] = RestrictionType::Add([Gt].as_ref().into());
