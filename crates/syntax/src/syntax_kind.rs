@@ -299,8 +299,16 @@ impl SyntaxKind {
                     [KwTrue, KwFalse, LParen].as_ref().into();
                 context_update[2] = RestrictionType::Override(operators + booleans_and_paren);
             }
+            DimHints => {
+                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
+                context_update[2] = RestrictionType::Override([].as_ref().into());
+            }
             FnArg => {
                 context_update[2] = RestrictionType::Add([RParen, StructAsType].as_ref().into());
+            }
+            Gt => {
+                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
+                context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
             }
             Ident => {
                 context_update[1] = RestrictionType::Add([LParen, LBrace, LBrack].as_ref().into());
@@ -315,6 +323,15 @@ impl SyntaxKind {
             Jump | Return => {
                 context_update[0] = RestrictionType::Add(Semi.into());
             }
+            Lambda => {
+                context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
+            }
+            LBrace => {
+                context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
+            }
+            LBrack => {
+                context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
+            }
             ParamDecl => {
                 let misc: SyntaxKindBitSet =
                     [And, Colon, Comma, Ident, KwMut, RParen].as_ref().into();
@@ -324,15 +341,6 @@ impl SyntaxKind {
             PrefixUnaryOp => {
                 context_update[2] =
                     RestrictionType::Add(SyntaxKind::prefix_unary_operators().as_ref().into());
-            }
-            Lambda => {
-                context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
-            }
-            LBrace => {
-                context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
-            }
-            LBrack => {
-                context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
             }
             RBrack => {
                 context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
@@ -347,17 +355,9 @@ impl SyntaxKind {
             RParen => {
                 context_update[1] = RestrictionType::Add([LParen, RParen].as_ref().into());
             }
-            Gt => {
-                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
-                context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
-            }
             TypeHint => {
                 context_update[1] = RestrictionType::Add([Gt].as_ref().into());
                 context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
-            }
-            DimHints => {
-                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
-                context_update[2] = RestrictionType::Override([].as_ref().into());
             }
             VarDef => {
                 // ! FIXME: this is a hack, I need to find a better way to expect things IN ORDER
