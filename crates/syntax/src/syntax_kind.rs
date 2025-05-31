@@ -304,6 +304,9 @@ impl SyntaxKind {
                 context_update[1] = RestrictionType::Add([Gt].as_ref().into());
                 context_update[2] = RestrictionType::Override([].as_ref().into());
             }
+            ForLoop => {
+                context_update[1] = RestrictionType::Add([KwIn, LBrace].as_ref().into());
+            }
             FnArg => {
                 context_update[2] = RestrictionType::Add([RParen, StructAsType].as_ref().into());
             }
@@ -333,6 +336,10 @@ impl SyntaxKind {
             LBrack => {
                 context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
             }
+            ParenExpr => {
+                context_update[1] = RestrictionType::Add([Comma, RBrace].as_ref().into());
+                context_update[2] = RestrictionType::Sub([Comma].as_ref().into());
+            }
             ParamDecl => {
                 let misc: SyntaxKindBitSet =
                     [And, Colon, Comma, Ident, KwMut, RParen].as_ref().into();
@@ -355,17 +362,6 @@ impl SyntaxKind {
             }
             RParen => {
                 context_update[1] = RestrictionType::Add([LParen, RParen].as_ref().into());
-            }
-            Tuple => {
-                let closing_delimiters: SyntaxKindBitSet =
-                    SyntaxKind::closing_delimiters().as_ref().into();
-                context_update[1] =
-                    RestrictionType::Add(closing_delimiters + [Comma].as_ref().into());
-                let allowed_operations: SyntaxKindBitSet = [And, Dot, Colon, Star].as_ref().into();
-                let opening_delimiters = SyntaxKind::opening_delimiters().as_ref().into();
-                let misc = [Ident, KwMut].as_ref().into();
-                context_update[2] =
-                    RestrictionType::Override(allowed_operations + opening_delimiters + misc);
             }
             TypeHint => {
                 context_update[1] = RestrictionType::Add([Gt].as_ref().into());

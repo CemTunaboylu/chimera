@@ -1,12 +1,10 @@
 use crate::{
     operator::starting_precedence,
-    parse::{Element, Finished},
-    parser::Parser,
+    parse::Finished,
+    parser::{IsNext, Parser},
 };
 
 use syntax::syntax_kind::SyntaxKind::*;
-
-use thin_vec::thin_vec;
 
 #[allow(unused_variables)]
 impl Parser<'_> {
@@ -46,18 +44,23 @@ impl Parser<'_> {
     // this can be (<i1>, (<i2>, <i3>)) thus needs its own parsing
     #[allow(unused_variables)]
     pub fn parse_loop_identifiers(&self) {
-        if self.is_next(LParen) {
-            self.parse_left_hand_side();
+        let marker = if self.is_next(LParen) {
+            let rollback_when_dropped = self.by_expecting(self.tuple_pattern_expectation());
+            let marker = self.parse_tuple_pattern();
+            if let Some(completed) = marker {
+                self.precede_marker_with(&completed)
+            } else {
+                return;
+            }
         } else {
-            // comma separated identifiers
-            let rollback_when_dropped = self.roll_back_context_after_drop();
-            self.context.borrow().allow(KwIn);
-
-            use Element::*;
-
-            let idents = thin_vec![Kind(Ident)];
-            self.parse_separated_by(&idents, ForIdent, Comma, KwIn);
-        }
+            let marker = self.start();
+            self.expect_and_bump(Ident);
+            while IsNext::No == self.is_next_strict(KwIn) {
+                self.recover();
+            }
+            marker
+        };
+        self.complete_marker_with(marker, ForIdent);
     }
 }
 
@@ -147,17 +150,264 @@ mod tests {
                     Whitespace@39..40 " "
                     RBrace@40..41 "}""#]],
       ),
-      for_loop_with_csv_identifiers: ("for ix,elm in arr[0_arr.len()].enumerate() { print(ix, elm) }",
+      for_loop_with_tuple_pattern: ("for (ix,elm) in arr[0_arr.len()].enumerate() { print(ix, elm) }",
+          expect![[r#"
+              Root@0..63
+                ForLoop@0..63
+                  KwFor@0..3 "for"
+                  Whitespace@3..4 " "
+                  ForIdent@4..12
+                    Tuple@4..12
+                      LParen@4..5 "("
+                      VarRef@5..7
+                        Ident@5..7 "ix"
+                      Comma@7..8 ","
+                      VarRef@8..11
+                        Ident@8..11 "elm"
+                      RParen@11..12 ")"
+                  In@12..45
+                    Whitespace@12..13 " "
+                    KwIn@13..15 "in"
+                    Whitespace@15..16 " "
+                    InfixBinOp@16..45
+                      ContainerRef@16..32
+                        Ident@16..19 "arr"
+                        Indexing@19..32
+                          LBrack@19..20 "["
+                          InfixBinOp@20..31
+                            Literal@20..21
+                              Int@20..21 "0"
+                            Under@21..22 "_"
+                            InfixBinOp@22..31
+                              VarRef@22..25
+                                Ident@22..25 "arr"
+                              Dot@25..26 "."
+                              Call@26..31
+                                Ident@26..29 "len"
+                                LParen@29..30 "("
+                                RParen@30..31 ")"
+                          RBrack@31..32 "]"
+                      Dot@32..33 "."
+                      Call@33..44
+                        Ident@33..42 "enumerate"
+                        LParen@42..43 "("
+                        RParen@43..44 ")"
+                      Whitespace@44..45 " "
+                  Block@45..63
+                    LBrace@45..46 "{"
+                    Whitespace@46..47 " "
+                    Call@47..61
+                      Ident@47..52 "print"
+                      LParen@52..53 "("
+                      FnArg@53..56
+                        VarRef@53..55
+                          Ident@53..55 "ix"
+                        Comma@55..56 ","
+                      Whitespace@56..57 " "
+                      FnArg@57..60
+                        VarRef@57..60
+                          Ident@57..60 "elm"
+                      RParen@60..61 ")"
+                    Whitespace@61..62 " "
+                    RBrace@62..63 "}""#]],
+      ),
+      for_loop_with_nested_tuple_pattern: ("for ((ix,elm), (ix2,elm2)) in arr[0_arr.len()].enumerate() { print(ix, elm, ix2, elm2) }",
+          expect![[r#"
+              Root@0..88
+                ForLoop@0..88
+                  KwFor@0..3 "for"
+                  Whitespace@3..4 " "
+                  ForIdent@4..26
+                    Tuple@4..26
+                      LParen@4..5 "("
+                      Tuple@5..13
+                        LParen@5..6 "("
+                        VarRef@6..8
+                          Ident@6..8 "ix"
+                        Comma@8..9 ","
+                        VarRef@9..12
+                          Ident@9..12 "elm"
+                        RParen@12..13 ")"
+                      Comma@13..14 ","
+                      Whitespace@14..15 " "
+                      Tuple@15..25
+                        LParen@15..16 "("
+                        VarRef@16..19
+                          Ident@16..19 "ix2"
+                        Comma@19..20 ","
+                        VarRef@20..24
+                          Ident@20..24 "elm2"
+                        RParen@24..25 ")"
+                      RParen@25..26 ")"
+                  In@26..59
+                    Whitespace@26..27 " "
+                    KwIn@27..29 "in"
+                    Whitespace@29..30 " "
+                    InfixBinOp@30..59
+                      ContainerRef@30..46
+                        Ident@30..33 "arr"
+                        Indexing@33..46
+                          LBrack@33..34 "["
+                          InfixBinOp@34..45
+                            Literal@34..35
+                              Int@34..35 "0"
+                            Under@35..36 "_"
+                            InfixBinOp@36..45
+                              VarRef@36..39
+                                Ident@36..39 "arr"
+                              Dot@39..40 "."
+                              Call@40..45
+                                Ident@40..43 "len"
+                                LParen@43..44 "("
+                                RParen@44..45 ")"
+                          RBrack@45..46 "]"
+                      Dot@46..47 "."
+                      Call@47..58
+                        Ident@47..56 "enumerate"
+                        LParen@56..57 "("
+                        RParen@57..58 ")"
+                      Whitespace@58..59 " "
+                  Block@59..88
+                    LBrace@59..60 "{"
+                    Whitespace@60..61 " "
+                    Call@61..86
+                      Ident@61..66 "print"
+                      LParen@66..67 "("
+                      FnArg@67..70
+                        VarRef@67..69
+                          Ident@67..69 "ix"
+                        Comma@69..70 ","
+                      Whitespace@70..71 " "
+                      FnArg@71..75
+                        VarRef@71..74
+                          Ident@71..74 "elm"
+                        Comma@74..75 ","
+                      Whitespace@75..76 " "
+                      FnArg@76..80
+                        VarRef@76..79
+                          Ident@76..79 "ix2"
+                        Comma@79..80 ","
+                      Whitespace@80..81 " "
+                      FnArg@81..85
+                        VarRef@81..85
+                          Ident@81..85 "elm2"
+                      RParen@85..86 ")"
+                    Whitespace@86..87 " "
+                    RBrace@87..88 "}""#]],
+      ),
+      for_loop_with_nested_and_ref_mut_tuple_pattern: ("for ((ix,mut elm), (& mut ix2, &mut elm2,),) in arr[0_arr.len()].enumerate() { print(ix, elm, ix2, elm2) }",
+          expect![[r#"
+              Root@0..106
+                ForLoop@0..106
+                  KwFor@0..3 "for"
+                  Whitespace@3..4 " "
+                  ForIdent@4..44
+                    Tuple@4..44
+                      LParen@4..5 "("
+                      Tuple@5..17
+                        LParen@5..6 "("
+                        VarRef@6..8
+                          Ident@6..8 "ix"
+                        Comma@8..9 ","
+                        Mut@9..16
+                          KwMut@9..12 "mut"
+                          Whitespace@12..13 " "
+                          VarRef@13..16
+                            Ident@13..16 "elm"
+                        RParen@16..17 ")"
+                      Comma@17..18 ","
+                      Whitespace@18..19 " "
+                      Tuple@19..42
+                        LParen@19..20 "("
+                        PrefixUnaryOp@20..29
+                          And@20..21 "&"
+                          Whitespace@21..22 " "
+                          Mut@22..29
+                            KwMut@22..25 "mut"
+                            Whitespace@25..26 " "
+                            VarRef@26..29
+                              Ident@26..29 "ix2"
+                        Comma@29..30 ","
+                        Whitespace@30..31 " "
+                        PrefixUnaryOp@31..40
+                          And@31..32 "&"
+                          Mut@32..40
+                            KwMut@32..35 "mut"
+                            Whitespace@35..36 " "
+                            VarRef@36..40
+                              Ident@36..40 "elm2"
+                        Comma@40..41 ","
+                        RParen@41..42 ")"
+                      Comma@42..43 ","
+                      RParen@43..44 ")"
+                  In@44..77
+                    Whitespace@44..45 " "
+                    KwIn@45..47 "in"
+                    Whitespace@47..48 " "
+                    InfixBinOp@48..77
+                      ContainerRef@48..64
+                        Ident@48..51 "arr"
+                        Indexing@51..64
+                          LBrack@51..52 "["
+                          InfixBinOp@52..63
+                            Literal@52..53
+                              Int@52..53 "0"
+                            Under@53..54 "_"
+                            InfixBinOp@54..63
+                              VarRef@54..57
+                                Ident@54..57 "arr"
+                              Dot@57..58 "."
+                              Call@58..63
+                                Ident@58..61 "len"
+                                LParen@61..62 "("
+                                RParen@62..63 ")"
+                          RBrack@63..64 "]"
+                      Dot@64..65 "."
+                      Call@65..76
+                        Ident@65..74 "enumerate"
+                        LParen@74..75 "("
+                        RParen@75..76 ")"
+                      Whitespace@76..77 " "
+                  Block@77..106
+                    LBrace@77..78 "{"
+                    Whitespace@78..79 " "
+                    Call@79..104
+                      Ident@79..84 "print"
+                      LParen@84..85 "("
+                      FnArg@85..88
+                        VarRef@85..87
+                          Ident@85..87 "ix"
+                        Comma@87..88 ","
+                      Whitespace@88..89 " "
+                      FnArg@89..93
+                        VarRef@89..92
+                          Ident@89..92 "elm"
+                        Comma@92..93 ","
+                      Whitespace@93..94 " "
+                      FnArg@94..98
+                        VarRef@94..97
+                          Ident@94..97 "ix2"
+                        Comma@97..98 ","
+                      Whitespace@98..99 " "
+                      FnArg@99..103
+                        VarRef@99..103
+                          Ident@99..103 "elm2"
+                      RParen@103..104 ")"
+                    Whitespace@104..105 " "
+                    RBrace@105..106 "}""#]],
+      ),
+      for_loop_with_csv_identifiers_errors: ("for ix,elm in arr[0_arr.len()].enumerate() { print(ix, elm) }",
           expect![[r#"
               Root@0..61
                 ForLoop@0..61
                   KwFor@0..3 "for"
                   Whitespace@3..4 " "
-                  ForIdent@4..7
+                  ForIdent@4..11
                     Ident@4..6 "ix"
-                    Comma@6..7 ","
-                  ForIdent@7..11
-                    Ident@7..10 "elm"
+                    Recovered@6..7
+                      Comma@6..7 ","
+                    Recovered@7..10
+                      Ident@7..10 "elm"
                     Whitespace@10..11 " "
                   In@11..43
                     KwIn@11..13 "in"

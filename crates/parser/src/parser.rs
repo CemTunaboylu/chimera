@@ -86,9 +86,15 @@ impl<'input> Parser<'input> {
         anchor
     }
 
-    pub fn forbid_all(&self) -> RollingBackAnchor {
+    pub fn by_forbidding_all(&self) -> RollingBackAnchor {
         let anchor = self.roll_back_context_after_drop();
         self.context.borrow().forbid_all();
+        anchor
+    }
+
+    pub fn by_expecting(&self, e: impl Into<SyntaxKindBitSet>) -> RollingBackAnchor {
+        let anchor = self.roll_back_context_after_drop();
+        self.context.borrow().expect(e);
         anchor
     }
 

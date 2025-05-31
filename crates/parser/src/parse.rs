@@ -215,6 +215,14 @@ impl Parser<'_> {
             // Note: OrOr is a special case for a lambda definition with no parameters, and since OrOr is a binary infix operator,
             // we don't expect it to be in left-hand side expression, thus attempt to parse it as a lambda definition
             Or | OrOr => self.parse_lambda_def(),
+            // first capture ( to parse tuple patterns
+            LParen if self.is_parsing_tuple_pattern() => {
+                let marker = self.parse_tuple_pattern();
+                // we now need to revert expectation to allow upcoming
+                // tuples or parenthesised expressions parse
+                self.mark_tuple_pattern_as_parsed();
+                marker
+            }
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             typing if is_a_type(typing) || matches!(typing, KwBuffer | KwTensor) => {
                 self.parse_type(&syntax)

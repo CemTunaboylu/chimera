@@ -15,7 +15,7 @@ impl Parser<'_> {
         let rollback_when_dropped = self.impose_context_for_parsing(LetBinding);
 
         if IsNext::Yes == self.is_next_strict(LParen) {
-            self.expect_in_ctx([Tuple, LetBinding].as_ref());
+            self.expect_in_ctx(self.tuple_pattern_expectation());
         }
 
         if self
