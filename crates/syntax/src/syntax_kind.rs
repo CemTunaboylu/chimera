@@ -38,6 +38,7 @@ pub enum SyntaxKind {
     StructRef,
     TensorLit,
     Tuple,
+    Unit,
     TypeHint,
     VarRef,
     // token-tree roots for statements
@@ -176,7 +177,7 @@ impl SyntaxKind {
         use SyntaxKind::*;
         matches!(
             self,
-            BufferLit | CharLit | Float | Int | KwFalse | KwTrue | StrLit
+            BufferLit | CharLit | Float | Int | KwFalse | KwTrue | StrLit | Unit
         )
     }
 
@@ -195,6 +196,7 @@ impl SyntaxKind {
             TyI32,
             TyStr,
             TyTensor,
+            Unit,
         ]
     }
 

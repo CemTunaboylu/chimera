@@ -72,7 +72,7 @@ impl Parser<'_> {
                 _ => return None,
             }
         } else {
-            Tuple // an empty () is a tuple now
+            Unit // an empty () is the unit tuple now
         };
 
         self.expect_and_bump(RParen);
@@ -129,7 +129,7 @@ mod tests {
         only_parenthesis: ("()",
             expect![[r#"
                 Root@0..2
-                  Tuple@0..2
+                  Unit@0..2
                     LParen@0..1 "("
                     RParen@1..2 ")""#]]
         ),
@@ -271,7 +271,7 @@ mod tests {
         ),
         missing_closing_parenthesis_does_not_panic: ("(",
             expect![[
-                "Root@0..1\n  Tuple@0..1\n    LParen@0..1 \"(\""
+                "Root@0..1\n  Unit@0..1\n    LParen@0..1 \"(\""
             ]]
         ),
         parenthesised_sub_precedes_mul: ("(3+1)*4",
