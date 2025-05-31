@@ -137,10 +137,8 @@ impl Parser<'_> {
         use Element::*;
 
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
-        let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let arg_elements = thin_vec![ref_mut_with(Branched(
             thin_vec![KindAs(Ident, StructAsType)],
-            // thin_vec![InSet(types_set)],
             thin_vec![ParseExprWith(starting_precedence())],
         ))];
 
