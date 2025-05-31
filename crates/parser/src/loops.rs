@@ -55,9 +55,8 @@ impl Parser<'_> {
         } else {
             let marker = self.start();
             self.expect_and_bump(Ident);
-            while IsNext::No == self.is_next_strict(KwIn) {
-                self.recover();
-            }
+            // if there is more than one identifier, we need to recover until KwIn
+            self.recover_until(KwIn);
             marker
         };
         self.complete_marker_with(marker, ForIdent);

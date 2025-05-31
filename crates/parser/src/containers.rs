@@ -162,11 +162,6 @@ impl Parser<'_> {
         }
     }
 
-    fn recover_until(&self, stop: SyntaxKind) {
-        while IsNext::Yes != self.is_next_strict(stop) {
-            self.recover();
-        }
-    }
     #[allow(unused_variables)]
     pub fn parse_buffer_literal(&self) {
         let marker = self.start();

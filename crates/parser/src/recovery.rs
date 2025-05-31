@@ -1,11 +1,11 @@
 use miette::Report;
-use syntax::syntax_kind::SyntaxKind;
+use syntax::{bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
 use crate::{
     errors::{ParseError, Stringer},
     event::Event,
-    parser::Parser,
+    parser::{IsNext, Parser},
 };
 
 impl Parser<'_> {
@@ -50,6 +50,13 @@ impl Parser<'_> {
 
         if self.can_recover() {
             self.bump_with_marker(SyntaxKind::Recovered);
+        }
+    }
+
+    pub fn recover_until(&self, until: impl Into<SyntaxKindBitSet>) {
+        let set: SyntaxKindBitSet = until.into();
+        while IsNext::No == self.is_next_in_strict(set) {
+            self.recover();
         }
     }
 
