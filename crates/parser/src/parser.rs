@@ -123,10 +123,7 @@ impl<'input> Parser<'input> {
         self.rollback_anchor_with_new_restrictions(context_updates)
     }
 
-    pub fn impose_restrictions_of_currently_parsing_on_context(
-        &self,
-        kind: SyntaxKind,
-    ) -> RollingBackAnchor {
+    pub fn impose_context_for_parsing(&self, kind: SyntaxKind) -> RollingBackAnchor {
         let context_updates = kind.imposed_restrictions();
         let rollback_anchor = self.rollback_anchor_with_new_restrictions(context_updates);
         self.context.borrow().set_in_the_middle_of(kind);

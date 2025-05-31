@@ -38,7 +38,6 @@ impl Parser<'_> {
             self.parse_statement();
         }
         self.complete_marker_with(root, Root);
-
         let lexer = self.lexer.borrow();
         let sink = Sink::new(self.event_holder.into_inner().into(), lexer.source());
         ConcreteSyntaxTree::from(sink)
@@ -138,8 +137,7 @@ impl Parser<'_> {
             self.bump_with_marker(Condition)
         } else {
             let cond_marker = self.start();
-            let rollback_when_dropped =
-                self.impose_restrictions_of_currently_parsing_on_context(SyntaxKind::Condition);
+            let rollback_when_dropped = self.impose_context_for_parsing(SyntaxKind::Condition);
             self.parse_expression_until_binding_power(starting_precedence());
             self.complete_marker_with(cond_marker, Condition)
         };
@@ -304,7 +302,7 @@ impl Parser<'_> {
         let marker = self.start();
         self.expect_and_bump(KwBreak);
 
-        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Jump);
+        let rollback_after_drop = self.impose_context_for_parsing(Jump);
 
         self.parse_expression_until_binding_power(starting_precedence());
         self.expect_and_bump(Semi);
@@ -317,7 +315,7 @@ impl Parser<'_> {
         let marker = self.start();
         self.expect_and_bump(KwReturn);
 
-        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Return);
+        let rollback_after_drop = self.impose_context_for_parsing(Return);
         self.parse_expression_until_binding_power(starting_precedence());
         self.expect_and_bump(Semi);
 
@@ -362,8 +360,7 @@ impl Parser<'_> {
     pub fn parse_prefix_unary_operation(&self, kind: SyntaxKind) -> Option<Finished> {
         let prefix_unary_op = AssocUnOp::from_syntax_kind(kind)?;
         let marker = self.start();
-        let rollback_after_drop =
-            self.impose_restrictions_of_currently_parsing_on_context(PrefixUnaryOp);
+        let rollback_after_drop = self.impose_context_for_parsing(PrefixUnaryOp);
         self.expect_and_bump(kind);
         let bounded_precedence = Bound::from_op(prefix_unary_op.clone());
         _ = self.parse_expression_until_binding_power(bounded_precedence);

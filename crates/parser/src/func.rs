@@ -42,8 +42,7 @@ impl Parser<'_> {
         if self.is_next(RArrow) {
             let ret_type_marker = self.start();
             self.expect_and_bump(RArrow);
-            let rollback_after_drop =
-                self.impose_restrictions_of_currently_parsing_on_context(RetType);
+            let rollback_after_drop = self.impose_context_for_parsing(RetType);
 
             if self.is_next(And) {
                 self.parse_prefix_unary_operation(And);
@@ -58,7 +57,7 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_lambda_def(&self) -> Option<Finished> {
         let marker = self.start();
-        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Lambda);
+        let rollback_after_drop = self.impose_context_for_parsing(Lambda);
 
         if self.is_next(OrOr) {
             self.expect_and_bump(OrOr);
@@ -108,8 +107,7 @@ impl Parser<'_> {
         if self.is_next(RArrow) {
             let ret_type_marker = self.start();
             self.expect_and_bump(RArrow);
-            let rollback_after_drop =
-                self.impose_restrictions_of_currently_parsing_on_context(RetType);
+            let rollback_after_drop = self.impose_context_for_parsing(RetType);
 
             if self.is_next(And) {
                 self.parse_prefix_unary_operation(And);
@@ -127,7 +125,7 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_call(&self, marker: Marker<Incomplete>) -> Finished {
         self.expect_and_bump(LParen);
-        let rollback_when_dropped = self.impose_restrictions_of_currently_parsing_on_context(Call);
+        let rollback_when_dropped = self.impose_context_for_parsing(Call);
         self.parse_comma_separated_arguments_until(RParen);
         self.expect_and_bump(RParen);
         self.complete_marker_with(marker, Call)
@@ -135,8 +133,7 @@ impl Parser<'_> {
 
     #[allow(unused_variables)]
     pub fn parse_comma_separated_types_until(&self, until_false: fn(Syntax) -> bool) {
-        let rollback_when_dropped =
-            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
+        let rollback_when_dropped = self.impose_context_for_parsing(ParamDecl);
         use Element::*;
 
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
@@ -157,8 +154,7 @@ impl Parser<'_> {
 
     #[allow(unused_variables)]
     pub fn parse_comma_separated_typed_declarations_until(&self, until_false: fn(Syntax) -> bool) {
-        let rollback_when_dropped =
-            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
+        let rollback_when_dropped = self.impose_context_for_parsing(ParamDecl);
         use Element::*;
 
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
@@ -192,8 +188,7 @@ impl Parser<'_> {
         &self,
         until_false: fn(Syntax) -> bool,
     ) {
-        let rollback_when_dropped =
-            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
+        let rollback_when_dropped = self.impose_context_for_parsing(ParamDecl);
         use Element::*;
 
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
@@ -261,7 +256,7 @@ impl Parser<'_> {
 
     #[allow(unused_variables)]
     pub fn parse_comma_separated_arguments_until(&self, unwanted: impl Into<SyntaxKindBitSet>) {
-        let rollback_when_dropped = self.impose_restrictions_of_currently_parsing_on_context(FnArg);
+        let rollback_when_dropped = self.impose_context_for_parsing(FnArg);
         use Element::*;
         let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
         let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];

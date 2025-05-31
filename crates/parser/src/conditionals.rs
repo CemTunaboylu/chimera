@@ -13,7 +13,7 @@ impl Parser<'_> {
         let cond_marker = self.start();
         self.expect_and_bump(KwIf);
         {
-            let anchor = self.impose_restrictions_of_currently_parsing_on_context(Condition);
+            let anchor = self.impose_context_for_parsing(Condition);
             if self.parse_condition().is_none() {
                 self.recover_with_msg("if expects a condition", "");
             }
@@ -26,7 +26,7 @@ impl Parser<'_> {
             let cond_marker = self.start();
             self.expect_and_bump(KwElif);
             {
-                let anchor = self.impose_restrictions_of_currently_parsing_on_context(Condition);
+                let anchor = self.impose_context_for_parsing(Condition);
                 if self.parse_condition().is_none() {
                     self.recover_with_msg("elif expects a condition", "");
                 }

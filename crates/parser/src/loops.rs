@@ -16,8 +16,7 @@ impl Parser<'_> {
         self.expect_and_bump(KwWhile);
 
         {
-            let rollback_when_dropped =
-                self.impose_restrictions_of_currently_parsing_on_context(WhileLoop);
+            let rollback_when_dropped = self.impose_context_for_parsing(WhileLoop);
             if self.parse_condition().is_none() {
                 self.recover_with_msg("while loop expects a condition", "");
             }
@@ -28,13 +27,12 @@ impl Parser<'_> {
 
     #[allow(unused_variables)]
     pub fn parse_for_loop(&self) -> Option<Finished> {
+        let rollback_when_dropped = self.parsing(ForLoop);
         let marker = self.start();
         self.expect_and_bump(KwFor);
-
         self.parse_loop_identifiers();
         {
-            let rollback_when_dropped =
-                self.impose_restrictions_of_currently_parsing_on_context(In);
+            let rollback_when_dropped = self.impose_context_for_parsing(In);
             let in_marker = self.start();
             self.expect_and_bump(KwIn);
             // this can be 0_10, <iterable>, <iterable>.<method>,

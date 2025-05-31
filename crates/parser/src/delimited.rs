@@ -39,8 +39,7 @@ impl Parser<'_> {
     pub fn parse_block(&self) -> Option<Finished> {
         let marker = self.start();
         {
-            let rollback_when_dropped =
-                self.impose_restrictions_of_currently_parsing_on_context(Block);
+            let rollback_when_dropped = self.impose_context_for_parsing(Block);
             self.expect_and_bump(LBrace);
             while IsNext::No == self.is_next_strict(RBrace) && self.parse_statement().is_some() {}
         }

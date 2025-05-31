@@ -146,18 +146,16 @@ impl Parser<'_> {
     // from parsing an identifier and saw a LBrack as well.
     #[allow(unused_variables)]
     pub fn parse_container_indexing(&self) {
-        let rollback_when_dropped =
-            self.impose_restrictions_of_currently_parsing_on_context(Indexing);
+        let rollback_when_dropped = self.impose_context_for_parsing(Indexing);
         while IsNext::Yes == self.is_next_strict(LBrack) {
             let marker = self.start();
             {
-                let rollback_when_dropped =
-                    self.impose_restrictions_of_currently_parsing_on_context(LBrack);
+                let rollback_when_dropped = self.impose_context_for_parsing(LBrack);
                 self.expect_and_bump(LBrack);
                 self.parse_expression_until_binding_power(starting_precedence());
             }
             {
-                self.impose_restrictions_of_currently_parsing_on_context(RBrack);
+                self.impose_context_for_parsing(RBrack);
                 self.expect_and_bump(RBrack);
             }
             self.complete_marker_with(marker, Indexing);
@@ -173,14 +171,12 @@ impl Parser<'_> {
     pub fn parse_buffer_literal(&self) {
         let marker = self.start();
         {
-            let rollback_when_dropped =
-                self.impose_restrictions_of_currently_parsing_on_context(LBrack);
+            let rollback_when_dropped = self.impose_context_for_parsing(LBrack);
             self.expect_and_bump(LBrack);
             self.comma_separated_expressions_until(RBrack, DimValue);
         }
         {
-            let rollback_when_dropped =
-                self.impose_restrictions_of_currently_parsing_on_context(RBrack);
+            let rollback_when_dropped = self.impose_context_for_parsing(RBrack);
             self.expect_and_bump(RBrack);
         }
         let dim_values_marker = self.complete_marker_with(marker, BufferLit);
@@ -275,7 +271,7 @@ impl Parser<'_> {
         } else {
             TensorLit
         };
-        let rollback_when_dropped = self.impose_restrictions_of_currently_parsing_on_context(kind);
+        let rollback_when_dropped = self.impose_context_for_parsing(kind);
         self.allow_in_ctx(Semi);
         self.expect_and_bump(opening);
 
