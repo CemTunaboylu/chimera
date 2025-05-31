@@ -1,6 +1,6 @@
 use crate::{
     operator::starting_precedence,
-    parse::{Finished, Element},
+    parse::{Element, Finished},
     parser::Parser,
 };
 
