@@ -368,8 +368,18 @@ impl<'input> Parser<'input> {
         }
         Some(())
     }
-    pub fn bump_if(&self, kind: SyntaxKind) {
+    pub fn bump_if(&self, kind: SyntaxKind) -> bool {
         if self.is_next(kind) {
+            self.bump();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn bump_until(&self, kinds: impl Into<SyntaxKindBitSet>) {
+        let set: SyntaxKindBitSet = kinds.into();
+        while IsNext::No == self.is_next_in_strict(set) {
             self.bump();
         }
     }

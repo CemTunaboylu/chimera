@@ -1,7 +1,7 @@
 use crate::{
     operator::starting_precedence,
     parse::{Element, Finished},
-    parser::{IsNext, Parser},
+    parser::Parser,
 };
 
 use syntax::{
@@ -21,7 +21,6 @@ impl Parser<'_> {
     pub fn mark_tuple_pattern_as_parsed(&self) {
         self.mark_expectation_as_satisfied_in_ctx([Tuple, LetBinding].as_ref());
     }
-
     fn impose_tuple_pattern_context(&self) -> RollingBackAnchor {
         let rollback_when_dropped = self.roll_back_context_after_drop();
         let ctx = self.context.borrow();
@@ -32,22 +31,55 @@ impl Parser<'_> {
         ctx.allow_only(allowed + opening_delimiters);
         rollback_when_dropped
     }
+    fn parse_tuple(&self) {
+        let elements = if self.is_parsing_tuple_pattern() {
+            &[Element::LeftHandSide]
+        } else {
+            &[Element::ParseExprWith(starting_precedence())]
+        };
+        self.bump_separated_by(elements, Comma, RParen);
+    }
+    #[allow(unused_variables)]
+    fn parse_parenthesised_or_tuple_pattern(&self) -> (SyntaxKind, Option<Finished>) {
+        let marker = self.start();
+        self.expect_and_bump(LParen);
+        let mut kind = Unit; // an empty () is the unit tuple now
+        if self.bump_if(RParen) {
+            return (kind, Some(self.complete_marker_with(marker, kind)));
+        }
+        kind = ParenExpr;
+        if self
+            .parse_expression_until_binding_power(starting_precedence())
+            .is_none()
+        {
+            self.bump_until([Comma, RParen].as_ref());
+        };
+
+        if self.bump_if(RParen) {
+            return (kind, Some(self.complete_marker_with(marker, kind)));
+        } else if self.bump_if(Comma) {
+            kind = Tuple;
+            let rollback_when_dropped = self.impose_context_for_parsing(Tuple);
+            self.parse_tuple();
+        } else {
+            self.bump_until(RParen);
+            kind = Recovered;
+        }
+
+        self.expect_and_bump(RParen);
+        let finished = self.complete_marker_with(marker, kind);
+        (kind, Some(finished))
+    }
 
     // Parses tuples in let bindings, e.g. let (a,b,c) = ... a pattern expression as in Rust
     #[allow(unused_variables)]
     pub fn parse_tuple_pattern(&self) -> Option<Finished> {
         let rollback_when_dropped = self.impose_tuple_pattern_context();
-        let marker = self.start();
-        self.expect_and_bump(LParen);
-        self.parse_tuple();
-        self.expect_and_bump(RParen);
-        let finished = self.complete_marker_with(marker, SyntaxKind::Tuple);
-        Some(finished)
-    }
-
-    fn parse_tuple(&self) {
-        let elements = &[Element::ParseExprWith(starting_precedence())];
-        self.bump_separated_by(elements, Comma, RParen);
+        let (kind, finished) = self.parse_parenthesised_or_tuple_pattern();
+        if kind != Tuple {
+            self.emit_error_event("expected tuple pattern");
+        }
+        finished
     }
 
     #[allow(unused_variables)]
@@ -56,28 +88,11 @@ impl Parser<'_> {
             return self.parse_tuple_pattern();
         }
         let rollback_when_dropped = self.impose_context_for_parsing(ParenExpr);
-        let marker = self.start();
-        self.expect_and_bump(LParen);
-
-        let kind = if IsNext::No == self.is_next_strict(RParen) {
-            self.parse_expression_until_binding_power(starting_precedence());
-            match self.is_next_strict(Comma) {
-                IsNext::Yes => {
-                    let rollback_when_dropped = self.impose_context_for_parsing(Tuple);
-                    self.bump_if(Comma);
-                    self.parse_tuple();
-                    Tuple
-                }
-                IsNext::No => ParenExpr,
-                _ => return None,
-            }
-        } else {
-            Unit // an empty () is the unit tuple now
-        };
-
-        self.expect_and_bump(RParen);
-        let finished = self.complete_marker_with(marker, kind);
-        Some(finished)
+        let (kind, finished) = self.parse_parenthesised_or_tuple_pattern();
+        if kind == Recovered {
+            self.emit_error_event("expected parenthesised expression");
+        }
+        finished
     }
 }
 
@@ -105,8 +120,7 @@ mod tests {
                         Recovered@7..8
                           Plus@7..8 "+"
                         Whitespace@8..9 " "
-                        VarRef@9..10
-                          Ident@9..10 "b"
+                        Ident@9..10 "b"
                         Comma@10..11 ","
                         RParen@11..12 ")"
                       Whitespace@12..13 " "
@@ -115,6 +129,45 @@ mod tests {
                       Literal@15..16
                         Int@15..16 "1"
                     Semi@16..17 ";""#]],
+        )
+    }
+
+    #[test]
+    fn test_last_erroneous_tuple_patterns() {
+        check(
+            "let (x, y, a + b,) = 1;",
+            expect![[r#"
+                Root@0..23
+                  LetBinding@0..23
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..22
+                      Tuple@4..18
+                        LParen@4..5 "("
+                        VarRef@5..6
+                          Ident@5..6 "x"
+                        Comma@6..7 ","
+                        Whitespace@7..8 " "
+                        VarRef@8..9
+                          Ident@8..9 "y"
+                        Comma@9..10 ","
+                        Whitespace@10..11 " "
+                        VarRef@11..13
+                          Ident@11..12 "a"
+                          Whitespace@12..13 " "
+                        Recovered@13..14
+                          Plus@13..14 "+"
+                        Whitespace@14..15 " "
+                        VarRef@15..16
+                          Ident@15..16 "b"
+                        Comma@16..17 ","
+                        RParen@17..18 ")"
+                      Whitespace@18..19 " "
+                      Eq@19..20 "="
+                      Whitespace@20..21 " "
+                      Literal@21..22
+                        Int@21..22 "1"
+                    Semi@22..23 ";""#]],
         )
     }
 
@@ -270,9 +323,10 @@ mod tests {
                       RBrace@43..44 "}""#]]
         ),
         missing_closing_parenthesis_does_not_panic: ("(",
-            expect![[
-                "Root@0..1\n  Unit@0..1\n    LParen@0..1 \"(\""
-            ]]
+            expect![[r#"
+                Root@0..1
+                  Recovered@0..1
+                    LParen@0..1 "(""#]]
         ),
         parenthesised_sub_precedes_mul: ("(3+1)*4",
             expect![[
@@ -304,87 +358,79 @@ mod tests {
         ),
         misplaced_parenthesised_var_def: ("let z = (3;1);",
             expect![[r#"
-                Root@0..13
-                  LetBinding@0..12
+                Root@0..14
+                  LetBinding@0..14
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    InfixBinOp@4..11
+                    InfixBinOp@4..13
                       VarRef@4..6
                         Ident@4..5 "z"
                         Whitespace@5..6 " "
                       Eq@6..7 "="
                       Whitespace@7..8 " "
-                      ParenExpr@8..11
+                      Recovered@8..13
                         LParen@8..9 "("
                         Literal@9..10
                           Int@9..10 "3"
-                        Recovered@10..11
-                          Semi@10..11 ";"
-                    Recovered@11..12
-                      Int@11..12 "1"
-                  Recovered@12..13
-                    RParen@12..13 ")""#]]
+                        Semi@10..11 ";"
+                        Int@11..12 "1"
+                        RParen@12..13 ")"
+                    Semi@13..14 ";""#]]
         ),
         misplaced_parenthesised_var_def_with_fn_call: ("let z = (something(););",
             expect![[r#"
                 Root@0..23
-                  Semi@0..23
-                    LetBinding@0..22
-                      KwLet@0..3 "let"
-                      Whitespace@3..4 " "
-                      InfixBinOp@4..21
-                        VarRef@4..6
-                          Ident@4..5 "z"
-                          Whitespace@5..6 " "
-                        Eq@6..7 "="
-                        Whitespace@7..8 " "
-                        ParenExpr@8..21
-                          LParen@8..9 "("
-                          Call@9..20
-                            Ident@9..18 "something"
-                            LParen@18..19 "("
-                            RParen@19..20 ")"
-                          Recovered@20..21
-                            Semi@20..21 ";"
-                      Recovered@21..22
+                  LetBinding@0..23
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..22
+                      VarRef@4..6
+                        Ident@4..5 "z"
+                        Whitespace@5..6 " "
+                      Eq@6..7 "="
+                      Whitespace@7..8 " "
+                      Recovered@8..22
+                        LParen@8..9 "("
+                        Call@9..20
+                          Ident@9..18 "something"
+                          LParen@18..19 "("
+                          RParen@19..20 ")"
+                        Semi@20..21 ";"
                         RParen@21..22 ")"
                     Semi@22..23 ";""#]]
         ),
         assignment_during_var_def: ("let z = (self.x += 1) + 2;",
             expect![[r#"
                 Root@0..26
-                  LetBinding@0..21
+                  LetBinding@0..26
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    InfixBinOp@4..20
+                    InfixBinOp@4..25
                       VarRef@4..6
                         Ident@4..5 "z"
                         Whitespace@5..6 " "
                       Eq@6..7 "="
                       Whitespace@7..8 " "
-                      ParenExpr@8..20
-                        LParen@8..9 "("
-                        InfixBinOp@9..18
-                          SelfRef@9..13
-                            Kwself@9..13 "self"
-                          Dot@13..14 "."
-                          VarRef@14..16
-                            Ident@14..15 "x"
-                            Whitespace@15..16 " "
-                          Recovered@16..18
-                            PlusEq@16..18 "+="
-                        Whitespace@18..19 " "
-                        Recovered@19..20
+                      InfixBinOp@8..25
+                        Recovered@8..21
+                          LParen@8..9 "("
+                          InfixBinOp@9..18
+                            SelfRef@9..13
+                              Kwself@9..13 "self"
+                            Dot@13..14 "."
+                            VarRef@14..16
+                              Ident@14..15 "x"
+                              Whitespace@15..16 " "
+                            Recovered@16..18
+                              PlusEq@16..18 "+="
+                          Whitespace@18..19 " "
                           Int@19..20 "1"
-                    Recovered@20..21
-                      RParen@20..21 ")"
-                  Whitespace@21..22 " "
-                  Recovered@22..23
-                    Plus@22..23 "+"
-                  Whitespace@23..24 " "
-                  Semi@24..26
-                    Literal@24..25
-                      Int@24..25 "2"
+                          RParen@20..21 ")"
+                        Whitespace@21..22 " "
+                        Plus@22..23 "+"
+                        Whitespace@23..24 " "
+                        Literal@24..25
+                          Int@24..25 "2"
                     Semi@25..26 ";""#]]
         ),
         parenthesised_pi: ("((314))",
@@ -408,18 +454,18 @@ mod tests {
         ),
         parenthesised_pi_with_semicolon_inside: ("((314;));",
             expect![[r#"
-                Root@0..8
-                  ParenExpr@0..7
-                    LParen@0..1 "("
-                    ParenExpr@1..6
-                      LParen@1..2 "("
-                      Literal@2..5
-                        Int@2..5 "314"
-                      Recovered@5..6
+                Root@0..9
+                  Semi@0..9
+                    ParenExpr@0..8
+                      LParen@0..1 "("
+                      Recovered@1..7
+                        LParen@1..2 "("
+                        Literal@2..5
+                          Int@2..5 "314"
                         Semi@5..6 ";"
-                    RParen@6..7 ")"
-                  Recovered@7..8
-                    RParen@7..8 ")""#]]
+                        RParen@6..7 ")"
+                      RParen@7..8 ")"
+                    Semi@8..9 ";""#]]
         ),
     }
 }

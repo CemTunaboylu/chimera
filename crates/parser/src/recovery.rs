@@ -21,6 +21,12 @@ impl Parser<'_> {
         }
     }
 
+    pub fn emit_error_event(&self, err_msg: &str) {
+        let err_span = self.lexer.borrow().span().clone();
+        let parse_err = ParseError::from(err_span, err_msg, &self.context.borrow());
+        self.push_event(Event::Error { err: parse_err });
+    }
+
     pub fn recover_from_err(&self, err: Report) {
         let err_span = self.lexer.borrow().span().clone();
         let parse_err = ParseError::from(
