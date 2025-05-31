@@ -20,15 +20,16 @@ pub type CustomExpectationOnSyntax = fn(&Syntax) -> bool;
 
 #[derive(Clone, Debug)]
 pub enum Element {
+    Branched(ThinVec<Element>, ThinVec<Element>),
+    Fn(CustomExpectationOnSyntax),
+    InSet(SyntaxKindBitSet),
+    LeftHandSide,
     Kind(SyntaxKind),
     KindAs(SyntaxKind, SyntaxKind),
-    InSet(SyntaxKindBitSet),
     KindWithMarker(SyntaxKind, SyntaxKind),
     Optional(SyntaxKindBitSet),
-    RefMut(ThinVec<Element>),
-    Fn(CustomExpectationOnSyntax),
-    Branched(ThinVec<Element>, ThinVec<Element>),
     ParseExprWith(Bound),
+    RefMut(ThinVec<Element>),
 }
 
 impl Parser<'_> {
@@ -76,49 +77,22 @@ impl Parser<'_> {
     fn does_first_element_pass(&self, s: &Element) -> bool {
         use Element::*;
         match s {
+            Branched(f, _) => self.does_first_element_pass(f.first().unwrap()),
+            &Fn(f) => self.is_next_f(f),
+            &InSet(syntax_kind_bit_set) => self.is_next_in(syntax_kind_bit_set),
             &Kind(syntax_kind) => self.is_next(syntax_kind),
             &KindAs(syntax_kind, _) => self.is_next(syntax_kind),
             &KindWithMarker(syntax_kind, _) => self.is_next(syntax_kind),
-            &Fn(f) => self.is_next_f(f),
+            &LeftHandSide => true,
             Optional(_) => true,
-            RefMut(elements) => self.does_first_element_pass(elements.first().unwrap()),
             ParseExprWith(_) => true,
-            Branched(f, _) => self.does_first_element_pass(f.first().unwrap()),
-            &InSet(syntax_kind_bit_set) => self.is_next_in(syntax_kind_bit_set),
+            RefMut(elements) => self.does_first_element_pass(elements.first().unwrap()),
         }
     }
     pub fn parse_with(&self, elements_in_order: &[Element]) {
         use Element::*;
         for element in elements_in_order.iter() {
             match element {
-                &Kind(exp_kind) => {
-                    self.expect_and_bump(exp_kind);
-                }
-                &KindAs(exp_kind, as_kind) => {
-                    self.expect_and_bump_as(exp_kind, as_kind);
-                }
-                &InSet(set) => {
-                    if self.is_next_in(set) {
-                        self.bump();
-                    }
-                }
-                &KindWithMarker(exp_kind, bump_with) => {
-                    self.expect_and_bump_with_marker(exp_kind, bump_with);
-                }
-                &Fn(custom_exp_func) => {
-                    self.expect_f_and_bump(custom_exp_func);
-                }
-                &Optional(set) => {
-                    if self.is_next_in(set) {
-                        self.bump();
-                    }
-                }
-                RefMut(elements) => {
-                    self.parse_possible_ref_mut_arg_and_elms(elements);
-                }
-                ParseExprWith(bound) => {
-                    self.parse_expression_until_binding_power(bound.clone());
-                }
                 Branched(a, b) => {
                     let to_iterate = if self.does_first_element_pass(a.first().unwrap()) {
                         a
@@ -126,6 +100,37 @@ impl Parser<'_> {
                         b
                     };
                     self.parse_with(to_iterate);
+                }
+                &Fn(custom_exp_func) => {
+                    self.expect_f_and_bump(custom_exp_func);
+                }
+                &InSet(set) => {
+                    if self.is_next_in(set) {
+                        self.bump();
+                    }
+                }
+                &Kind(exp_kind) => {
+                    self.expect_and_bump(exp_kind);
+                }
+                &KindAs(exp_kind, as_kind) => {
+                    self.expect_and_bump_as(exp_kind, as_kind);
+                }
+                &KindWithMarker(exp_kind, bump_with) => {
+                    self.expect_and_bump_with_marker(exp_kind, bump_with);
+                }
+                LeftHandSide => {
+                    self.parse_left_hand_side();
+                }
+                &Optional(set) => {
+                    if self.is_next_in(set) {
+                        self.bump();
+                    }
+                }
+                ParseExprWith(bound) => {
+                    self.parse_expression_until_binding_power(bound.clone());
+                }
+                RefMut(elements) => {
+                    self.parse_possible_ref_mut_arg_and_elms(elements);
                 }
             }
         }
