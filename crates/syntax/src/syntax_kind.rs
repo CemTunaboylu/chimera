@@ -54,7 +54,7 @@ pub enum SyntaxKind {
     Generic,
     Indexing,
     StructDef,
-    VarDef,
+    LetBinding,
     WhileLoop,
     // mirrored
     And,
@@ -371,7 +371,7 @@ impl SyntaxKind {
                 context_update[1] = RestrictionType::Add([Gt].as_ref().into());
                 context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
             }
-            VarDef => {
+            LetBinding => {
                 // ! FIXME: this is a hack, I need to find a better way to expect things IN ORDER
                 context_update[0] = RestrictionType::Add([Eq, Ident, Semi].as_slice().into());
                 let non_assignments: SyntaxKindBitSet = non_assigning_operators();

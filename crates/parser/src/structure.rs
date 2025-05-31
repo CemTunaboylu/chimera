@@ -132,7 +132,7 @@ mod tests {
         struct_init: ("let origin = Point{ x: 0, y: 0, item: origin_item };",
             expect![[r#"
                 Root@0..52
-                  VarDef@0..52
+                  LetBinding@0..52
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..51

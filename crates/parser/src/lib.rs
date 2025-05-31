@@ -7,6 +7,7 @@ mod event;
 mod event_holder;
 pub mod func;
 pub mod implements;
+pub mod let_binding;
 pub mod loops;
 pub mod marker;
 mod operator;
@@ -17,7 +18,6 @@ mod recovery;
 mod sink;
 pub mod statement;
 pub mod structure;
-pub mod var_def;
 
 #[cfg(test)]
 mod tests {

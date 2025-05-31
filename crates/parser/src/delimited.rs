@@ -230,7 +230,7 @@ mod tests {
                 Root@0..14
                   Block@0..14
                     LBrace@0..1 "{"
-                    VarDef@1..11
+                    LetBinding@1..11
                       KwLet@1..4 "let"
                       Whitespace@4..5 " "
                       InfixBinOp@5..10
@@ -253,7 +253,7 @@ mod tests {
                 Root@0..40
                   Block@0..40
                     LBrace@0..1 "{"
-                    VarDef@1..11
+                    LetBinding@1..11
                       KwLet@1..4 "let"
                       Whitespace@4..5 " "
                       InfixBinOp@5..10
@@ -267,7 +267,7 @@ mod tests {
                       Semi@10..11 ";"
                     Whitespace@11..12 "\n"
                     Whitespace@12..13 " "
-                    VarDef@13..23
+                    LetBinding@13..23
                       KwLet@13..16 "let"
                       Whitespace@16..17 " "
                       InfixBinOp@17..22
@@ -280,7 +280,7 @@ mod tests {
                           Int@21..22 "1"
                       Semi@22..23 ";"
                     Whitespace@23..24 " "
-                    VarDef@24..33
+                    LetBinding@24..33
                       KwLet@24..27 "let"
                       Whitespace@27..28 " "
                       InfixBinOp@28..32

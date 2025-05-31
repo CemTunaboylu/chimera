@@ -335,7 +335,7 @@ mod tests {
     lambda_with_no_parameters_not_handled: ("let empty = || {0}",
               expect![[r#"
                   Root@0..18
-                    VarDef@0..18
+                    LetBinding@0..18
                       KwLet@0..3 "let"
                       Whitespace@3..4 " "
                       InfixBinOp@4..18
@@ -358,7 +358,7 @@ mod tests {
         call_on_lambda_literal: ("let two = |a| {2*a}(1);",
               expect![[r#"
                   Root@0..23
-                    VarDef@0..23
+                    LetBinding@0..23
                       KwLet@0..3 "let"
                       Whitespace@3..4 " "
                       InfixBinOp@4..22
@@ -414,7 +414,7 @@ mod tests {
     lambda_with_single_typeless_parameter: ("let identity = |s| {s};",
         expect![[r#"
             Root@0..23
-              VarDef@0..23
+              LetBinding@0..23
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..22
@@ -441,7 +441,7 @@ mod tests {
     lambda_with_single_type_hinted_parameter: ("let ident = |s:i32| {s};",
         expect![[r#"
             Root@0..24
-              VarDef@0..24
+              LetBinding@0..24
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..23
@@ -528,7 +528,7 @@ mod tests {
     lambda_with_multiple_type_hinted_parameters: ("let tri = |first:i32, second:char, third: Structure| { third.juggle(first, second) }",
         expect![[r#"
             Root@0..82
-              VarDef@0..82
+              LetBinding@0..82
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..82
@@ -583,7 +583,7 @@ mod tests {
     lambda_with_mixed_parameters: ("let tri = |typeless, primitive:char, structure: Structure, another_typles| { structure.juggle(typeless, primitive,another_typles) }",
         expect![[r#"
             Root@0..128
-              VarDef@0..128
+              LetBinding@0..128
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..128
@@ -643,7 +643,7 @@ mod tests {
     lambda_returnin_another_lambda: ("let inception = |typeless| { |t| {t.steal_type(typeless)} }",
         expect![[r#"
             Root@0..59
-              VarDef@0..59
+              LetBinding@0..59
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..59
@@ -713,7 +713,7 @@ mod tests {
                       Block@39..110
                         Whitespace@39..40 " "
                         LBrace@40..41 "{"
-                        VarDef@41..68
+                        LetBinding@41..68
                           KwLet@41..44 "let"
                           Whitespace@44..45 " "
                           InfixBinOp@45..67
@@ -732,7 +732,7 @@ mod tests {
                                 Ident@61..67 "second"
                           Semi@67..68 ";"
                         Whitespace@68..69 " "
-                        VarDef@69..94
+                        LetBinding@69..94
                           KwLet@69..72 "let"
                           Whitespace@72..73 " "
                           InfixBinOp@73..93
@@ -873,7 +873,7 @@ mod tests {
     lambda_with_ref_mut_parameter: ("let like_a_method = |s:&mut Structure| {s.mutate()};",
         expect![[r#"
             Root@0..52
-              VarDef@0..52
+              LetBinding@0..52
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..51

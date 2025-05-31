@@ -1,15 +1,22 @@
-use crate::{operator::starting_precedence, parse::Finished, parser::Parser};
+use crate::{
+    operator::starting_precedence,
+    parse::Finished,
+    parser::{IsNext, Parser},
+};
 
 use syntax::syntax_kind::SyntaxKind::*;
 
 impl Parser<'_> {
     #[allow(unused_variables)]
-    pub fn parse_variable_def(&self) -> Option<Finished> {
+    pub fn parse_let_binding(&self) -> Option<Finished> {
         let marker = self.start();
         self.expect_and_bump(KwLet);
 
-        let rollback_when_dropped =
-            self.impose_restrictions_of_currently_parsing_on_context(VarDef);
+        let rollback_when_dropped = self.impose_context_for_parsing(LetBinding);
+
+        if IsNext::Yes == self.is_next_strict(LParen) {
+            self.expect_in_ctx([Tuple, LetBinding].as_ref());
+        }
 
         if self
             .parse_expression_until_binding_power(starting_precedence())
@@ -19,7 +26,7 @@ impl Parser<'_> {
             self.recover_with_msg("expected a valid assignment", got);
         }
         self.expect_and_bump(Semi);
-        Some(self.complete_marker_with(marker, VarDef))
+        Some(self.complete_marker_with(marker, LetBinding))
     }
 }
 
@@ -40,7 +47,7 @@ mod tests {
         malformed_var_defs: ("let a = let b = let c = 5;",
             expect![[r#"
                 Root@0..26
-                  VarDef@0..8
+                  LetBinding@0..8
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..8
@@ -49,7 +56,7 @@ mod tests {
                         Whitespace@5..6 " "
                       Eq@6..7 "="
                       Whitespace@7..8 " "
-                  VarDef@8..16
+                  LetBinding@8..16
                     KwLet@8..11 "let"
                     Whitespace@11..12 " "
                     InfixBinOp@12..16
@@ -58,7 +65,7 @@ mod tests {
                         Whitespace@13..14 " "
                       Eq@14..15 "="
                       Whitespace@15..16 " "
-                  VarDef@16..26
+                  LetBinding@16..26
                     KwLet@16..19 "let"
                     Whitespace@19..20 " "
                     InfixBinOp@20..25
@@ -75,7 +82,7 @@ mod tests {
         moving_var_def:    ("let foo = bar",
             expect![[r#"
                 Root@0..13
-                  VarDef@0..13
+                  LetBinding@0..13
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..13
@@ -89,7 +96,7 @@ mod tests {
         type_hinted_var_def:    ("let foo : Important = bar",
             expect![[r#"
                 Root@0..25
-                  VarDef@0..25
+                  LetBinding@0..25
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..25
@@ -108,7 +115,7 @@ mod tests {
         fn_type_hinted_var_def:    ("let foo : fn(i32)->i32 = bar",
             expect![[r#"
                 Root@0..28
-                  VarDef@0..28
+                  LetBinding@0..28
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..28
@@ -136,7 +143,7 @@ mod tests {
         mut_moving_var_def:    ("let mut foo : i32 = bar",
             expect![[r#"
                 Root@0..23
-                  VarDef@0..23
+                  LetBinding@0..23
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     Mut@4..23
@@ -159,7 +166,7 @@ mod tests {
             "let a =\nlet b = a;",
             expect![[r#"
                 Root@0..18
-                  VarDef@0..8
+                  LetBinding@0..8
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..8
@@ -168,7 +175,7 @@ mod tests {
                         Whitespace@5..6 " "
                       Eq@6..7 "="
                       Whitespace@7..8 "\n"
-                  VarDef@8..18
+                  LetBinding@8..18
                     KwLet@8..11 "let"
                     Whitespace@11..12 " "
                     InfixBinOp@12..17
@@ -185,7 +192,7 @@ mod tests {
             "let a =;let b = a;",
             expect![[r#"
                 Root@0..18
-                  VarDef@0..8
+                  LetBinding@0..8
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..7
@@ -194,7 +201,7 @@ mod tests {
                         Whitespace@5..6 " "
                       Eq@6..7 "="
                     Semi@7..8 ";"
-                  VarDef@8..18
+                  LetBinding@8..18
                     KwLet@8..11 "let"
                     Whitespace@11..12 " "
                     InfixBinOp@12..17
@@ -213,7 +220,7 @@ mod tests {
                 Root@0..23
                   Block@0..23
                     LBrace@0..1 "{"
-                    VarDef@1..21
+                    LetBinding@1..21
                       KwLet@1..4 "let"
                       Whitespace@4..5 " "
                       InfixBinOp@5..19
@@ -224,7 +231,7 @@ mod tests {
                         Whitespace@8..9 "\n"
                         Block@9..18
                           LBrace@9..10 "{"
-                          VarDef@10..17
+                          LetBinding@10..17
                             KwLet@10..13 "let"
                             Whitespace@13..14 " "
                             InfixBinOp@14..17
@@ -245,7 +252,7 @@ mod tests {
                 Root@0..24
                   Block@0..24
                     LBrace@0..1 "{"
-                    VarDef@1..19
+                    LetBinding@1..19
                       KwLet@1..4 "let"
                       Whitespace@4..5 " "
                       InfixBinOp@5..18
@@ -256,7 +263,7 @@ mod tests {
                         Whitespace@8..9 "\n"
                         Block@9..18
                           LBrace@9..10 "{"
-                          VarDef@10..17
+                          LetBinding@10..17
                             KwLet@10..13 "let"
                             Whitespace@13..14 " "
                             InfixBinOp@14..17

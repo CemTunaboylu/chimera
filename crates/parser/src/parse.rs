@@ -178,7 +178,7 @@ impl Parser<'_> {
                         {
                             lhs_marker = marker;
                             if is_an_assignment(kind)
-                                && !self.is_in_the_middle_of_parsing(VarDef)
+                                && !self.is_in_the_middle_of_parsing(LetBinding)
                                 && self.is_next(Semi)
                             {
                                 let semi_marker = self.precede_marker_with(&lhs_marker);

@@ -388,7 +388,7 @@ mod tests {
         var_def_from_arr: ("let z = arr[me.z - she.z];",
             expect![[r#"
                 Root@0..26
-                  VarDef@0..26
+                  LetBinding@0..26
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..25
@@ -423,7 +423,7 @@ mod tests {
         var_def_with_buffer_literal: ("let z = [1,1,1];",
             expect![[r#"
                 Root@0..14
-                  VarDef@0..14
+                  LetBinding@0..14
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..13
@@ -450,7 +450,7 @@ mod tests {
         var_def_with_generic_dim_hinted_buffer_fails: ("let z: buffer<_,_,_> = [1,1,1];",
             expect![[r#"
                 Root@0..29
-                  VarDef@0..29
+                  LetBinding@0..29
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..28
@@ -495,7 +495,7 @@ mod tests {
         var_def_with_2d_tensor_literal: ("let u = [[1,0,0],[0,1,0],[0,0,1]];",
             expect![[r#"
                 Root@0..26
-                  VarDef@0..26
+                  LetBinding@0..26
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..25
@@ -555,7 +555,7 @@ mod tests {
         var_def_with_fully_generic_shaped_tensor: ("let z : tensor<_,_,_> = random_3d_tensor();",
             expect![[r#"
                 Root@0..43
-                  VarDef@0..43
+                  LetBinding@0..43
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..42
@@ -587,7 +587,7 @@ mod tests {
         var_def_with_tensor_type_with_hint_cannot_take_a_fn_call: ("let z = tensor<f32>::new();",
             expect![[r#"
                 Root@0..27
-                  VarDef@0..27
+                  LetBinding@0..27
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..26
@@ -614,7 +614,7 @@ mod tests {
         var_def_with_tensor_structure_with_consecutive_type_hints: ("let z = tensor<f32><i32>::new();",
             expect![[r#"
                 Root@0..32
-                  VarDef@0..32
+                  LetBinding@0..32
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..31
@@ -647,7 +647,7 @@ mod tests {
         var_def_with_tensor_structure_with_consecutive_dim_hints: ("let z : tensor<3,3,3><1,1,1> = tensor[0; [3,3,3]];",
             expect![[r#"
                 Root@0..50
-                  VarDef@0..50
+                  LetBinding@0..50
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..49

@@ -116,7 +116,7 @@ mod tests {
                 conditionals_if_else_semi: ("let can_pass = if human.age >= 18 { true } else { false };",
             expect![[r#"
                 Root@0..58
-                  VarDef@0..58
+                  LetBinding@0..58
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..57

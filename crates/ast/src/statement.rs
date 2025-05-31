@@ -56,7 +56,7 @@ impl TryFrom<&SyntaxNode> for Stmt {
                 Ok(struct_def) => Ok(Self::StructDef(struct_def)),
                 Err(err) => Err(err),
             },
-            SyntaxKind::VarDef => match VarDef::try_from(node) {
+            SyntaxKind::LetBinding => match VarDef::try_from(node) {
                 Ok(var_def) => Ok(Self::VarDef(var_def)),
                 Err(err) => Err(err),
             },
