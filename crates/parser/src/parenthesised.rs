@@ -186,6 +186,14 @@ mod tests {
                     LParen@0..1 "("
                     RParen@1..2 ")""#]]
         ),
+        just_comma_in_parenthesis: ("(,)",
+            expect![[r#"
+                Root@0..3
+                  Tuple@0..3
+                    LParen@0..1 "("
+                    Comma@1..2 ","
+                    RParen@2..3 ")""#]]
+        ),
         single_element_parenthesised_expr: ("(x)",
             expect![[r#"
                 Root@0..3
@@ -217,6 +225,19 @@ mod tests {
                         Ident@5..6 "x"
                     Comma@6..7 ","
                     RParen@7..8 ")""#]]
+        ),
+        two_element_tuple_with_double_commas: ("(x,,y)",
+            expect![[r#"
+                Root@0..6
+                  Tuple@0..6
+                    LParen@0..1 "("
+                    VarRef@1..2
+                      Ident@1..2 "x"
+                    Comma@2..3 ","
+                    Comma@3..4 ","
+                    VarRef@4..5
+                      Ident@4..5 "y"
+                    RParen@5..6 ")""#]]
         ),
         single_element_tuple_with_ref_mut: ("(& mut x,)",
             expect![[r#"
@@ -356,7 +377,36 @@ mod tests {
                         RParen@12..13 ")"
                     Semi@13..14 ";""#]]
         ),
-        misplaced_parenthesised_var_def: ("let z = (3;1);",
+        let_binding_with_two_commas_pattern: ("let (x,,y) = (3,1);",
+            expect![[r#"
+                Root@0..19
+                  LetBinding@0..19
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..18
+                      Tuple@4..10
+                        LParen@4..5 "("
+                        VarRef@5..6
+                          Ident@5..6 "x"
+                        Comma@6..7 ","
+                        Comma@7..8 ","
+                        VarRef@8..9
+                          Ident@8..9 "y"
+                        RParen@9..10 ")"
+                      Whitespace@10..11 " "
+                      Eq@11..12 "="
+                      Whitespace@12..13 " "
+                      Tuple@13..18
+                        LParen@13..14 "("
+                        Literal@14..15
+                          Int@14..15 "3"
+                        Comma@15..16 ","
+                        Literal@16..17
+                          Int@16..17 "1"
+                        RParen@17..18 ")"
+                    Semi@18..19 ";""#]]
+        ),
+        misplaced_parenthesised_let_binding: ("let z = (3;1);",
             expect![[r#"
                 Root@0..14
                   LetBinding@0..14
