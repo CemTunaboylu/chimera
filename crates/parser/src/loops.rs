@@ -1,8 +1,4 @@
-use crate::{
-    operator::starting_precedence,
-    parse::Finished,
-    parser::{IsNext, Parser},
-};
+use crate::{operator::starting_precedence, parse::Finished, parser::Parser};
 
 use syntax::syntax_kind::SyntaxKind::*;
 
