@@ -45,7 +45,7 @@ impl Parser<'_> {
 
     pub fn bump_separated_by(
         &self,
-        elements_in_order: &ThinVec<Element>,
+        elements_in_order: &[Element],
         separator: SyntaxKind,
         unwanted: impl Into<SyntaxKindBitSet>,
     ) {
@@ -57,7 +57,7 @@ impl Parser<'_> {
     }
     pub fn parse_separated_by(
         &self,
-        elements_in_order: &ThinVec<Element>,
+        elements_in_order: &[Element],
         wrapping_kind_to_complete: SyntaxKind,
         separator: SyntaxKind,
         unwanted: impl Into<SyntaxKindBitSet>,
@@ -87,7 +87,7 @@ impl Parser<'_> {
             &InSet(syntax_kind_bit_set) => self.is_next_in(syntax_kind_bit_set),
         }
     }
-    pub fn parse_with(&self, elements_in_order: &ThinVec<Element>) {
+    pub fn parse_with(&self, elements_in_order: &[Element]) {
         use Element::*;
         for element in elements_in_order.iter() {
             match element {
