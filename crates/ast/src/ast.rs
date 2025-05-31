@@ -77,7 +77,7 @@ pub mod tests {
             Recovered@4..5
                 Int@4..5 "9"
      */
-    fn try_from_var_def_malformed_with_no_name() {
+    fn try_from_let_binding_malformed_with_no_name() {
         let malformed = "let = 9";
         let root = ast_root_from(&malformed);
         let stmts = root.statements();

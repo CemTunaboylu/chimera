@@ -69,9 +69,9 @@ impl HIRBuilder {
                 let low_struct_def_idx = self.lower_struct_def(struct_def)?;
                 Stmt::StructDef(low_struct_def_idx)
             }
-            ASTStmt::VarDef(var_def) => {
-                let low_var_def = self.lower_var_def(var_def)?;
-                Stmt::VarDef(low_var_def)
+            ASTStmt::VarDef(let_binding) => {
+                let low_let_binding = self.lower_let_binding(let_binding)?;
+                Stmt::VarDef(low_let_binding)
             }
         };
         Ok(lowered)

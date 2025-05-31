@@ -354,7 +354,7 @@ mod tests {
                 "Root@0..7\n  InfixBinOp@0..7\n    ParenExpr@0..5\n      LParen@0..1 \"(\"\n      InfixBinOp@1..4\n        Literal@1..2\n          Int@1..2 \"3\"\n        Plus@2..3 \"+\"\n        Literal@3..4\n          Int@3..4 \"1\"\n      RParen@4..5 \")\"\n    Star@5..6 \"*\"\n    Literal@6..7\n      Int@6..7 \"4\""
             ]]
         ),
-        parenthesised_var_def: ("let z = (3+1);",
+        parenthesised_let_binding: ("let z = (3+1);",
             expect![[r#"
                 Root@0..14
                   LetBinding@0..14
@@ -427,7 +427,7 @@ mod tests {
                         RParen@12..13 ")"
                     Semi@13..14 ";""#]]
         ),
-        misplaced_parenthesised_var_def_with_fn_call: ("let z = (something(););",
+        misplaced_parenthesised_let_binding_with_fn_call: ("let z = (something(););",
             expect![[r#"
                 Root@0..23
                   LetBinding@0..23
@@ -449,7 +449,7 @@ mod tests {
                         RParen@21..22 ")"
                     Semi@22..23 ";""#]]
         ),
-        assignment_during_var_def: ("let z = (self.x += 1) + 2;",
+        assignment_during_let_binding: ("let z = (self.x += 1) + 2;",
             expect![[r#"
                 Root@0..26
                   LetBinding@0..26

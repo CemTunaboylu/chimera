@@ -364,8 +364,8 @@ mod tests {
     fn detailed_testing_of_direct_call_on_lambda_literal() {
         let program = "let two = |a| {2*a}(1);";
         let ast_root = ast_root_from(program);
-        let var_def_node = ast_root.get_root().first_child().unwrap();
-        let eq_infix_node = var_def_node.first_child().unwrap();
+        let let_binding_node = ast_root.get_root().first_child().unwrap();
+        let eq_infix_node = let_binding_node.first_child().unwrap();
         let call_node = eq_infix_node.last_child().unwrap();
         let call: Call = cast_node_into_type::<Call>(&call_node);
         assert_eq!(

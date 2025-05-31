@@ -44,7 +44,7 @@ mod tests {
     }
 
     create_parser_test! {
-        malformed_var_defs: ("let a = let b = let c = 5;",
+        malformed_let_bindings: ("let a = let b = let c = 5;",
             expect![[r#"
                 Root@0..26
                   LetBinding@0..8
@@ -79,7 +79,7 @@ mod tests {
                     Semi@25..26 ";""#]]
         ),
 
-        moving_var_def:    ("let foo = bar",
+        moving_let_binding:    ("let foo = bar",
             expect![[r#"
                 Root@0..13
                   LetBinding@0..13
@@ -93,7 +93,7 @@ mod tests {
                       Whitespace@9..10 " "
                       VarRef@10..13
                         Ident@10..13 "bar""#]]),
-        type_hinted_var_def:    ("let foo : Important = bar",
+        type_hinted_let_binding:    ("let foo : Important = bar",
             expect![[r#"
                 Root@0..25
                   LetBinding@0..25
@@ -112,7 +112,7 @@ mod tests {
                       Whitespace@21..22 " "
                       VarRef@22..25
                         Ident@22..25 "bar""#]]),
-        fn_type_hinted_var_def:    ("let foo : fn(i32)->i32 = bar",
+        fn_type_hinted_let_binding:    ("let foo : fn(i32)->i32 = bar",
             expect![[r#"
                 Root@0..28
                   LetBinding@0..28
@@ -140,7 +140,7 @@ mod tests {
                       VarRef@25..28
                         Ident@25..28 "bar""#]]),
 
-        mut_moving_var_def:    ("let mut foo : i32 = bar",
+        mut_moving_let_binding:    ("let mut foo : i32 = bar",
             expect![[r#"
                 Root@0..23
                   LetBinding@0..23

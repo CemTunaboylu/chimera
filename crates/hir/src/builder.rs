@@ -234,7 +234,7 @@ pub(crate) mod tests {
         }
 
         #[test]
-        fn lower_malformed_var_def_no_value() {
+        fn lower_malformed_let_binding_no_value() {
             let root = parse("let a = ");
             let hir = lower(&root).into_iter().next().unwrap();
 
@@ -248,7 +248,7 @@ pub(crate) mod tests {
         }
 
         #[test]
-        fn lower_malformed_var_def_no_name() {
+        fn lower_malformed_let_binding_no_name() {
             let root = parse("let = 9");
             let hir = lower(&root).into_iter().next();
             assert_eq!(hir, None);

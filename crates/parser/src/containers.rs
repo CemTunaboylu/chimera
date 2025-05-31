@@ -380,7 +380,7 @@ mod tests {
                         Int@28..29 "0"
                       RBrack@29..30 "]""#]]
         ),
-        var_def_from_arr: ("let z = arr[me.z - she.z];",
+        let_binding_from_arr: ("let z = arr[me.z - she.z];",
             expect![[r#"
                 Root@0..26
                   LetBinding@0..26
@@ -415,7 +415,7 @@ mod tests {
                           RBrack@24..25 "]"
                     Semi@25..26 ";""#]]
         ),
-        var_def_with_buffer_literal: ("let z = [1,1,1];",
+        let_binding_with_buffer_literal: ("let z = [1,1,1];",
             expect![[r#"
                 Root@0..14
                   LetBinding@0..14
@@ -442,7 +442,7 @@ mod tests {
                           RBrack@12..13 "]"
                     Semi@13..14 ";""#]]
         ),
-        var_def_with_generic_dim_hinted_buffer_fails: ("let z: buffer<_,_,_> = [1,1,1];",
+        let_binding_with_generic_dim_hinted_buffer_fails: ("let z: buffer<_,_,_> = [1,1,1];",
             expect![[r#"
                 Root@0..29
                   LetBinding@0..29
@@ -487,7 +487,7 @@ mod tests {
                           RBrack@27..28 "]"
                     Semi@28..29 ";""#]]
         ),
-        var_def_with_2d_tensor_literal: ("let u = [[1,0,0],[0,1,0],[0,0,1]];",
+        let_binding_with_2d_tensor_literal: ("let u = [[1,0,0],[0,1,0],[0,0,1]];",
             expect![[r#"
                 Root@0..26
                   LetBinding@0..26
@@ -547,7 +547,7 @@ mod tests {
                           RBrack@24..25 "]"
                     Semi@25..26 ";""#]]
         ),
-        var_def_with_fully_generic_shaped_tensor: ("let z : tensor<_,_,_> = random_3d_tensor();",
+        let_binding_with_fully_generic_shaped_tensor: ("let z : tensor<_,_,_> = random_3d_tensor();",
             expect![[r#"
                 Root@0..43
                   LetBinding@0..43
@@ -579,7 +579,7 @@ mod tests {
                         RParen@41..42 ")"
                     Semi@42..43 ";""#]]
         ),
-        var_def_with_tensor_type_with_hint_cannot_take_a_fn_call: ("let z = tensor<f32>::new();",
+        let_binding_with_tensor_type_with_hint_cannot_take_a_fn_call: ("let z = tensor<f32>::new();",
             expect![[r#"
                 Root@0..27
                   LetBinding@0..27
@@ -606,7 +606,7 @@ mod tests {
                     Semi@26..27 ";""#]]
         ),
 
-        var_def_with_tensor_structure_with_consecutive_type_hints: ("let z = tensor<f32><i32>::new();",
+        let_binding_with_tensor_structure_with_consecutive_type_hints: ("let z = tensor<f32><i32>::new();",
             expect![[r#"
                 Root@0..32
                   LetBinding@0..32
@@ -639,7 +639,7 @@ mod tests {
         ),
         // note: the initialized tensor will be promoted to stack since we know its size
         // even if it is escaped (in this case it will be moved)
-        var_def_with_tensor_structure_with_consecutive_dim_hints: ("let z : tensor<3,3,3><1,1,1> = tensor[0; [3,3,3]];",
+        let_binding_with_tensor_structure_with_consecutive_dim_hints: ("let z : tensor<3,3,3><1,1,1> = tensor[0; [3,3,3]];",
             expect![[r#"
                 Root@0..50
                   LetBinding@0..50

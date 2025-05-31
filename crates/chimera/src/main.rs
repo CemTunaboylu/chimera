@@ -75,7 +75,7 @@ fn display_as_cst(cst: &ConcreteSyntaxTree) {
 fn display_as_ast(cst: &ConcreteSyntaxTree) {
     let ast = Root::try_from(cst).unwrap();
     dbg!(ast.statements().for_each(|stmt| match stmt {
-        AstStmt::VarDef(var_def) => println!("VarDef: {:?}", var_def),
+        AstStmt::VarDef(let_binding) => println!("VarDef: {:?}", let_binding),
         AstStmt::Expr(_) => {}
         AstStmt::FnDef(_) => {}
         AstStmt::Jump(_) => {}

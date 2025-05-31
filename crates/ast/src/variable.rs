@@ -46,9 +46,9 @@ impl VarDef {
 impl TryFrom<&SyntaxNode> for VarDef {
     type Error = ASTError;
 
-    fn try_from(var_def_node: &SyntaxNode) -> Result<Self, Self::Error> {
+    fn try_from(let_binding_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let mut child = first_child_of_kind_errs(
-            var_def_node,
+            let_binding_node,
             [SyntaxKind::InfixBinOp, SyntaxKind::Mut].as_ref(),
         )?;
         let is_mut = child.kind() == SyntaxKind::Mut;
@@ -66,7 +66,7 @@ impl TryFrom<&SyntaxNode> for VarDef {
             ));
         };
         let assignment = bin.rhs().cloned();
-        let span = var_def_node.text_range().into();
+        let span = let_binding_node.text_range().into();
         Ok(Self {
             var_ref,
             is_mut,
@@ -134,26 +134,26 @@ mod tests {
     }
 
     #[test]
-    fn var_def() {
+    fn let_binding() {
         let program = "let diff_norm : Point = (point_1.locus() - point_2.locus()).normalize();";
         let ast_root = ast_root_from(program);
-        let var_def_node = ast_root.get_root().first_child().unwrap();
-        let var_def = cast_node_into_type::<VarDef>(&var_def_node);
-        assert_eq!("diff_norm", var_def.name().as_str());
+        let let_binding_node = ast_root.get_root().first_child().unwrap();
+        let let_binding = cast_node_into_type::<VarDef>(&let_binding_node);
+        assert_eq!("diff_norm", let_binding.name().as_str());
         assert_eq!(
             &Hint::Type(Type::Struct(SmolStr::from("Point"))),
-            var_def.type_hint().expect("should have a type hint")
+            let_binding.type_hint().expect("should have a type hint")
         );
-        assert!(!var_def.is_mut);
+        assert!(!let_binding.is_mut);
     }
 
     #[test]
-    fn mut_var_def() {
+    fn mut_let_binding() {
         let program = "let mut diff_norm = (point_1.locus() - point_2.locus()).normalize();";
         let ast_root = ast_root_from(program);
-        let var_def_node = ast_root.get_root().first_child().unwrap();
-        let var_def = cast_node_into_type::<VarDef>(&var_def_node);
-        assert_eq!("diff_norm", var_def.name().as_str());
-        assert!(var_def.is_mut);
+        let let_binding_node = ast_root.get_root().first_child().unwrap();
+        let let_binding = cast_node_into_type::<VarDef>(&let_binding_node);
+        assert_eq!("diff_norm", let_binding.name().as_str());
+        assert!(let_binding.is_mut);
     }
 }

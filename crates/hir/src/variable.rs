@@ -42,22 +42,22 @@ impl NameIndexed for VarDef {
 
 impl HIRBuilder {
     #[with_context(UsageContext::Moved)]
-    pub fn lower_var_def_rhs(&mut self, expr: Option<&ASTExpr>) -> HIRResult<ExprIdx> {
+    pub fn lower_let_binding_rhs(&mut self, expr: Option<&ASTExpr>) -> HIRResult<ExprIdx> {
         self.try_lower_expr_as_idx_with_default(expr)
     }
-    fn store_metadata_for_var_def(
+    fn store_metadata_for_let_binding(
         &mut self,
-        _ast_var_def: &ASTVarDef,
+        _ast_let_binding: &ASTVarDef,
         _idx: Idx<VarDef>,
         _expr_idx: ExprIdx,
     ) -> HIRResult<()> {
-        // let span = ast_var_def.span();
-        // self.allocate_span(ast_var_def.name(), span.clone().into());
+        // let span = ast_let_binding.span();
+        // self.allocate_span(ast_let_binding.name(), span.clone().into());
         // let usage_for_def = {
         //     let l_ctx = self.get_context().expect("a context");
         //     Usage::from(l_ctx, span.into(), self.get_current_stmt_idx())
         // };
-        // let of_type = if let Some(ASTHint::Type(type_hint)) = ast_var_def.type_hint() {
+        // let of_type = if let Some(ASTHint::Type(type_hint)) = ast_let_binding.type_hint() {
         //     self.lower_type(type_hint)?;
         // } else {
         // };
@@ -67,7 +67,7 @@ impl HIRBuilder {
         //     VarMeta {
         //         def: usage_for_def,
         //         usages: Usages::new(),
-        //         is_mut: ast_var_def.is_mut(),
+        //         is_mut: ast_let_binding.is_mut(),
         //         first_read_idx: None,
         //         first_write_idx: None,
         //         of_type: todo!(), // should be able to infer this?
@@ -76,17 +76,17 @@ impl HIRBuilder {
         todo!()
     }
     #[with_context(UsageContext::Init)]
-    pub fn lower_var_def(&mut self, ast_var_def: &ASTVarDef) -> HIRResult<VarDefIdx> {
-        let name = ast_var_def.name();
-        let expr_index = self.lower_var_def_rhs(ast_var_def.value())?;
+    pub fn lower_let_binding(&mut self, ast_let_binding: &ASTVarDef) -> HIRResult<VarDefIdx> {
+        let name = ast_let_binding.name();
+        let expr_index = self.lower_let_binding_rhs(ast_let_binding.value())?;
 
-        let var_def = VarDef {
+        let let_binding = VarDef {
             name_index: placeholder_idx::<SmolStr>(),
             expr_index,
         };
 
-        let idx = self.allocate::<VarDef, VarSelector>(name.clone(), var_def)?;
-        self.store_metadata_for_var_def(ast_var_def, idx, expr_index)?;
+        let idx = self.allocate::<VarDef, VarSelector>(name.clone(), let_binding)?;
+        self.store_metadata_for_let_binding(ast_let_binding, idx, expr_index)?;
         Ok(idx)
     }
     pub fn lower_var_ref(&mut self, var_ref: &ASTVarRef) -> HIRResult<Unresolved> {
