@@ -203,6 +203,19 @@ mod tests {
                       Ident@1..2 "x"
                     RParen@2..3 ")""#]]
         ),
+        return_single_element_tuple_with_trailing_comma: ("return (x,)",
+            expect![[r#"
+                Root@0..11
+                  Return@0..11
+                    KwReturn@0..6 "return"
+                    Whitespace@6..7 " "
+                    Tuple@7..11
+                      LParen@7..8 "("
+                      VarRef@8..9
+                        Ident@8..9 "x"
+                      Comma@9..10 ","
+                      RParen@10..11 ")""#]]
+        ),
         single_element_tuple_with_trailing_comma: ("(x,)",
             expect![[r#"
                 Root@0..4

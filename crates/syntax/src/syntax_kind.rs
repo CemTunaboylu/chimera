@@ -343,8 +343,9 @@ impl SyntaxKind {
                 context_update[2] = RestrictionType::Sub([Comma].as_ref().into());
             }
             ParamDecl => {
-                let misc: SyntaxKindBitSet =
-                    [And, Colon, Comma, Ident, KwMut, RParen].as_ref().into();
+                let misc: SyntaxKindBitSet = [And, Colon, Comma, Ident, KwMut, LParen, RParen]
+                    .as_ref()
+                    .into();
                 let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
                 context_update[2] = RestrictionType::Override(misc + types);
             }
