@@ -188,6 +188,7 @@ impl SyntaxKind {
             KwFn,     // allows parsing function declaration as a type
             KwTensor, // allows parsing tensor<dim><type> as a type
             StructAsType,
+            Tuple,
             TyBool,
             TyBuffer,
             TyChar,
@@ -343,6 +344,7 @@ impl SyntaxKind {
                 context_update[2] = RestrictionType::Sub([Comma].as_ref().into());
             }
             ParamDecl => {
+                context_update[0] = RestrictionType::Add(StructAsType.into());
                 let misc: SyntaxKindBitSet = [And, Colon, Comma, Ident, KwMut, LParen, RParen]
                     .as_ref()
                     .into();
