@@ -556,41 +556,38 @@ mod tests {
                   LBrace@49..50 "{"
                   RBrace@50..51 "}""#]],
     ),
-    function_def_with_tuple_parameter: ("fn empty((first:i32, second:char), third: Structure) {}",
+    function_def_with_tuple_parameter: ("fn empty(first:(i32, char, Structure), third: Structure) {}",
         expect![[r#"
-            Root@0..54
-              FnDef@0..54
+            Root@0..58
+              FnDef@0..58
                 KwFn@0..2 "fn"
                 Whitespace@2..3 " "
                 Ident@3..8 "empty"
                 LParen@8..9 "("
-                ParamDecl@9..33
-                  Tuple@9..33
-                    LParen@9..10 "("
-                    VarRef@10..19
-                      Ident@10..15 "first"
-                      Colon@15..16 ":"
-                      TypeHint@16..19
-                        TyI32@16..19 "i32"
+                ParamDecl@9..37
+                  Ident@9..14 "first"
+                  Colon@14..15 ":"
+                  Tuple@15..37
+                    LParen@15..16 "("
+                    TyI32@16..19 "i32"
                     Comma@19..20 ","
                     Whitespace@20..21 " "
-                    VarRef@21..32
-                      Ident@21..27 "second"
-                      Colon@27..28 ":"
-                      TypeHint@28..32
-                        TyChar@28..32 "char"
-                    RParen@32..33 ")"
-                Whitespace@33..34 " "
-                ParamDecl@34..50
-                  Ident@34..39 "third"
-                  Colon@39..40 ":"
-                  Whitespace@40..41 " "
-                  StructAsType@41..50 "Structure"
-                RParen@50..51 ")"
-                Whitespace@51..52 " "
-                Block@52..54
-                  LBrace@52..53 "{"
-                  RBrace@53..54 "}""#]],
+                    TyChar@21..25 "char"
+                    Comma@25..26 ","
+                    Whitespace@26..27 " "
+                    StructAsType@27..36 "Structure"
+                    RParen@36..37 ")"
+                Whitespace@37..38 " "
+                ParamDecl@38..54
+                  Ident@38..43 "third"
+                  Colon@43..44 ":"
+                  Whitespace@44..45 " "
+                  StructAsType@45..54 "Structure"
+                RParen@54..55 ")"
+                Whitespace@55..56 " "
+                Block@56..58
+                  LBrace@56..57 "{"
+                  RBrace@57..58 "}""#]],
     ),
     function_def_with_multiple_parameters_returning_a_tuple: ("fn empty(first:i32, second:char, third: Structure) -> (i32, char, Structure) {}",
         expect![[r#"
