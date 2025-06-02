@@ -7,10 +7,29 @@ use crate::{
     expression::Expr,
     lang_elems::{
         ensure_node_kind_is, error_for_node, get_children_as, get_children_in,
-        get_single_children_as_expr,
+        get_single_children_as_expr, vector_of_children_as,
     },
     statement::Stmt,
 };
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tuple(pub(crate) SyntaxNode);
+impl Tuple {
+    pub fn elements(&self) -> ASTResult<ThinVec<Expr>> {
+        let elements = vector_of_children_as(
+            &self.0,
+            [
+                SyntaxKind::Comma,
+                SyntaxKind::LParen,
+                SyntaxKind::RParen,
+                SyntaxKind::Whitespace,
+            ]
+            .as_ref(),
+            |ch| Expr::try_from(ch),
+        )?;
+        Ok(elements)
+    }
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Paren(pub(crate) SyntaxNode);
@@ -77,9 +96,9 @@ mod test {
     use super::*;
     use crate::{
         ast::Root,
-        literal::Value,
+        ast_root_from, cast_node_into_type,
+        literal::{Literal, Value},
         operation::{Binary, test::assert_infix_bin_op_with},
-        {ast_root_from, cast_node_into_type},
     };
 
     fn get_paren_from(ast_root: &Root) -> Paren {
@@ -129,6 +148,34 @@ mod test {
             }
             assert_eq!(SyntaxKind::Minus, infix_bin_op.op().unwrap());
         }
+    }
+
+    #[test]
+    fn happy_path_for_nested_tuples() {
+        let program = "((3,14),5)";
+        let ast_root = ast_root_from(program);
+        let tuple_node = ast_root.get_root().first_child().unwrap();
+        let tuple = Tuple(tuple_node);
+        let elements = tuple.elements().expect("should have been ok");
+        assert!(elements.len() == 2);
+        let first_tuple = elements.get(0).unwrap();
+        assert!(matches!(first_tuple, Expr::Tuple(_)));
+        if let Expr::Tuple(tuple) = first_tuple {
+            let elements = tuple.elements().expect("should have been ok");
+            assert!(elements.len() == 2);
+            assert!(matches!(
+                elements.get(0).unwrap(),
+                Expr::Literal(Literal(Value::Int(3)))
+            ));
+            assert!(matches!(
+                elements.get(1).unwrap(),
+                Expr::Literal(Literal(Value::Int(14)))
+            ));
+        }
+        assert!(matches!(
+            elements.get(1).unwrap(),
+            Expr::Literal(Literal(Value::Int(5)))
+        ));
     }
 
     #[test]

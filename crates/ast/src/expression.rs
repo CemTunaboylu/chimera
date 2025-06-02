@@ -5,7 +5,7 @@ use syntax::{
 
 use crate::{
     container_ref::ContainerRef as ASTContainerRef,
-    delimited::{Block as ASTBlock, Indexing as ASTIndexing, Paren},
+    delimited::{Block as ASTBlock, Indexing as ASTIndexing, Paren, Tuple as ASTTuple},
     errors::ASTError,
     function::Call as ASTCall,
     literal::Literal as ASTLiteral,
@@ -28,6 +28,7 @@ pub enum Expr {
     Mut(ASTMut),
     Paren(Paren),
     SelfRef(ASTSelfRef),
+    Tuple(ASTTuple),
     Unary(Unary),
     VarRef(ASTVarRef),
 }
@@ -80,6 +81,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                 let self_ref = ASTSelfRef::try_from(node)?;
                 Self::SelfRef(self_ref)
             }
+            Tuple => Self::Tuple(ASTTuple(node.clone())),
             VarRef => {
                 let var_ref = ASTVarRef::try_from(node)?;
                 Self::VarRef(var_ref)
@@ -101,6 +103,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                         PrefixUnaryOp,
                         SelfRef,
                         StructLit,
+                        Tuple,
                         VarRef,
                     ]
                     .as_ref(),

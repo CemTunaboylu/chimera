@@ -3,16 +3,30 @@ use syntax::{
     language::{NodeOrToken, SyntaxElement, SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
-use thin_vec::ThinVec;
+use thin_vec::{ThinVec, thin_vec};
 
 use crate::{ast::ASTResult, errors::ASTError, expression::Expr};
 
 use std::{fmt::Debug, ops::Range};
 
 use SyntaxKind::*;
+
 const EXPR_CANDIDATES: &[SyntaxKind; 10] = &[
     Literal, Block, Call, Ident, InfixBinOp, KwSelf, Kwself, KwFalse, KwTrue, ParenExpr,
 ];
+
+pub fn vector_of_children_as<T>(
+    node: &SyntaxNode,
+    set: impl Into<SyntaxKindBitSet>,
+    f: fn(&NodeOrToken) -> ASTResult<T>,
+) -> ASTResult<ThinVec<T>> {
+    let mut types: ThinVec<T> = thin_vec![];
+    for ch in children_with_tokens_without_unwanted(&node, set) {
+        let t = f(&ch).map_err(|e| ASTError::new(ch.text_range().into(), e, ch.kind()))?;
+        types.push(t);
+    }
+    Ok(types)
+}
 
 pub fn err_if_empty<T>(a: &ThinVec<T>, span: Range<usize>, exp: &str) -> ASTResult<()> {
     if a.is_empty() {
@@ -140,6 +154,7 @@ where
         .filter_map(|node| T::try_from(node).ok())
         .collect::<ThinVec<_>>();
 
+    // TODO: put a flag
     if results.is_empty() {
         Err(error_for_node(node, "non empty"))
     } else {

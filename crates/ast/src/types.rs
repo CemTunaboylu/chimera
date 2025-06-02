@@ -14,7 +14,8 @@ use crate::{
     expression::Expr,
     function::RetType as ASTRetType,
     lang_elems::{
-        ensure_node_kind_is_any, error_for_token, get_children_with_tokens_in_f, get_first_child_in,
+        ensure_node_kind_is_any, error_for_token, get_children_with_tokens_in_f,
+        get_first_child_in, vector_of_children_as,
     },
     literal::{Literal, Value, parse_into},
     parameter::Param,
@@ -37,7 +38,7 @@ pub enum Type {
     Float32,
     Fn {
         parameters: ThinVec<Type>,
-        return_type: Option<Box<Type>>, // TODO: handle returning a tuple
+        return_type: Option<Box<Type>>,
     },
     Integer32,
     String,
@@ -48,6 +49,7 @@ pub enum Type {
         // note: tensor<1, _, 64>  -> tensor<Some(1), None , Some(64)>
         shape: ThinVec<Option<Expr>>,
     },
+    Tuple(ThinVec<Type>),
 }
 
 fn extract_type_hint_from(type_hint_node: &SyntaxNode) -> ASTResult<Type> {
@@ -85,6 +87,21 @@ impl TryFrom<&SyntaxNode> for Type {
 
     fn try_from(parent_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let t = match parent_node.kind() {
+            SelfRef => Self::SelfRef(SelfRef::try_from(parent_node)?),
+            Tuple => {
+                let types = vector_of_children_as(
+                    parent_node,
+                    [
+                        SyntaxKind::Comma,
+                        SyntaxKind::LParen,
+                        SyntaxKind::RParen,
+                        SyntaxKind::Whitespace,
+                    ]
+                    .as_ref(),
+                    |ch| Type::try_from(ch),
+                )?;
+                Self::Tuple(types)
+            }
             TyBuffer => {
                 let type_hint_node = get_first_child_in(parent_node, SyntaxKind::TypeHint).ok_or(
                     ASTError::with_err_msg(
@@ -144,7 +161,6 @@ impl TryFrom<&SyntaxNode> for Type {
                     return_type,
                 }
             }
-            SelfRef => Self::SelfRef(SelfRef::try_from(parent_node)?),
             TyTensor => {
                 let mut type_hint = None;
                 if let Some(type_hint_node) = get_first_child_in(parent_node, SyntaxKind::TypeHint)
@@ -300,6 +316,7 @@ mod tests {
         valid_fully_hinted_tensor: "tensor<f32><3,3,3>",
         valid_type_hinted_tensor: "tensor<f32>",
         valid_type_partially_dim_hinted_tensor: "tensor<3,_,3>",
+        valid_tuple: "(i32, char)",
     }
 
     #[test]
@@ -314,6 +331,19 @@ mod tests {
             .unwrap();
         let struct_as_type = param_node.last_token().unwrap();
         cast_token_into_type::<Type>(&struct_as_type);
+    }
+    #[test]
+    fn tuple_with_struct_identifier() {
+        let program = "fn def(arg:(char, Structure, Structure,))";
+        let ast_root = ast_root_from(program);
+
+        let fn_def_node = ast_root.get_root().first_child().unwrap();
+        let param_node = fn_def_node
+            .children()
+            .find(|node| node.kind() == ParamDecl)
+            .unwrap();
+        let tuple_as_type = param_node.first_child().unwrap();
+        cast_node_into_type::<Type>(&tuple_as_type);
     }
 
     #[test]
