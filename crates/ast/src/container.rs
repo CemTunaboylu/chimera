@@ -252,7 +252,7 @@ mod tests {
     use crate::{
         ast_root_from, cast_node_into_type,
         function::{Call, On},
-        variable::VarRef,
+        let_binding::VarRef,
     };
 
     fn literal_from(program: &str) -> Literal {

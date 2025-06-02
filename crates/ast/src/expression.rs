@@ -8,12 +8,12 @@ use crate::{
     delimited::{Block as ASTBlock, Indexing as ASTIndexing, Paren, Tuple as ASTTuple},
     errors::ASTError,
     function::Call as ASTCall,
+    let_binding::VarRef as ASTVarRef,
     literal::Literal as ASTLiteral,
     mutable::Mut as ASTMut,
     operation::{Binary, Unary},
     self_ref::SelfRef as ASTSelfRef,
     types::Type,
-    variable::VarRef as ASTVarRef,
 };
 
 #[derive(Clone, Debug, PartialEq)]

@@ -15,6 +15,7 @@ pub mod function;
 pub mod impl_block;
 pub mod jump;
 mod lang_elems;
+pub mod let_binding;
 pub mod literal;
 pub mod loops;
 pub mod mutable;
@@ -26,7 +27,6 @@ pub mod semi;
 pub mod statement;
 pub mod structure;
 pub mod types;
-pub mod variable;
 
 pub fn ast_root_from(program: &str) -> Root {
     let root = Parser::new(program).parse();

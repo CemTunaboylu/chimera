@@ -186,8 +186,8 @@ mod test {
         assert!(matches!(block, Block::Returning(_)));
         if let Block::Returning(stmts) = block {
             assert!(stmts.len() == 3);
-            assert!(matches!(stmts.get(0).unwrap(), Stmt::VarDef(_)));
-            assert!(matches!(stmts.get(1).unwrap(), Stmt::VarDef(_)));
+            assert!(matches!(stmts.get(0).unwrap(), Stmt::LetBinding(_)));
+            assert!(matches!(stmts.get(1).unwrap(), Stmt::LetBinding(_)));
             assert!(matches!(
                 stmts.get(2).unwrap(),
                 Stmt::Expr(Expr::Infix(Binary::Infix(_)))

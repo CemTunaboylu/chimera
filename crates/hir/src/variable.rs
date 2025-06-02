@@ -1,7 +1,7 @@
 use ast::{
     expression::Expr as ASTExpr,
+    let_binding::{LetBinding as ASTVarDef, VarRef as ASTVarRef},
     types::Hint as ASTHint,
-    variable::{VarDef as ASTVarDef, VarRef as ASTVarRef},
 };
 
 use hir_macro::with_context;

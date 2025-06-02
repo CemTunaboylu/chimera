@@ -15,14 +15,14 @@ use crate::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VarDef {
+pub struct LetBinding {
     var_ref: VarRef,
     is_mut: bool,
     expr: Option<Expr>,
     span: Range<usize>,
 }
 
-impl VarDef {
+impl LetBinding {
     pub fn var_ref(&self) -> &VarRef {
         &self.var_ref
     }
@@ -43,7 +43,7 @@ impl VarDef {
     }
 }
 
-impl TryFrom<&SyntaxNode> for VarDef {
+impl TryFrom<&SyntaxNode> for LetBinding {
     type Error = ASTError;
 
     fn try_from(let_binding_node: &SyntaxNode) -> Result<Self, Self::Error> {
@@ -133,12 +133,27 @@ mod tests {
         assert_eq!(program, var_ref.name().as_str());
     }
 
+    // #[test]
+    // fn let_binding_with_tuple_pattern() {
+    //     let program =
+    //         "let (p1_norm : Point, p2_norm : Point) = (point_1.normalize(), point_2.normalize());";
+    //     let ast_root = ast_root_from(program);
+    //     let let_binding_node = ast_root.get_root().first_child().unwrap();
+    //     let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
+    //     assert_eq!("diff_norm", let_binding.name().as_str());
+    //     assert_eq!(
+    //         &Hint::Type(Type::Struct(SmolStr::from("Point"))),
+    //         let_binding.type_hint().expect("should have a type hint")
+    //     );
+    //     assert!(!let_binding.is_mut);
+    // }
+
     #[test]
     fn let_binding() {
         let program = "let diff_norm : Point = (point_1.locus() - point_2.locus()).normalize();";
         let ast_root = ast_root_from(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
-        let let_binding = cast_node_into_type::<VarDef>(&let_binding_node);
+        let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
         assert_eq!("diff_norm", let_binding.name().as_str());
         assert_eq!(
             &Hint::Type(Type::Struct(SmolStr::from("Point"))),
@@ -152,7 +167,7 @@ mod tests {
         let program = "let mut diff_norm = (point_1.locus() - point_2.locus()).normalize();";
         let ast_root = ast_root_from(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
-        let let_binding = cast_node_into_type::<VarDef>(&let_binding_node);
+        let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
         assert_eq!("diff_norm", let_binding.name().as_str());
         assert!(let_binding.is_mut);
     }

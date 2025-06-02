@@ -126,9 +126,9 @@ pub(crate) mod test {
         ast::Root,
         ast_root_from,
         function::On,
+        let_binding::VarRef,
         literal::{Literal, Value},
         types::Type,
-        variable::VarRef,
     };
 
     fn assert_expr_literal_value_eq(expr: &Expr, exp: &Value) {

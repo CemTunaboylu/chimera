@@ -1,7 +1,7 @@
 use crate::{
     control_flow::ControlFlow as ASTControlFlow, errors::ASTError, expression::Expr,
-    function::FnDef, impl_block::Impl, jump::Jump, loops::Loop, return_stmt::Return, semi::Semi,
-    structure::StructDef, variable::VarDef,
+    function::FnDef, impl_block::Impl, jump::Jump, let_binding::LetBinding, loops::Loop,
+    return_stmt::Return, semi::Semi, structure::StructDef,
 };
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 
@@ -16,7 +16,7 @@ pub enum Stmt {
     Loop(Loop),
     Semi(Semi),
     StructDef(StructDef),
-    VarDef(VarDef),
+    LetBinding(LetBinding),
 }
 
 impl TryFrom<&SyntaxNode> for Stmt {
@@ -56,8 +56,8 @@ impl TryFrom<&SyntaxNode> for Stmt {
                 Ok(struct_def) => Ok(Self::StructDef(struct_def)),
                 Err(err) => Err(err),
             },
-            SyntaxKind::LetBinding => match VarDef::try_from(node) {
-                Ok(let_binding) => Ok(Self::VarDef(let_binding)),
+            SyntaxKind::LetBinding => match LetBinding::try_from(node) {
+                Ok(let_binding) => Ok(Self::LetBinding(let_binding)),
                 Err(err) => Err(err),
             },
             _ => match Expr::try_from(node) {
