@@ -221,14 +221,6 @@ impl Parser<'_> {
             // Note: OrOr is a special case for a lambda definition with no parameters, and since OrOr is a binary infix operator,
             // we don't expect it to be in left-hand side expression, thus attempt to parse it as a lambda definition
             Or | OrOr => self.parse_lambda_def(),
-            // first capture ( to parse tuple patterns
-            LParen if self.is_parsing_tuple_pattern() => {
-                let marker = self.parse_tuple_pattern();
-                // we now need to revert expectation to allow upcoming
-                // tuples or parenthesised expressions parse
-                self.mark_tuple_pattern_as_parsed();
-                marker
-            }
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             container if matches!(container, KwBuffer | KwTensor) => self.parse_type(&syntax),
             typing if is_a_type(typing) => {
@@ -260,6 +252,9 @@ impl Parser<'_> {
             }
             Ident => {
                 self.parse_starting_with_identifier();
+            }
+            LParen => {
+                self.parse_parenthesised();
             }
             t if is_a_type(t) => {
                 self.bump();
@@ -305,7 +300,7 @@ impl Parser<'_> {
         self.expect_and_bump(Colon);
         let marker = self.start();
 
-        let rollback_when_dropped = self.by_expecting(StructAsType);
+        let rollback_when_dropped = self.by_expecting([StructAsType, TypeHint].as_ref());
 
         if IsNext::Yes == self.is_next_strict(Ident) {
             self.parse_starting_with_identifier();

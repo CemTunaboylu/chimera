@@ -18,6 +18,9 @@ impl Parser<'_> {
     pub fn is_parsing_tuple_pattern(&self) -> bool {
         self.is_expected([Tuple, LetBinding].as_ref())
     }
+    pub fn is_parsing_tuple_type(&self) -> bool {
+        self.is_expected([TypeHint].as_ref())
+    }
     pub fn mark_tuple_pattern_as_parsed(&self) {
         self.mark_expectation_as_satisfied_in_ctx([Tuple, LetBinding].as_ref());
     }
@@ -31,6 +34,22 @@ impl Parser<'_> {
         let opening_delimiters = SyntaxKind::opening_delimiters().as_ref().into();
         ctx.allow_only(allowed + opening_delimiters + types);
         rollback_when_dropped
+    }
+    fn impose_tuple_type_context(&self) -> RollingBackAnchor {
+        let rollback_when_dropped = self.by_forbidding_all();
+        self.dont_recover_in_ctx(RParen);
+        let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
+        let allowed: SyntaxKindBitSet = [And, Comma, Ident, KwMut, LParen, SelfRef].as_ref().into();
+        self.allow_in_ctx(allowed + types);
+        rollback_when_dropped
+    }
+    pub fn parse_tuple_type(&self) {
+        let marker = self.start();
+        self.expect_and_bump(LParen);
+        let elements = &[Element::ParseExprWith(starting_precedence())];
+        self.bump_separated_by(elements, Comma, RParen);
+        self.expect_and_bump(RParen);
+        self.complete_marker_with(marker, Tuple);
     }
     fn parse_tuple(&self) {
         let elements = if self.is_parsing_tuple_pattern() {
@@ -84,9 +103,18 @@ impl Parser<'_> {
     }
 
     #[allow(unused_variables)]
+    /// Main entry point for parsing tuples and parenthesised expressions
     pub fn parse_parenthesised(&self) -> Option<Finished> {
         if self.is_parsing_tuple_pattern() {
-            return self.parse_tuple_pattern();
+            let marker = self.parse_tuple_pattern();
+            // we now need to revert expectation to allow upcoming
+            // tuples or parenthesised expressions parse
+            self.mark_tuple_pattern_as_parsed();
+            return marker;
+        } else if self.is_parsing_tuple_type() {
+            let rollback_when_dropped = self.impose_tuple_type_context();
+            self.parse_tuple_type();
+            return None;
         }
         let rollback_when_dropped = self.impose_context_for_parsing(ParenExpr);
         let (kind, finished) = self.parse_parenthesised_or_tuple_pattern();

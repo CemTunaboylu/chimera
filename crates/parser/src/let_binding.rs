@@ -162,6 +162,77 @@ mod tests {
                         Whitespace@19..20 " "
                         VarRef@20..23
                           Ident@20..23 "bar""#]]),
+        mut_tuple_let_binding:    ("let mut foo : (i32, i32, i32) = bar",
+            expect![[r#"
+                Root@0..35
+                  LetBinding@0..35
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    Mut@4..35
+                      KwMut@4..7 "mut"
+                      Whitespace@7..8 " "
+                      InfixBinOp@8..35
+                        VarRef@8..29
+                          Ident@8..11 "foo"
+                          Whitespace@11..12 " "
+                          Colon@12..13 ":"
+                          TypeHint@13..29
+                            Whitespace@13..14 " "
+                            Tuple@14..29
+                              LParen@14..15 "("
+                              TyI32@15..18 "i32"
+                              Comma@18..19 ","
+                              Whitespace@19..20 " "
+                              TyI32@20..23 "i32"
+                              Comma@23..24 ","
+                              Whitespace@24..25 " "
+                              TyI32@25..28 "i32"
+                              RParen@28..29 ")"
+                        Whitespace@29..30 " "
+                        Eq@30..31 "="
+                        Whitespace@31..32 " "
+                        VarRef@32..35
+                          Ident@32..35 "bar""#]]),
+        mut_nested_tuple_let_binding:    ("let mut foo : ((i32, i32), (f32, f32)) = bar",
+            expect![[r#"
+                Root@0..44
+                  LetBinding@0..44
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    Mut@4..44
+                      KwMut@4..7 "mut"
+                      Whitespace@7..8 " "
+                      InfixBinOp@8..44
+                        VarRef@8..38
+                          Ident@8..11 "foo"
+                          Whitespace@11..12 " "
+                          Colon@12..13 ":"
+                          TypeHint@13..38
+                            Whitespace@13..14 " "
+                            Tuple@14..38
+                              LParen@14..15 "("
+                              Tuple@15..25
+                                LParen@15..16 "("
+                                TyI32@16..19 "i32"
+                                Comma@19..20 ","
+                                Whitespace@20..21 " "
+                                TyI32@21..24 "i32"
+                                RParen@24..25 ")"
+                              Comma@25..26 ","
+                              Whitespace@26..27 " "
+                              Tuple@27..37
+                                LParen@27..28 "("
+                                TyF32@28..31 "f32"
+                                Comma@31..32 ","
+                                Whitespace@32..33 " "
+                                TyF32@33..36 "f32"
+                                RParen@36..37 ")"
+                              RParen@37..38 ")"
+                        Whitespace@38..39 " "
+                        Eq@39..40 "="
+                        Whitespace@40..41 " "
+                        VarRef@41..44
+                          Ident@41..44 "bar""#]]),
         do_not_recover_on_let_token: (
             "let a =\nlet b = a;",
             expect![[r#"
