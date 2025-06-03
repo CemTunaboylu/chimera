@@ -27,8 +27,9 @@ impl Parser<'_> {
         let closing_delimiters: SyntaxKindBitSet = SyntaxKind::closing_delimiters().as_ref().into();
         ctx.disallow_recovery_of(closing_delimiters + [Comma].as_ref().into());
         let allowed: SyntaxKindBitSet = [And, KwMut, Ident, Mut, SelfRef].as_ref().into();
+        let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let opening_delimiters = SyntaxKind::opening_delimiters().as_ref().into();
-        ctx.allow_only(allowed + opening_delimiters);
+        ctx.allow_only(allowed + opening_delimiters + types);
         rollback_when_dropped
     }
     fn parse_tuple(&self) {
@@ -389,6 +390,56 @@ mod tests {
                             Int@11..12 "1"
                         RParen@12..13 ")"
                     Semi@13..14 ";""#]]
+        ),
+        let_binding_with_valid_tuple_pattern: ("let (mut x:i32, y: &mut Coordinate ) = (0,Coordinate(0));",
+            expect![[r#"
+                Root@0..57
+                  LetBinding@0..57
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..56
+                      Tuple@4..36
+                        LParen@4..5 "("
+                        Mut@5..14
+                          KwMut@5..8 "mut"
+                          Whitespace@8..9 " "
+                          VarRef@9..14
+                            Ident@9..10 "x"
+                            Colon@10..11 ":"
+                            TypeHint@11..14
+                              TyI32@11..14 "i32"
+                        Comma@14..15 ","
+                        Whitespace@15..16 " "
+                        VarRef@16..35
+                          Ident@16..17 "y"
+                          Colon@17..18 ":"
+                          TypeHint@18..35
+                            Whitespace@18..19 " "
+                            PrefixUnaryOp@19..35
+                              And@19..20 "&"
+                              Mut@20..34
+                                KwMut@20..23 "mut"
+                                Whitespace@23..24 " "
+                                StructAsType@24..34 "Coordinate"
+                              Whitespace@34..35 " "
+                        RParen@35..36 ")"
+                      Whitespace@36..37 " "
+                      Eq@37..38 "="
+                      Whitespace@38..39 " "
+                      Tuple@39..56
+                        LParen@39..40 "("
+                        Literal@40..41
+                          Int@40..41 "0"
+                        Comma@41..42 ","
+                        Call@42..55
+                          Ident@42..52 "Coordinate"
+                          LParen@52..53 "("
+                          FnArg@53..54
+                            Literal@53..54
+                              Int@53..54 "0"
+                          RParen@54..55 ")"
+                        RParen@55..56 ")"
+                    Semi@56..57 ";""#]]
         ),
         let_binding_with_two_commas_pattern: ("let (x,,y) = (3,1);",
             expect![[r#"
