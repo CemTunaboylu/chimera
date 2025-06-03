@@ -201,6 +201,7 @@ impl Parser<'_> {
         Some(lhs_marker)
     }
 
+    #[allow(unused_variables)]
     pub fn parse_left_hand_side(&self) -> Option<Finished> {
         use SyntaxKind::*;
         let syntax = match self.peek()? {
@@ -229,7 +230,9 @@ impl Parser<'_> {
                 marker
             }
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
-            typing if is_a_type(typing) || matches!(typing, KwBuffer | KwTensor) => {
+            container if matches!(container, KwBuffer | KwTensor) => self.parse_type(&syntax),
+            typing if is_a_type(typing) => {
+                let rollback_when_dropped = self.by_expecting(StructAsType);
                 self.parse_type(&syntax)
             }
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
@@ -241,6 +244,7 @@ impl Parser<'_> {
         }
     }
 
+    #[allow(unused_variables)]
     pub fn parse_type(&self, syntax: &Syntax) -> Option<Finished> {
         let kind = syntax.get_kind();
         if !self.is_allowed(kind) && !self.is_expected(kind) {
@@ -251,6 +255,12 @@ impl Parser<'_> {
             KwTensor | KwBuffer => return self.parse_container_constructs(syntax),
             // note: a lambda is typed as a function when hinted or as a parameter as in Rust
             KwFn => return self.parse_function_as_type(),
+            ref_or_mut if ref_or_mut == And || ref_or_mut == Mut => {
+                self.parse_left_hand_side();
+            }
+            Ident => {
+                self.parse_starting_with_identifier();
+            }
             t if is_a_type(t) => {
                 self.bump();
             }
@@ -290,12 +300,15 @@ impl Parser<'_> {
         Some(finished)
     }
 
+    #[allow(unused_variables)]
     fn parse_type_hint(&self) -> Finished {
         self.expect_and_bump(Colon);
         let marker = self.start();
 
+        let rollback_when_dropped = self.by_expecting(StructAsType);
+
         if IsNext::Yes == self.is_next_strict(Ident) {
-            self.expect_and_bump_as(Ident, StructAsType);
+            self.parse_starting_with_identifier();
         } else {
             let syntax = self
                 .peek()

@@ -817,6 +817,21 @@ mod tests {
                         Ident@12..19 "dynamic"
                       RBrack@19..20 "]""#]]
         ),
+      dynamic_tensor_initializer_with_value: ("tensor[some_value; dynamic]",
+            expect![[r#"
+                Root@0..27
+                  Literal@0..27
+                    TensorLit@0..27
+                      KwTensor@0..6 "tensor"
+                      LBrack@6..7 "["
+                      VarRef@7..17
+                        Ident@7..17 "some_value"
+                      Semi@17..18 ";"
+                      Whitespace@18..19 " "
+                      VarRef@19..26
+                        Ident@19..26 "dynamic"
+                      RBrack@26..27 "]""#]]
+        ),
     buffer_initializer_and_default_value_with_dim: ("buffer[0.0; 100 ]",
             expect![[r#"
                 Root@0..17

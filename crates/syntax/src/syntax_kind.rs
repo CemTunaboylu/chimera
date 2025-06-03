@@ -369,6 +369,7 @@ impl SyntaxKind {
                 context_update[1] = RestrictionType::Add([LParen, RParen].as_ref().into());
             }
             TypeHint => {
+                context_update[0] = RestrictionType::Add([StructAsType].as_ref().into());
                 context_update[1] = RestrictionType::Add([Gt].as_ref().into());
                 context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
             }
