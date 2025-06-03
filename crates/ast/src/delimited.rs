@@ -7,7 +7,7 @@ use crate::{
     expression::Expr,
     lang_elems::{
         ensure_node_kind_is, error_for_node, get_children_as, get_children_in,
-        get_single_children_as_expr, vector_of_children_as,
+        get_single_children_as_expr, vector_of_children_and_tokens_as,
     },
     statement::Stmt,
 };
@@ -16,7 +16,7 @@ use crate::{
 pub struct Tuple(pub(crate) SyntaxNode);
 impl Tuple {
     pub fn elements(&self) -> ASTResult<ThinVec<Expr>> {
-        let elements = vector_of_children_as(
+        let elements = vector_of_children_and_tokens_as(
             &self.0,
             [
                 SyntaxKind::Comma,

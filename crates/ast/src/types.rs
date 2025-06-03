@@ -14,9 +14,9 @@ use crate::{
     expression::Expr,
     function::RetType as ASTRetType,
     lang_elems::{
-        ensure_node_kind_is_any, error_for_token, filtered_children_with_tokens,
-        get_children_with_tokens_in_f, get_first_child_in, get_token_of_errs,
-        unwrap_first_child_or_err, vector_of_children_as,
+        children_with_tokens_without_unwanted, ensure_node_kind_is_any, error_for_token,
+        filtered_children_with_tokens, get_children_with_tokens_in_f, get_first_child_in,
+        get_token_of_errs, unwrap_first_child_or_err, vector_of_children_and_tokens_as,
     },
     literal::{Literal, Value, parse_into},
     parameter::Param,
@@ -107,7 +107,7 @@ impl TryFrom<&SyntaxNode> for Type {
             }
             SelfRef => Self::SelfRef(SelfRef::try_from(parent_node)?),
             Tuple => {
-                let types = vector_of_children_as(
+                let types = vector_of_children_and_tokens_as(
                     parent_node,
                     [
                         SyntaxKind::Comma,

@@ -15,7 +15,7 @@ const EXPR_CANDIDATES: &[SyntaxKind; 10] = &[
     Literal, Block, Call, Ident, InfixBinOp, KwSelf, Kwself, KwFalse, KwTrue, ParenExpr,
 ];
 
-pub fn vector_of_children_as<T>(
+pub fn vector_of_children_and_tokens_as<T>(
     node: &SyntaxNode,
     set: impl Into<SyntaxKindBitSet>,
     f: fn(&NodeOrToken) -> ASTResult<T>,
