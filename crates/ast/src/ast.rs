@@ -26,9 +26,8 @@ impl Root {
             .filter_map(|syntax_node| match Stmt::try_from(&syntax_node) {
                 Ok(s) => Some(s),
                 Err(ast_err) => {
-                    let src = self.root.text().to_string();
-                    let report: Report = ast_err.into();
-                    println!("{:?}", report.with_source_code(src));
+                    let _: Report = ast_err.into();
+                    let _ = self.root.text().to_string();
                     None
                 }
             })
