@@ -94,12 +94,22 @@ impl TryFrom<&SyntaxNode> for Type {
         let t = match parent_node.kind() {
             PrefixUnaryOp => {
                 get_token_of_errs(parent_node, And)?;
-                let mut child = unwrap_first_child_or_err(parent_node)?;
+                let children = children_with_tokens_without_unwanted(
+                    parent_node,
+                    [And, Comma, Whitespace].as_ref(),
+                );
+                let child = children.first().unwrap();
                 let is_mut = child.kind() == Mut;
-                if is_mut {
-                    child = unwrap_first_child_or_err(&child)?;
-                }
-                let ty = Type::try_from(&child)?;
+                let ty = if is_mut {
+                    let grand_children = children_with_tokens_without_unwanted(
+                        child.as_node().unwrap(),
+                        [Comma, KwMut, Whitespace].as_ref(),
+                    );
+                    let grand_child = grand_children.first().unwrap();
+                    Type::try_from(grand_child)?
+                } else {
+                    Type::try_from(child)?
+                };
                 Self::Pointer {
                     ty: Box::new(ty),
                     is_mut,
@@ -262,6 +272,9 @@ pub enum Hint {
 }
 
 impl Hint {
+    pub fn is_type(&self) -> bool {
+        matches!(self, Self::Type(_))
+    }
     pub fn dim_hints(dim_hints_node: &SyntaxNode) -> ASTResult<ThinVec<Self>> {
         // comma separated values
         let mut dim_hints = ThinVec::new();
@@ -285,13 +298,21 @@ impl Hint {
     }
 
     pub fn type_hint(typehint_node: &SyntaxNode) -> ASTResult<Self> {
-        let type_node = get_children_with_tokens_in_f(typehint_node, is_a_type);
-        let type_node = type_node.first().unwrap();
-        let type_ = match type_node {
-            NodeOrToken::Node(node) => Type::try_from(node)?,
-            NodeOrToken::Token(token) => Type::try_from(token)?,
-        };
-        Ok(Self::Type(type_))
+        let is_a_type_or_modifier: SyntaxKindBitSet = [PrefixUnaryOp].as_ref().into();
+        let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
+        if let Some(type_node) =
+            filtered_children_with_tokens(typehint_node, is_a_type_or_modifier + types).first()
+        {
+            let type_ = match type_node {
+                NodeOrToken::Node(node) => Type::try_from(node)?,
+                NodeOrToken::Token(token) => Type::try_from(token)?,
+            };
+            return Ok(Self::Type(type_));
+        }
+        return Err(ASTError::with_err_msg(
+            typehint_node.text_range().into(),
+            format!("expected a valid type hint but got {:?}", typehint_node),
+        ));
     }
 }
 

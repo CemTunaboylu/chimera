@@ -9,7 +9,6 @@ use ast::parameter::{By as ASTBy, Param as ASTParam, ParamType as ASTParamType};
 pub enum By {
     Ref,
     RefMut,
-    ValueMut,
     Value,
 }
 
@@ -18,7 +17,6 @@ impl From<&ASTBy> for By {
         match value {
             ASTBy::Ref => By::Ref,
             ASTBy::RefMut => By::RefMut,
-            ASTBy::ValueMut => By::ValueMut,
             ASTBy::Value => By::Value,
         }
     }
@@ -50,8 +48,6 @@ impl HIRBuilder {
                 let ctx = match by {
                     By::Ref => UsageContext::Ref,
                     By::RefMut => UsageContext::RefMut,
-                    // note: still a move but declared as mutable
-                    By::ValueMut => UsageContext::Mut,
                     By::Value => UsageContext::Moved,
                 };
 

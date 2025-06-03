@@ -1,6 +1,6 @@
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
-    can_be_a_parameter, can_be_a_parameter_with_mut, is_a_type,
+    can_be_a_parameter_with_mut, is_a_type,
     language::{NodeOrToken, SyntaxNode},
     syntax_kind::SyntaxKind,
 };
@@ -21,7 +21,6 @@ use SyntaxKind::*;
 pub enum By {
     Ref,
     RefMut,
-    ValueMut,
     Value,
 }
 
@@ -49,8 +48,7 @@ impl Param {
     }
     fn error_for_can_be_a_param_type(got: &SyntaxNode) -> ASTError {
         let child = got.first_child_or_token();
-        let mut exp = SyntaxKind::can_be_parameter();
-        exp.push(Mut);
+        let exp = SyntaxKind::can_be_parameter();
         ASTError::new(got.text_range().into(), child.as_ref(), exp)
     }
     fn extract_from_ref(ref_node: &SyntaxNode) -> ASTResult<ParamType> {
@@ -86,18 +84,6 @@ impl Param {
         };
         Ok(param_type)
     }
-    fn extract_from_mut(mut_node: &SyntaxNode) -> ASTResult<ParamType> {
-        let node = get_children_with_tokens_in_f(mut_node, can_be_a_parameter)
-            .first()
-            .cloned();
-
-        if let Some(node) = node {
-            let t = Type::try_from(&node)?;
-            Ok(ParamType(By::ValueMut, t))
-        } else {
-            Err(Self::error_for_can_be_a_param_type(mut_node))
-        }
-    }
     fn get_parameter_type_from_node(node: &NodeOrToken) -> ASTResult<ParamType> {
         let param_type = match node.kind() {
             PrefixUnaryOp => {
@@ -105,16 +91,12 @@ impl Param {
                 Self::validate_op(&node)?;
                 Param::extract_from_ref(&node)?
             }
-            Mut => {
-                let node = node.clone().into_node().unwrap();
-                Param::extract_from_mut(&node)?
-            }
-            StructAsType => ParamType(By::Value, Type::try_from(node)?),
             SelfRef => ParamType(By::Value, Type::try_from(node)?),
+            StructAsType => ParamType(By::Value, Type::try_from(node)?),
             type_ if is_a_type(type_) => ParamType(By::Value, Type::try_from(node)?),
             no => {
                 let mut types = SyntaxKind::types();
-                types.extend_from_slice(&[PrefixUnaryOp, Mut, SelfRef]);
+                types.extend_from_slice(&[PrefixUnaryOp, SelfRef]);
                 return Err(ASTError::new(node.text_range().into(), types, no));
             }
         };
@@ -157,7 +139,7 @@ impl TryFrom<&SyntaxNode> for Param {
             .last();
         if child_as_param_type.is_none() {
             let mut types = SyntaxKind::types();
-            types.extend_from_slice(&[PrefixUnaryOp, Mut, SelfRef]);
+            types.extend_from_slice(&[PrefixUnaryOp, SelfRef]);
             return Err(error_for_node(param_decl_node, types));
         }
         let node_or_token = child_as_param_type.unwrap();
@@ -204,7 +186,7 @@ mod tests {
     happy_path_self_ref_parameter_test! {
     param_ref_mut_self: ("fn f(&mut self) {}", By::RefMut ),
     param_ref_self: ("fn f(&self) {}", By::Ref),
-    param_mut_self: ("fn f(mut self) {}",By::ValueMut ),
+    // param_mut_self: ("fn f(mut self) {}",By::Value),
     param_self: ("fn f(self) {}", By::Value),
     }
 
@@ -235,11 +217,9 @@ mod tests {
     happy_path_named_parameter_test! {
     param_ref_mut_struct: ("fn f(s: &mut Structure) {}", By::RefMut, Type::Struct(SmolStr::from("Structure"))),
     param_ref_struct: ("fn f(s: &Structure) {}", By::Ref, Type::Struct(SmolStr::from("Structure"))),
-    param_mut_struct: ("fn f(s: mut Structure) {}", By::ValueMut, Type::Struct(SmolStr::from("Structure"))),
     param_struct: ("fn f(s: Structure) {}", By::Value, Type::Struct(SmolStr::from("Structure"))),
     param_ref_mut_int: ("fn f(i: &mut i32) {}", By::RefMut, Type::Integer32),
     param_ref_int: ("fn f(i: &i32) {}", By::Ref, Type::Integer32),
-    param_mut_int: ("fn f(i: mut i32) {}", By::ValueMut, Type::Integer32),
     param_int: ("fn f(i: i32) {}", By::Value, Type::Integer32),
     }
 
