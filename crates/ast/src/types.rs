@@ -14,8 +14,9 @@ use crate::{
     expression::Expr,
     function::RetType as ASTRetType,
     lang_elems::{
-        ensure_node_kind_is_any, error_for_token, get_children_with_tokens_in_f,
-        get_first_child_in, vector_of_children_as,
+        ensure_node_kind_is_any, error_for_token, filtered_children_with_tokens,
+        get_children_with_tokens_in_f, get_first_child_in, get_token_of_errs,
+        unwrap_first_child_or_err, vector_of_children_as,
     },
     literal::{Literal, Value, parse_into},
     parameter::Param,
@@ -41,6 +42,10 @@ pub enum Type {
         return_type: Option<Box<Type>>,
     },
     Integer32,
+    Pointer {
+        ty: Box<Type>,
+        is_mut: bool,
+    },
     String,
     Struct(SmolStr),
     SelfRef(SelfRef),
@@ -87,6 +92,19 @@ impl TryFrom<&SyntaxNode> for Type {
 
     fn try_from(parent_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let t = match parent_node.kind() {
+            PrefixUnaryOp => {
+                get_token_of_errs(parent_node, And)?;
+                let mut child = unwrap_first_child_or_err(parent_node)?;
+                let is_mut = child.kind() == Mut;
+                if is_mut {
+                    child = unwrap_first_child_or_err(&child)?;
+                }
+                let ty = Type::try_from(&child)?;
+                Self::Pointer {
+                    ty: Box::new(ty),
+                    is_mut,
+                }
+            }
             SelfRef => Self::SelfRef(SelfRef::try_from(parent_node)?),
             Tuple => {
                 let types = vector_of_children_as(
