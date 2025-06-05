@@ -340,6 +340,12 @@ impl SyntaxKind {
             LBrack => {
                 context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
             }
+            Mut => {
+                // * Note: can_be_parameter also includes Ident as a parameter (to allow for StructAsType)
+                let can_be_parameter: SyntaxKindBitSet =
+                    SyntaxKind::can_be_parameter().as_ref().into();
+                context_update[2] = RestrictionType::Override(can_be_parameter + LParen.into());
+            }
             ParenExpr => {
                 context_update[1] = RestrictionType::Add([Comma, RBrace].as_ref().into());
                 context_update[2] = RestrictionType::Sub([Comma].as_ref().into());
@@ -362,9 +368,8 @@ impl SyntaxKind {
             RetType => {
                 context_update[0] = RestrictionType::Add([StructAsType].as_ref().into());
                 let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-                let ref_mut_struct_as_type: SyntaxKindBitSet =
-                    [And, Mut, StructAsType].as_ref().into();
-                context_update[2] = RestrictionType::Add(types + ref_mut_struct_as_type);
+                let ref_struct_as_type: SyntaxKindBitSet = [And, StructAsType].as_ref().into();
+                context_update[2] = RestrictionType::Add(types + ref_struct_as_type);
             }
             RParen => {
                 context_update[1] = RestrictionType::Add([LParen, RParen].as_ref().into());

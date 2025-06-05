@@ -247,7 +247,7 @@ impl Parser<'_> {
             KwTensor | KwBuffer => return self.parse_container_constructs(syntax),
             // note: a lambda is typed as a function when hinted or as a parameter as in Rust
             KwFn => return self.parse_function_as_type(),
-            ref_or_mut if ref_or_mut == And || ref_or_mut == Mut => {
+            reference if reference == And => {
                 self.parse_left_hand_side();
             }
             Ident => {
@@ -350,6 +350,27 @@ impl Parser<'_> {
         Some(self.complete_marker_with(marker, Jump))
     }
 
+    #[allow(unused_variables)]
+    pub fn parse_mut(&self) -> Option<Finished> {
+        let marker = self.start();
+        self.expect_and_bump(KwMut);
+        // * Note: either an identifier for binding, or a type declaration (&mut <type>)
+        let rollback_when_dropped = self.impose_context_for_parsing(Mut);
+        // * We are in the rhs of the : operator
+        if self.is_expected(TypeHint) {
+            if self.is_next(Ident) {
+                self.expect_in_ctx(StructAsType);
+                self.parse_starting_with_identifier();
+            } else {
+                self.parse_type(&self.peek().unwrap().unwrap());
+            }
+        // * We are in the lhs of the identifier, thus expect to parse an identifier
+        } else {
+            self.parse_starting_with_identifier();
+        }
+        Some(self.complete_marker_with(marker, Mut))
+    }
+    #[allow(unused_variables)]
     pub fn parse_keyword_expression(&self, keyword: Syntax) -> Option<Finished> {
         match keyword.get_kind() {
             KwBreak => self.parse_break(),
@@ -361,12 +382,7 @@ impl Parser<'_> {
                 self.recover();
                 None
             }
-            KwMut => {
-                let marker = self.start();
-                self.expect_and_bump(KwMut);
-                self.parse_expression_until_binding_power(starting_precedence());
-                Some(self.complete_marker_with(marker, Mut))
-            }
+            KwMut if self.is_allowed(KwMut) => self.parse_mut(),
             KwReturn => self.parse_return(),
             KwStruct => self.parse_struct_definition(),
             KwSelf | Kwself => Some(self.bump_with_marker(SelfRef)),
