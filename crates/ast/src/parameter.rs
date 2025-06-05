@@ -1,6 +1,8 @@
-use smol_str::{SmolStr, ToSmolStr};
+use std::ops::Range;
+
+use smol_str::SmolStr;
 use syntax::{
-    can_be_a_parameter_with_mut, is_a_type,
+    bitset::SyntaxKindBitSet,
     language::{NodeOrToken, SyntaxNode},
     syntax_kind::SyntaxKind,
 };
@@ -10,150 +12,161 @@ use crate::{
     ast::ASTResult,
     errors::ASTError,
     lang_elems::{
-        error_for_node, get_children_in, get_children_with_tokens_in_f, get_token,
-        get_tokens_in_errs,
+        error_for_node, filtered_children_with_tokens, get_children_in, get_first_child_in,
+        get_name, get_token,
     },
+    self_ref::SelfRef as ASTSelfRef,
     types::Type,
 };
 use SyntaxKind::*;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum By {
-    Ref,
-    RefMut,
-    Value,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ParamType(pub By, pub Type);
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Param {
-    /// Represents a lambda parameter without an explicit type annotation.
-    Generic(SmolStr),
-    Named(SmolStr, ParamType),
-    SelfRef(By),
+pub struct Param {
+    pub by_ref: bool,
+    pub is_mut: bool,
+    pub name: SmolStr,
+    pub param_type: Option<Type>,
+    pub span: Range<usize>,
 }
 
 impl Param {
+    pub fn new_self_ref(by_ref: bool, is_mut: bool, span: Range<usize>) -> Self {
+        Self {
+            by_ref,
+            is_mut,
+            name: SmolStr::from("self"),
+            param_type: Some(Type::SelfRef(ASTSelfRef::Instance)),
+            span,
+        }
+    }
+    pub fn new_named(
+        is_mut: bool,
+        name: SmolStr,
+        param_type: Option<Type>,
+        span: Range<usize>,
+    ) -> Self {
+        Self {
+            by_ref: false,
+            is_mut,
+            name,
+            param_type,
+            span,
+        }
+    }
+    pub fn new_generic(name: SmolStr, is_mut: bool, span: Range<usize>) -> Self {
+        Self {
+            by_ref: false,
+            is_mut,
+            name,
+            param_type: None,
+            span,
+        }
+    }
     pub fn get_params_nodes_from(fn_def_node: &SyntaxNode) -> ThinVec<SyntaxNode> {
         get_children_in(fn_def_node, ParamDecl)
     }
-    fn validate_op(node: &SyntaxNode) -> ASTResult<()> {
-        // note: in the future, raw pointers will be introduced thus we don't assume
-        // it is only &, left as an arr now so that it would be easier to add it.
-        let op = [And].as_ref();
-        _ = get_tokens_in_errs(node, op)?;
-        Ok(())
-    }
-    fn error_for_can_be_a_param_type(got: &SyntaxNode) -> ASTError {
-        let child = got.first_child_or_token();
-        let exp = SyntaxKind::can_be_parameter();
-        ASTError::new(got.text_range().into(), child.as_ref(), exp)
-    }
-    fn extract_from_ref(ref_node: &SyntaxNode) -> ASTResult<ParamType> {
-        let node = get_children_with_tokens_in_f(ref_node, can_be_a_parameter_with_mut)
-            .first()
-            .cloned();
-        if node.is_none() {
-            return Err(Self::error_for_can_be_a_param_type(ref_node));
+    fn get_parameter_related_nodes(
+        param_decl_node: &SyntaxNode,
+    ) -> ASTResult<ThinVec<NodeOrToken>> {
+        use SyntaxKind::*;
+        let allowed_nodes: SyntaxKindBitSet = [Mut, PrefixUnaryOp].as_ref().into();
+        let can_be_param: SyntaxKindBitSet = SyntaxKind::can_be_parameter().as_ref().into();
+        let nodes = filtered_children_with_tokens(param_decl_node, allowed_nodes + can_be_param);
+        if nodes.is_empty() {
+            return Err(error_for_node(
+                param_decl_node,
+                allowed_nodes + can_be_param,
+            ));
         }
-        let node = node.unwrap();
-        let param_type = match node {
-            NodeOrToken::Node(node) => {
-                if node.kind() == Mut {
-                    // TODO: have a method like in HIR to make this easier
-                    let last_token = node.children_with_tokens().last();
-                    let typ = if matches!(&last_token, Some(node_or_token) if node_or_token.kind() != KwMut)
-                    {
-                        Type::try_from(last_token.as_ref().unwrap())?
-                    } else {
-                        let inside = node.first_child().unwrap();
-                        Type::try_from(&inside)?
-                    };
-                    ParamType(By::RefMut, typ)
-                } else {
-                    let t = Type::try_from(&node)?;
-                    ParamType(By::Ref, t)
-                }
-            }
-            NodeOrToken::Token(token) => {
-                let t = Type::try_from(&token)?;
-                ParamType(By::Ref, t)
-            }
-        };
-        Ok(param_type)
+        Ok(nodes)
     }
-    fn get_parameter_type_from_node(node: &NodeOrToken) -> ASTResult<ParamType> {
-        let param_type = match node.kind() {
-            PrefixUnaryOp => {
-                let node = node.clone().into_node().unwrap();
-                Self::validate_op(&node)?;
-                Param::extract_from_ref(&node)?
+    fn try_parsing_self_ref(child_node: &SyntaxNode) -> Option<Param> {
+        // * Can be &mut self, &self, mut self or self.
+        let mut expected: SyntaxKindBitSet = [PrefixUnaryOp, Mut, SelfRef].as_ref().into();
+        use SyntaxKind::*;
+        if !expected.contains(child_node.kind()) {
+            return None;
+        }
+        let mut is_mut = false;
+        let mut by_ref = false;
+
+        let mut first_child = if child_node.kind() == PrefixUnaryOp {
+            let op = get_token(child_node).unwrap();
+            if op.text() != "&" {
+                return None;
             }
-            SelfRef => ParamType(By::Value, Type::try_from(node)?),
-            StructAsType => ParamType(By::Value, Type::try_from(node)?),
-            type_ if is_a_type(type_) => ParamType(By::Value, Type::try_from(node)?),
-            no => {
-                let mut types = SyntaxKind::types();
-                types.extend_from_slice(&[PrefixUnaryOp, SelfRef]);
-                return Err(ASTError::new(node.text_range().into(), types, no));
+            by_ref = true;
+            expected -= PrefixUnaryOp.into();
+            if let Some(c) = get_first_child_in(child_node, expected) {
+                c
+            } else {
+                return None;
             }
+        } else {
+            child_node.clone()
         };
-        Ok(param_type)
+        loop {
+            match first_child.kind() {
+                Mut => {
+                    is_mut = true;
+                    expected -= Mut.into();
+                    expected -= PrefixUnaryOp.into();
+                    if let Some(c) = get_first_child_in(&first_child, expected) {
+                        first_child = c;
+                    } else {
+                        return None;
+                    }
+                }
+                SelfRef => {
+                    return Some(Param::new_self_ref(
+                        by_ref,
+                        is_mut,
+                        child_node.text_range().into(),
+                    ));
+                }
+                _ => break,
+            }
+        }
+
+        return None;
     }
 }
 
 impl TryFrom<&SyntaxNode> for Param {
     type Error = ASTError;
-    /*
-    ParamDecl@10..17
-        Ident@10..13 "one"
-        Colon@13..14 ":"
-        TyI32@14..17 "i32"
-    ParamDecl@13..22
-        PrefixUnaryOp@13..22
-            And@13..14 "&"
-            Mut@14..22
-                KwMut@14..17 "mut"
-                Whitespace@17..18 " "
-                SelfRef@18..22
-                    Kwself@18..22 "self"
-    ParamDecl@23..37
-        Ident@23..25 "by"
-        Colon@25..26 ":"
-        Whitespace@26..27 " "
-        PrefixUnaryOp@27..37
-            And@27..28 "&"
-            Mut@28..37
-                KwMut@28..31 "mut"
-                Whitespace@31..32 " "
-                StructAsType@32..37
-                    Ident@32..37 "Point"
-    */
-
     fn try_from(param_decl_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let child_as_param_type = param_decl_node
-            .children_with_tokens()
-            .filter(|not| !matches!(not.kind(), SyntaxKind::Whitespace | SyntaxKind::Comma))
-            .last();
-        if child_as_param_type.is_none() {
-            let mut types = SyntaxKind::types();
-            types.extend_from_slice(&[PrefixUnaryOp, SelfRef]);
-            return Err(error_for_node(param_decl_node, types));
-        }
-        let node_or_token = child_as_param_type.unwrap();
-        // untyped variable ('generic') for lambda
-        if node_or_token.kind() == SyntaxKind::Ident {
-            return Ok(Self::Generic(node_or_token.to_smolstr()));
-        }
-        let param_type = Self::get_parameter_type_from_node(&node_or_token)?;
-        let param = if let Some(name) = get_token(param_decl_node).map(|t| t.text().to_smolstr()) {
-            Self::Named(name, param_type)
+        let mut children = Self::get_parameter_related_nodes(param_decl_node)?;
+        let mut is_mut = false;
+        let kind = children.first().unwrap().kind();
+        let child = if kind == Mut {
+            is_mut = true;
+            children =
+                Self::get_parameter_related_nodes(&children.first().unwrap().as_node().unwrap())?;
+            children.first().unwrap()
         } else {
-            Self::SelfRef(param_type.0)
+            children.first().unwrap()
         };
+        let span: Range<usize> = child.text_range().into();
+        // Only attempt to form SelfRef if there is only one child
+        if children.len() == 1 && child.as_node().is_some() {
+            let node = child.as_node().unwrap();
+            if let Some(mut param) = Self::try_parsing_self_ref(&node) {
+                if is_mut {
+                    param.is_mut = true;
+                }
+                return Ok(param);
+            }
+        }
+        let type_hint = children.split_off(1);
+        let ident = children.first().unwrap();
+        let name = get_name(ident);
 
+        let param = if let Some(type_hint) = type_hint.first() {
+            let param_type = Type::try_from(type_hint)?;
+            Self::new_named(is_mut, name, Some(param_type), span)
+        } else {
+            Self::new_generic(name, is_mut, span)
+        };
         Ok(param)
     }
 }
@@ -169,43 +182,38 @@ mod tests {
 
     create! {
         happy_path_self_ref_parameter_test,
-        (program, exp_by), {
+        (program, exp_by_ref, exp_is_mut), {
         let ast_root = ast_root_from(program);
         let params_nodes = get_params_nodes_from(ast_root);
         let p = cast_node_into_type::<Param>(params_nodes.first().unwrap());
-        match p {
-            Param::SelfRef(by) => {
-                assert_eq!(exp_by, by);
-            },
-            _ => {
-                unreachable!()
-            },
-        }
+        let Param{ by_ref, is_mut, param_type, name, .. } = p;
+        assert_eq!(exp_by_ref, by_ref);
+        assert_eq!(exp_is_mut, is_mut);
+        assert_eq!(name, SmolStr::from("self"));
+        assert_eq!(param_type, Some(Type::SelfRef(ASTSelfRef::Instance)));
         }
     }
+    const BY_REF: bool = true;
+    const IS_MUT: bool = true;
     happy_path_self_ref_parameter_test! {
-    param_ref_mut_self: ("fn f(&mut self) {}", By::RefMut ),
-    param_ref_self: ("fn f(&self) {}", By::Ref),
-    // param_mut_self: ("fn f(mut self) {}",By::Value),
-    param_self: ("fn f(self) {}", By::Value),
+    param_ref_mut_self: ("fn f(&mut self) {}", BY_REF, IS_MUT),
+    param_ref_self: ("fn f(&self) {}", BY_REF, !IS_MUT),
+    param_mut_self: ("fn f(mut self) {}", !BY_REF, IS_MUT),
+    param_self: ("fn f(self) {}", !BY_REF, !IS_MUT),
     }
 
     create! {
         happy_path_named_parameter_test,
-        (program, exp_by, exp_type), {
+        (program, exp_is_mut, exp_name, exp_type), {
         let ast_root = ast_root_from(program);
         let params_nodes = get_params_nodes_from(ast_root);
         let p = cast_node_into_type::<Param>(params_nodes.first().unwrap());
-        match p {
-            Param::Named(name, param_type) => {
-                assert_eq!(exp_by, param_type.0);
-                assert_eq!(exp_type, param_type.1);
-            },
-            Param::SelfRef(_) => {
-                unreachable!();
-            },
-            _ => unreachable!(),
-        }
+
+        let Param{ by_ref, is_mut, param_type, name, .. } = p;
+        assert_eq!(exp_is_mut, is_mut);
+        assert_eq!(name, SmolStr::from(exp_name));
+        assert_eq!(param_type, Some(exp_type));
+
         }
     }
 
@@ -215,12 +223,15 @@ mod tests {
     }
 
     happy_path_named_parameter_test! {
-    param_ref_mut_struct: ("fn f(s: &mut Structure) {}", By::RefMut, Type::Struct(SmolStr::from("Structure"))),
-    param_ref_struct: ("fn f(s: &Structure) {}", By::Ref, Type::Struct(SmolStr::from("Structure"))),
-    param_struct: ("fn f(s: Structure) {}", By::Value, Type::Struct(SmolStr::from("Structure"))),
-    param_ref_mut_int: ("fn f(i: &mut i32) {}", By::RefMut, Type::Integer32),
-    param_ref_int: ("fn f(i: &i32) {}", By::Ref, Type::Integer32),
-    param_int: ("fn f(i: i32) {}", By::Value, Type::Integer32),
+    param_ref_mut_struct: ("fn f(s: &mut Structure) {}", !IS_MUT, "s", Type::Pointer{is_mut: IS_MUT, ty: Box::new(Type::Struct(SmolStr::from("Structure")))}),
+    param_ref_struct: ("fn f(s: &Structure) {}", !IS_MUT, "s", Type::Pointer{is_mut: !IS_MUT, ty: Box::new(Type::Struct(SmolStr::from("Structure")))}),
+    param_struct: ("fn f(s: Structure) {}", !IS_MUT, "s", Type::Struct(SmolStr::from("Structure"))),
+    mut_param_ref_mut_struct: ("fn f(mut s: &mut Structure) {}", IS_MUT, "s", Type::Pointer{is_mut: true, ty: Box::new(Type::Struct(SmolStr::from("Structure")))}),
+    mut_param_ref_struct: ("fn f(mut s: &Structure) {}", IS_MUT, "s", Type::Pointer{is_mut: !IS_MUT, ty: Box::new(Type::Struct(SmolStr::from("Structure")))}),
+    mut_param_struct: ("fn f(mut s: Structure) {}", IS_MUT, "s", Type::Struct(SmolStr::from("Structure"))),
+    param_ref_mut_int: ("fn f(i: &mut i32) {}", !IS_MUT, "i", Type::Pointer{is_mut: IS_MUT, ty: Box::new(Type::Integer32)}),
+    param_ref_int: ("fn f(i: &i32) {}", !IS_MUT, "i", Type::Pointer{is_mut: !IS_MUT, ty: Box::new(Type::Integer32)}),
+    param_int: ("fn f(i: i32) {}", !IS_MUT, "i", Type::Integer32),
     }
 
     #[test]
@@ -229,20 +240,38 @@ mod tests {
         let ast_root = ast_root_from(program);
         let params_nodes = get_params_nodes_from(ast_root);
         let assert_param_types = [
-            |p: Param| assert!(matches!(p, Param::SelfRef(By::RefMut))),
+            |p: Param| assert_eq!(p, Param::new_self_ref(BY_REF, IS_MUT, 5..14)),
             |p: Param| {
-                if let Param::Named(name, param_type) = p {
-                    assert_eq!(name, "s");
-                    assert_eq!(param_type.0, By::Ref);
-                    assert!(matches!(param_type.1, Type::Struct(_)));
-                }
+                let Param {
+                    by_ref,
+                    is_mut,
+                    param_type,
+                    name,
+                    ..
+                } = p;
+                assert_eq!(name, "s");
+                assert_eq!(is_mut, !IS_MUT);
+                assert_eq!(by_ref, !BY_REF);
+                assert_eq!(
+                    param_type,
+                    Some(Type::Pointer {
+                        is_mut: !IS_MUT,
+                        ty: Box::new(Type::Struct(SmolStr::from("Structure")))
+                    })
+                );
             },
             |p: Param| {
-                if let Param::Named(name, param_type) = p {
-                    assert_eq!(name, "c");
-                    assert_eq!(param_type.0, By::Value);
-                    assert!(matches!(param_type.1, Type::Integer32));
-                }
+                let Param {
+                    by_ref,
+                    is_mut,
+                    param_type,
+                    name,
+                    ..
+                } = p;
+                assert_eq!(name, "c");
+                assert_eq!(is_mut, !IS_MUT);
+                assert_eq!(by_ref, !BY_REF);
+                assert_eq!(param_type, Some(Type::Integer32));
             },
         ];
         for (ix, param_node) in params_nodes.iter().enumerate() {
@@ -264,7 +293,17 @@ mod tests {
         let assert_param_names = ["g", "en", "eric"];
         for (p, n) in params_nodes.iter().zip(assert_param_names.iter()) {
             let param = cast_node_into_type::<Param>(&p);
-            assert!(matches!(param, Param::Generic(name) if name == *n));
+            let Param {
+                by_ref,
+                is_mut,
+                param_type,
+                name,
+                ..
+            } = param;
+            assert_eq!(name, SmolStr::from(*n));
+            assert_eq!(by_ref, false);
+            assert_eq!(is_mut, false);
+            assert_eq!(param_type, None);
         }
     }
 }

@@ -1,3 +1,4 @@
+use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
     bitset::SyntaxKindBitSet,
     language::{NodeOrToken, SyntaxElement, SyntaxNode, SyntaxToken},
@@ -14,6 +15,13 @@ use SyntaxKind::*;
 const EXPR_CANDIDATES: &[SyntaxKind; 10] = &[
     Literal, Block, Call, Ident, InfixBinOp, KwSelf, Kwself, KwFalse, KwTrue, ParenExpr,
 ];
+
+pub fn get_name(not: &NodeOrToken) -> SmolStr {
+    match not {
+        NodeOrToken::Node(node) => node.text().to_smolstr(),
+        NodeOrToken::Token(token) => token.text().to_smolstr(),
+    }
+}
 
 pub fn vector_of_children_and_tokens_as<T>(
     node: &SyntaxNode,

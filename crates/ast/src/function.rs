@@ -345,19 +345,16 @@ mod tests {
         assert_eq!(
             lambda.0.parameters,
             ThinVec::from([
-                Param::Named {
-                    is_mut: true,
-                    name: "a".into(),
-                    param_type: Type::Pointer {
+                Param::new_named(
+                    true,
+                    "a".into(),
+                    Some(Type::Pointer {
                         is_mut: true,
                         ty: Box::new(Type::Integer32)
-                    },
-                },
-                Param::Named {
-                    is_mut: false,
-                    name: "b".into(),
-                    param_type: Type::Integer32,
-                }
+                    }),
+                    5..6
+                ),
+                Param::new_named(false, "b".into(), Some(Type::Integer32), 17..18),
             ]),
         );
         assert!(lambda.0.return_type.is_none());
@@ -372,10 +369,7 @@ mod tests {
         if let [Stmt::Expr(Expr::Literal(Literal(Value::Lambda(l))))] = stmts.as_ref() {
             assert_eq!(
                 l.0.parameters,
-                thin_vec![Param::Generic {
-                    name: "f".into(),
-                    is_mut: false,
-                }]
+                thin_vec![Param::new_generic("f".into(), false, 28..29)]
             );
             assert!(l.0.return_type.is_none());
             assert!(matches!(l.0.body, Block::Semi(_)));
