@@ -163,7 +163,7 @@ impl TryFrom<&SyntaxNode> for LetBinding {
         let child = first_child_of_kind_errs(let_binding_node, [InfixBinOp].as_ref())?;
         get_token_of_errs(&child, Eq)?;
 
-        let lhs = first_child_of_kind_errs(&child, [Mut, Tuple, VarRefKind].as_ref())?;
+        let lhs = first_child_of_kind_errs(&child, [Tuple, VarRefKind].as_ref())?;
         let pattern = Pattern::try_from(&lhs)?;
 
         let assignment = child.last_child().unwrap();
@@ -362,7 +362,7 @@ mod tests {
                 is_mut: true,
                 spanned_name: SpannedIdentifier {
                     name: "distance".to_smolstr(),
-                    span: 49..62,
+                    span: 48..62,
                 },
                 type_hint: Some(Hint::Type(Type::Integer32)),
             })

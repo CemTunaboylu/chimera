@@ -979,10 +979,10 @@ mod tests {
                         RBrace@49..50 "}""#]],
     ),
 
-    fn_with_ref_mut_self: ("fn translate(&mut self, by: Point) { self.x += by.x; self.y += by.y;}",
+    fn_with_ref_mut_self: ("fn translate(&mut self, mut by: Point) { self.x += by.x; self.y += by.y;}",
             expect![[r#"
-                Root@0..68
-                  FnDef@0..68
+                Root@0..72
+                  FnDef@0..72
                     KwFn@0..2 "fn"
                     Whitespace@2..3 " "
                     Ident@3..12 "translate"
@@ -996,54 +996,57 @@ mod tests {
                           SelfRef@18..22
                             Kwself@18..22 "self"
                     Whitespace@22..23 " "
-                    ParamDecl@23..32
-                      Ident@23..25 "by"
-                      Colon@25..26 ":"
-                      Whitespace@26..27 " "
-                      StructAsType@27..32 "Point"
-                    RParen@32..33 ")"
-                    Whitespace@33..34 " "
-                    Block@34..68
-                      LBrace@34..35 "{"
-                      Whitespace@35..36 " "
-                      Semi@36..51
-                        InfixBinOp@36..50
-                          InfixBinOp@36..43
-                            SelfRef@36..40
-                              Kwself@36..40 "self"
-                            Dot@40..41 "."
-                            VarRef@41..43
-                              Ident@41..42 "x"
-                              Whitespace@42..43 " "
-                          PlusEq@43..45 "+="
-                          Whitespace@45..46 " "
-                          InfixBinOp@46..50
-                            VarRef@46..48
-                              Ident@46..48 "by"
-                            Dot@48..49 "."
-                            VarRef@49..50
-                              Ident@49..50 "x"
-                        Semi@50..51 ";"
-                      Whitespace@51..52 " "
-                      Semi@52..67
-                        InfixBinOp@52..66
-                          InfixBinOp@52..59
-                            SelfRef@52..56
-                              Kwself@52..56 "self"
-                            Dot@56..57 "."
-                            VarRef@57..59
-                              Ident@57..58 "y"
-                              Whitespace@58..59 " "
-                          PlusEq@59..61 "+="
-                          Whitespace@61..62 " "
-                          InfixBinOp@62..66
-                            VarRef@62..64
-                              Ident@62..64 "by"
-                            Dot@64..65 "."
-                            VarRef@65..66
-                              Ident@65..66 "y"
-                        Semi@66..67 ";"
-                      RBrace@67..68 "}""#]],
+                    ParamDecl@23..36
+                      Mut@23..36
+                        KwMut@23..26 "mut"
+                        Whitespace@26..27 " "
+                        Ident@27..29 "by"
+                        Colon@29..30 ":"
+                        Whitespace@30..31 " "
+                        StructAsType@31..36 "Point"
+                    RParen@36..37 ")"
+                    Whitespace@37..38 " "
+                    Block@38..72
+                      LBrace@38..39 "{"
+                      Whitespace@39..40 " "
+                      Semi@40..55
+                        InfixBinOp@40..54
+                          InfixBinOp@40..47
+                            SelfRef@40..44
+                              Kwself@40..44 "self"
+                            Dot@44..45 "."
+                            VarRef@45..47
+                              Ident@45..46 "x"
+                              Whitespace@46..47 " "
+                          PlusEq@47..49 "+="
+                          Whitespace@49..50 " "
+                          InfixBinOp@50..54
+                            VarRef@50..52
+                              Ident@50..52 "by"
+                            Dot@52..53 "."
+                            VarRef@53..54
+                              Ident@53..54 "x"
+                        Semi@54..55 ";"
+                      Whitespace@55..56 " "
+                      Semi@56..71
+                        InfixBinOp@56..70
+                          InfixBinOp@56..63
+                            SelfRef@56..60
+                              Kwself@56..60 "self"
+                            Dot@60..61 "."
+                            VarRef@61..63
+                              Ident@61..62 "y"
+                              Whitespace@62..63 " "
+                          PlusEq@63..65 "+="
+                          Whitespace@65..66 " "
+                          InfixBinOp@66..70
+                            VarRef@66..68
+                              Ident@66..68 "by"
+                            Dot@68..69 "."
+                            VarRef@69..70
+                              Ident@69..70 "y"
+                        Semi@70..71 ";"
+                      RBrace@71..72 "}""#]],
     ),
 
     lambda_with_ref_mut_parameter: ("let like_a_method = |s:&mut Structure| {s.mutate()};",

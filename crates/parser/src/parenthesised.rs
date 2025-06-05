@@ -29,7 +29,7 @@ impl Parser<'_> {
         let ctx = self.context.borrow();
         let closing_delimiters: SyntaxKindBitSet = SyntaxKind::closing_delimiters().as_ref().into();
         ctx.disallow_recovery_of(closing_delimiters + [Comma].as_ref().into());
-        let allowed: SyntaxKindBitSet = [And, KwMut, Ident, Mut, SelfRef].as_ref().into();
+        let allowed: SyntaxKindBitSet = [And, KwMut, Ident, SelfRef].as_ref().into();
         let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let opening_delimiters = SyntaxKind::opening_delimiters().as_ref().into();
         ctx.allow_only(allowed + opening_delimiters + types);
@@ -112,6 +112,7 @@ impl Parser<'_> {
             self.mark_tuple_pattern_as_parsed();
             return marker;
         } else if self.is_parsing_tuple_type() {
+            println!("parse_parenthesised tuple type");
             let rollback_when_dropped = self.impose_tuple_type_context();
             self.parse_tuple_type();
             return None;
@@ -262,8 +263,8 @@ mod tests {
                     LParen@0..1 "("
                     Mut@1..6
                       KwMut@1..4 "mut"
-                      Whitespace@4..5 " "
-                      VarRef@5..6
+                      VarRef@4..6
+                        Whitespace@4..5 " "
                         Ident@5..6 "x"
                     Comma@6..7 ","
                     RParen@7..8 ")""#]]
@@ -291,8 +292,8 @@ mod tests {
                       Whitespace@2..3 " "
                       Mut@3..8
                         KwMut@3..6 "mut"
-                        Whitespace@6..7 " "
-                        VarRef@7..8
+                        VarRef@6..8
+                          Whitespace@6..7 " "
                           Ident@7..8 "x"
                     Comma@8..9 ","
                     RParen@9..10 ")""#]]
@@ -342,48 +343,45 @@ mod tests {
                       Ident@7..8 "z"
                     RParen@8..9 ")""#]]
         ),
-        for_loop_with_tuple_pattern: ("for ((mut x, & mut y), z) in vec_of_pairs {}",
+        for_loop_with_tuple_pattern: ("for ((mut x, mut y), z) in vec_of_pairs {}",
             expect![[r#"
-                Root@0..44
-                  ForLoop@0..44
+                Root@0..42
+                  ForLoop@0..42
                     KwFor@0..3 "for"
                     Whitespace@3..4 " "
-                    ForIdent@4..25
-                      Tuple@4..25
+                    ForIdent@4..23
+                      Tuple@4..23
                         LParen@4..5 "("
-                        Tuple@5..21
+                        Tuple@5..19
                           LParen@5..6 "("
                           Mut@6..11
                             KwMut@6..9 "mut"
-                            Whitespace@9..10 " "
-                            VarRef@10..11
+                            VarRef@9..11
+                              Whitespace@9..10 " "
                               Ident@10..11 "x"
                           Comma@11..12 ","
                           Whitespace@12..13 " "
-                          PrefixUnaryOp@13..20
-                            And@13..14 "&"
-                            Whitespace@14..15 " "
-                            Mut@15..20
-                              KwMut@15..18 "mut"
-                              Whitespace@18..19 " "
-                              VarRef@19..20
-                                Ident@19..20 "y"
-                          RParen@20..21 ")"
-                        Comma@21..22 ","
-                        Whitespace@22..23 " "
-                        VarRef@23..24
-                          Ident@23..24 "z"
-                        RParen@24..25 ")"
-                    In@25..42
-                      Whitespace@25..26 " "
-                      KwIn@26..28 "in"
-                      Whitespace@28..29 " "
-                      VarRef@29..42
-                        Ident@29..41 "vec_of_pairs"
-                        Whitespace@41..42 " "
-                    Block@42..44
-                      LBrace@42..43 "{"
-                      RBrace@43..44 "}""#]]
+                          Mut@13..18
+                            KwMut@13..16 "mut"
+                            VarRef@16..18
+                              Whitespace@16..17 " "
+                              Ident@17..18 "y"
+                          RParen@18..19 ")"
+                        Comma@19..20 ","
+                        Whitespace@20..21 " "
+                        VarRef@21..22
+                          Ident@21..22 "z"
+                        RParen@22..23 ")"
+                    In@23..40
+                      Whitespace@23..24 " "
+                      KwIn@24..26 "in"
+                      Whitespace@26..27 " "
+                      VarRef@27..40
+                        Ident@27..39 "vec_of_pairs"
+                        Whitespace@39..40 " "
+                    Block@40..42
+                      LBrace@40..41 "{"
+                      RBrace@41..42 "}""#]]
         ),
         missing_closing_parenthesis_does_not_panic: ("(",
             expect![[r#"
@@ -430,8 +428,8 @@ mod tests {
                         LParen@4..5 "("
                         Mut@5..14
                           KwMut@5..8 "mut"
-                          Whitespace@8..9 " "
-                          VarRef@9..14
+                          VarRef@8..14
+                            Whitespace@8..9 " "
                             Ident@9..10 "x"
                             Colon@10..11 ":"
                             TypeHint@11..14

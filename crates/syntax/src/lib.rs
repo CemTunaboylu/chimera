@@ -56,10 +56,6 @@ pub fn can_be_a_parameter(kind: SyntaxKind) -> bool {
     CAN_BE_PARAMETERS.contains(kind)
 }
 
-pub fn can_be_a_parameter_with_mut(kind: SyntaxKind) -> bool {
-    CAN_BE_PARAMETERS.contains(kind) || kind == SyntaxKind::Mut
-}
-
 pub fn non_assigning_operators() -> SyntaxKindBitSet {
     let a: SyntaxKindBitSet = SyntaxKind::assignments().as_ref().into();
     let o: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();

@@ -16,7 +16,7 @@ use crate::{
     lang_elems::{
         children_with_tokens_without_unwanted, ensure_node_kind_is_any, error_for_token,
         filtered_children_with_tokens, get_children_with_tokens_in_f, get_first_child_in,
-        get_token_of_errs, unwrap_first_child_or_err, vector_of_children_and_tokens_as,
+        get_token_of_errs, vector_of_children_and_tokens_as,
     },
     literal::{Literal, Value, parse_into},
     parameter::Param,

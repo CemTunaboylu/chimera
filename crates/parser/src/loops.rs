@@ -290,14 +290,14 @@ mod tests {
                     Whitespace@86..87 " "
                     RBrace@87..88 "}""#]],
       ),
-      for_loop_with_nested_and_ref_mut_tuple_pattern: ("for ((ix,mut elm), (& mut ix2, &mut elm2,),) in arr[0_arr.len()].enumerate() { print(ix, elm, ix2, elm2) }",
+      for_loop_with_nested_and_mut_tuple_pattern: ("for ((ix,mut elm), (mut ix2, mut elm2,),) in arr[0_arr.len()].enumerate() { print(ix, elm, ix2, elm2) }",
           expect![[r#"
-              Root@0..106
-                ForLoop@0..106
+              Root@0..103
+                ForLoop@0..103
                   KwFor@0..3 "for"
                   Whitespace@3..4 " "
-                  ForIdent@4..44
-                    Tuple@4..44
+                  ForIdent@4..41
+                    Tuple@4..41
                       LParen@4..5 "("
                       Tuple@5..17
                         LParen@5..6 "("
@@ -306,90 +306,85 @@ mod tests {
                         Comma@8..9 ","
                         Mut@9..16
                           KwMut@9..12 "mut"
-                          Whitespace@12..13 " "
-                          VarRef@13..16
+                          VarRef@12..16
+                            Whitespace@12..13 " "
                             Ident@13..16 "elm"
                         RParen@16..17 ")"
                       Comma@17..18 ","
                       Whitespace@18..19 " "
-                      Tuple@19..42
+                      Tuple@19..39
                         LParen@19..20 "("
-                        PrefixUnaryOp@20..29
-                          And@20..21 "&"
-                          Whitespace@21..22 " "
-                          Mut@22..29
-                            KwMut@22..25 "mut"
-                            Whitespace@25..26 " "
-                            VarRef@26..29
-                              Ident@26..29 "ix2"
-                        Comma@29..30 ","
-                        Whitespace@30..31 " "
-                        PrefixUnaryOp@31..40
-                          And@31..32 "&"
-                          Mut@32..40
-                            KwMut@32..35 "mut"
-                            Whitespace@35..36 " "
-                            VarRef@36..40
-                              Ident@36..40 "elm2"
-                        Comma@40..41 ","
-                        RParen@41..42 ")"
-                      Comma@42..43 ","
-                      RParen@43..44 ")"
-                  In@44..77
+                        Mut@20..27
+                          KwMut@20..23 "mut"
+                          VarRef@23..27
+                            Whitespace@23..24 " "
+                            Ident@24..27 "ix2"
+                        Comma@27..28 ","
+                        Whitespace@28..29 " "
+                        Mut@29..37
+                          KwMut@29..32 "mut"
+                          VarRef@32..37
+                            Whitespace@32..33 " "
+                            Ident@33..37 "elm2"
+                        Comma@37..38 ","
+                        RParen@38..39 ")"
+                      Comma@39..40 ","
+                      RParen@40..41 ")"
+                  In@41..74
+                    Whitespace@41..42 " "
+                    KwIn@42..44 "in"
                     Whitespace@44..45 " "
-                    KwIn@45..47 "in"
-                    Whitespace@47..48 " "
-                    InfixBinOp@48..77
-                      ContainerRef@48..64
-                        Ident@48..51 "arr"
-                        Indexing@51..64
-                          LBrack@51..52 "["
-                          InfixBinOp@52..63
-                            Literal@52..53
-                              Int@52..53 "0"
-                            Under@53..54 "_"
-                            InfixBinOp@54..63
-                              VarRef@54..57
-                                Ident@54..57 "arr"
-                              Dot@57..58 "."
-                              Call@58..63
-                                Ident@58..61 "len"
-                                LParen@61..62 "("
-                                RParen@62..63 ")"
-                          RBrack@63..64 "]"
-                      Dot@64..65 "."
-                      Call@65..76
-                        Ident@65..74 "enumerate"
-                        LParen@74..75 "("
-                        RParen@75..76 ")"
-                      Whitespace@76..77 " "
-                  Block@77..106
-                    LBrace@77..78 "{"
-                    Whitespace@78..79 " "
-                    Call@79..104
-                      Ident@79..84 "print"
-                      LParen@84..85 "("
-                      FnArg@85..88
-                        VarRef@85..87
-                          Ident@85..87 "ix"
-                        Comma@87..88 ","
-                      Whitespace@88..89 " "
-                      FnArg@89..93
-                        VarRef@89..92
-                          Ident@89..92 "elm"
-                        Comma@92..93 ","
-                      Whitespace@93..94 " "
-                      FnArg@94..98
-                        VarRef@94..97
-                          Ident@94..97 "ix2"
-                        Comma@97..98 ","
-                      Whitespace@98..99 " "
-                      FnArg@99..103
-                        VarRef@99..103
-                          Ident@99..103 "elm2"
-                      RParen@103..104 ")"
-                    Whitespace@104..105 " "
-                    RBrace@105..106 "}""#]],
+                    InfixBinOp@45..74
+                      ContainerRef@45..61
+                        Ident@45..48 "arr"
+                        Indexing@48..61
+                          LBrack@48..49 "["
+                          InfixBinOp@49..60
+                            Literal@49..50
+                              Int@49..50 "0"
+                            Under@50..51 "_"
+                            InfixBinOp@51..60
+                              VarRef@51..54
+                                Ident@51..54 "arr"
+                              Dot@54..55 "."
+                              Call@55..60
+                                Ident@55..58 "len"
+                                LParen@58..59 "("
+                                RParen@59..60 ")"
+                          RBrack@60..61 "]"
+                      Dot@61..62 "."
+                      Call@62..73
+                        Ident@62..71 "enumerate"
+                        LParen@71..72 "("
+                        RParen@72..73 ")"
+                      Whitespace@73..74 " "
+                  Block@74..103
+                    LBrace@74..75 "{"
+                    Whitespace@75..76 " "
+                    Call@76..101
+                      Ident@76..81 "print"
+                      LParen@81..82 "("
+                      FnArg@82..85
+                        VarRef@82..84
+                          Ident@82..84 "ix"
+                        Comma@84..85 ","
+                      Whitespace@85..86 " "
+                      FnArg@86..90
+                        VarRef@86..89
+                          Ident@86..89 "elm"
+                        Comma@89..90 ","
+                      Whitespace@90..91 " "
+                      FnArg@91..95
+                        VarRef@91..94
+                          Ident@91..94 "ix2"
+                        Comma@94..95 ","
+                      Whitespace@95..96 " "
+                      FnArg@96..100
+                        VarRef@96..100
+                          Ident@96..100 "elm2"
+                      RParen@100..101 ")"
+                    Whitespace@101..102 " "
+                    RBrace@102..103 "}""#]],
       ),
       for_loop_with_csv_identifiers_errors: ("for ix,elm in arr[0_arr.len()].enumerate() { print(ix, elm) }",
           expect![[r#"

@@ -79,10 +79,10 @@ mod tests {
                     Semi@25..26 ";""#]]
         ),
 
-        moving_let_binding:    ("let foo = bar",
+        moving_let_binding:    ("let foo = bar;",
             expect![[r#"
-                Root@0..13
-                  LetBinding@0..13
+                Root@0..14
+                  LetBinding@0..14
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..13
@@ -92,11 +92,12 @@ mod tests {
                       Eq@8..9 "="
                       Whitespace@9..10 " "
                       VarRef@10..13
-                        Ident@10..13 "bar""#]]),
-        type_hinted_let_binding:    ("let foo : Important = bar",
+                        Ident@10..13 "bar"
+                    Semi@13..14 ";""#]]),
+        type_hinted_let_binding:    ("let foo : Important = bar;",
             expect![[r#"
-                Root@0..25
-                  LetBinding@0..25
+                Root@0..26
+                  LetBinding@0..26
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..25
@@ -111,11 +112,12 @@ mod tests {
                       Eq@20..21 "="
                       Whitespace@21..22 " "
                       VarRef@22..25
-                        Ident@22..25 "bar""#]]),
-        fn_type_hinted_let_binding:    ("let foo : fn(i32)->i32 = bar",
+                        Ident@22..25 "bar"
+                    Semi@25..26 ";""#]]),
+        fn_type_hinted_let_binding:    ("let foo : fn(i32)->i32 = bar;",
             expect![[r#"
-                Root@0..28
-                  LetBinding@0..28
+                Root@0..29
+                  LetBinding@0..29
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..28
@@ -138,41 +140,43 @@ mod tests {
                       Eq@23..24 "="
                       Whitespace@24..25 " "
                       VarRef@25..28
-                        Ident@25..28 "bar""#]]),
+                        Ident@25..28 "bar"
+                    Semi@28..29 ";""#]]),
 
-        mut_moving_let_binding:    ("let mut foo : i32 = bar",
+        mut_moving_let_binding:    ("let mut foo : i32 = bar;",
             expect![[r#"
-                Root@0..23
-                  LetBinding@0..23
+                Root@0..24
+                  LetBinding@0..24
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    Mut@4..23
-                      KwMut@4..7 "mut"
-                      Whitespace@7..8 " "
-                      InfixBinOp@8..23
-                        VarRef@8..17
+                    InfixBinOp@4..23
+                      Mut@4..17
+                        KwMut@4..7 "mut"
+                        VarRef@7..17
+                          Whitespace@7..8 " "
                           Ident@8..11 "foo"
                           Whitespace@11..12 " "
                           Colon@12..13 ":"
                           TypeHint@13..17
                             Whitespace@13..14 " "
                             TyI32@14..17 "i32"
-                        Whitespace@17..18 " "
-                        Eq@18..19 "="
-                        Whitespace@19..20 " "
-                        VarRef@20..23
-                          Ident@20..23 "bar""#]]),
-        mut_tuple_let_binding:    ("let mut foo : (i32, i32, i32) = bar",
+                      Whitespace@17..18 " "
+                      Eq@18..19 "="
+                      Whitespace@19..20 " "
+                      VarRef@20..23
+                        Ident@20..23 "bar"
+                    Semi@23..24 ";""#]]),
+        mut_tuple_let_binding:    ("let mut foo : (i32, i32, i32) = bar;",
             expect![[r#"
-                Root@0..35
-                  LetBinding@0..35
+                Root@0..36
+                  LetBinding@0..36
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    Mut@4..35
-                      KwMut@4..7 "mut"
-                      Whitespace@7..8 " "
-                      InfixBinOp@8..35
-                        VarRef@8..29
+                    InfixBinOp@4..35
+                      Mut@4..29
+                        KwMut@4..7 "mut"
+                        VarRef@7..29
+                          Whitespace@7..8 " "
                           Ident@8..11 "foo"
                           Whitespace@11..12 " "
                           Colon@12..13 ":"
@@ -188,22 +192,23 @@ mod tests {
                               Whitespace@24..25 " "
                               TyI32@25..28 "i32"
                               RParen@28..29 ")"
-                        Whitespace@29..30 " "
-                        Eq@30..31 "="
-                        Whitespace@31..32 " "
-                        VarRef@32..35
-                          Ident@32..35 "bar""#]]),
-        mut_nested_tuple_let_binding:    ("let mut foo : ((i32, i32), (f32, f32)) = bar",
+                      Whitespace@29..30 " "
+                      Eq@30..31 "="
+                      Whitespace@31..32 " "
+                      VarRef@32..35
+                        Ident@32..35 "bar"
+                    Semi@35..36 ";""#]]),
+        mut_nested_tuple_let_binding:    ("let mut foo : ((i32, i32), (f32, f32)) = bar;",
             expect![[r#"
-                Root@0..44
-                  LetBinding@0..44
+                Root@0..45
+                  LetBinding@0..45
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    Mut@4..44
-                      KwMut@4..7 "mut"
-                      Whitespace@7..8 " "
-                      InfixBinOp@8..44
-                        VarRef@8..38
+                    InfixBinOp@4..44
+                      Mut@4..38
+                        KwMut@4..7 "mut"
+                        VarRef@7..38
+                          Whitespace@7..8 " "
                           Ident@8..11 "foo"
                           Whitespace@11..12 " "
                           Colon@12..13 ":"
@@ -228,11 +233,12 @@ mod tests {
                                 TyF32@33..36 "f32"
                                 RParen@36..37 ")"
                               RParen@37..38 ")"
-                        Whitespace@38..39 " "
-                        Eq@39..40 "="
-                        Whitespace@40..41 " "
-                        VarRef@41..44
-                          Ident@41..44 "bar""#]]),
+                      Whitespace@38..39 " "
+                      Eq@39..40 "="
+                      Whitespace@40..41 " "
+                      VarRef@41..44
+                        Ident@41..44 "bar"
+                    Semi@44..45 ";""#]]),
         do_not_recover_on_let_token: (
             "let a =\nlet b = a;",
             expect![[r#"

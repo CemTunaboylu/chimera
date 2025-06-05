@@ -210,6 +210,7 @@ impl SyntaxKind {
             KwTensor, // allows parsing tensor<dim><type> as a type
             SelfRef,
             StructAsType,
+            Tuple,
             TyBool,
             TyBuffer,
             TyChar,
@@ -344,7 +345,7 @@ impl SyntaxKind {
                 context_update[2] = RestrictionType::Sub([Comma].as_ref().into());
             }
             ParamDecl => {
-                context_update[0] = RestrictionType::Add(StructAsType.into());
+                context_update[0] = RestrictionType::Add([StructAsType, TypeHint].as_ref().into());
                 let misc: SyntaxKindBitSet = [And, Colon, Comma, Ident, KwMut, LParen, RParen]
                     .as_ref()
                     .into();
@@ -381,9 +382,10 @@ impl SyntaxKind {
                     SyntaxKind::can_be_parameter().as_ref().into();
                 let opening_delimiters: SyntaxKindBitSet =
                     SyntaxKind::opening_delimiters().as_ref().into();
-                let exceptionals: SyntaxKindBitSet = [Eq, Ident, Semi, VarRef, SelfRef, StructLit]
-                    .as_ref()
-                    .into();
+                let exceptionals: SyntaxKindBitSet =
+                    [Eq, Ident, KwMut, SelfRef, Semi, StructLit, VarRef]
+                        .as_ref()
+                        .into();
                 context_update[2] = RestrictionType::Override(
                     non_assignments + can_be_parameter + opening_delimiters + exceptionals,
                 );
