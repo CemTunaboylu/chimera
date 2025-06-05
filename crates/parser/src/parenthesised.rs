@@ -29,7 +29,7 @@ impl Parser<'_> {
         let ctx = self.context.borrow();
         let closing_delimiters: SyntaxKindBitSet = SyntaxKind::closing_delimiters().as_ref().into();
         ctx.disallow_recovery_of(closing_delimiters + [Comma].as_ref().into());
-        let allowed: SyntaxKindBitSet = [And, KwMut, Ident, SelfRef].as_ref().into();
+        let allowed: SyntaxKindBitSet = [And, Colon, KwMut, Ident, SelfRef].as_ref().into();
         let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
         let opening_delimiters = SyntaxKind::opening_delimiters().as_ref().into();
         ctx.allow_only(allowed + opening_delimiters + types);
@@ -52,11 +52,7 @@ impl Parser<'_> {
         self.complete_marker_with(marker, Tuple);
     }
     fn parse_tuple(&self) {
-        let elements = if self.is_parsing_tuple_pattern() {
-            &[Element::LeftHandSide]
-        } else {
-            &[Element::ParseExprWith(starting_precedence())]
-        };
+        let elements = &[Element::ParseExprWith(starting_precedence())];
         self.bump_separated_by(elements, Comma, RParen);
     }
     #[allow(unused_variables)]
@@ -112,7 +108,6 @@ impl Parser<'_> {
             self.mark_tuple_pattern_as_parsed();
             return marker;
         } else if self.is_parsing_tuple_type() {
-            println!("parse_parenthesised tuple type");
             let rollback_when_dropped = self.impose_tuple_type_context();
             self.parse_tuple_type();
             return None;
@@ -426,28 +421,28 @@ mod tests {
                     InfixBinOp@4..56
                       Tuple@4..36
                         LParen@4..5 "("
-                        Mut@5..14
-                          KwMut@5..8 "mut"
-                          VarRef@8..14
-                            Whitespace@8..9 " "
-                            Ident@9..10 "x"
-                            Colon@10..11 ":"
-                            TypeHint@11..14
-                              TyI32@11..14 "i32"
+                        TypeHint@5..14
+                          Mut@5..10
+                            KwMut@5..8 "mut"
+                            VarRef@8..10
+                              Whitespace@8..9 " "
+                              Ident@9..10 "x"
+                          Colon@10..11 ":"
+                          TyI32@11..14 "i32"
                         Comma@14..15 ","
                         Whitespace@15..16 " "
-                        VarRef@16..35
-                          Ident@16..17 "y"
+                        TypeHint@16..35
+                          VarRef@16..17
+                            Ident@16..17 "y"
                           Colon@17..18 ":"
-                          TypeHint@18..35
-                            Whitespace@18..19 " "
-                            PrefixUnaryOp@19..35
-                              And@19..20 "&"
-                              Mut@20..34
-                                KwMut@20..23 "mut"
-                                Whitespace@23..24 " "
-                                StructAsType@24..34 "Coordinate"
-                              Whitespace@34..35 " "
+                          Whitespace@18..19 " "
+                          PrefixUnaryOp@19..35
+                            And@19..20 "&"
+                            Mut@20..34
+                              KwMut@20..23 "mut"
+                              Whitespace@23..24 " "
+                              StructAsType@24..34 "Coordinate"
+                            Whitespace@34..35 " "
                         RParen@35..36 ")"
                       Whitespace@36..37 " "
                       Eq@37..38 "="

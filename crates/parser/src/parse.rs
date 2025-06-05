@@ -285,33 +285,11 @@ impl Parser<'_> {
         } else if self.is_next(LBrace) && self.is_allowed(StructLit) {
             self.parse_struct_init_block();
             self.complete_marker_with(marker, StructLit)
-        } else if self.is_next(Colon) {
-            self.parse_type_hint();
-            self.complete_marker_with(marker, VarRef)
         } else {
             self.complete_marker_with(marker, VarRef)
         };
 
         Some(finished)
-    }
-
-    #[allow(unused_variables)]
-    fn parse_type_hint(&self) -> Finished {
-        self.expect_and_bump(Colon);
-        let marker = self.start();
-
-        let rollback_when_dropped = self.by_expecting([StructAsType, TypeHint].as_ref());
-
-        if IsNext::Yes == self.is_next_strict(Ident) {
-            self.parse_starting_with_identifier();
-        } else {
-            let syntax = self
-                .peek()
-                .expect("to be able to peek")
-                .expect("an ok peeked");
-            self.parse_type(&syntax);
-        }
-        self.complete_marker_with(marker, TypeHint)
     }
 
     pub fn parse_literal(&self, kind: SyntaxKind) -> Option<Finished> {
@@ -436,7 +414,7 @@ impl Parser<'_> {
         let marker = self.precede_marker_with(marker);
         self.expect_and_bump(kind);
         let bounded_precedence = Bound::from_op(binary_op.clone());
-        let rollback_when_dropped = self.impose_restrictions_on_context(syntax);
+        let rollback_when_dropped = self.impose_restrictions_of_kind_on_context(syntax.get_kind());
         self.parse_expression_until_binding_power(bounded_precedence);
         Some(self.complete_marker_with(marker, binary_op.into()))
     }

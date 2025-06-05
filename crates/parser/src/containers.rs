@@ -449,27 +449,27 @@ mod tests {
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..28
-                      VarRef@4..21
-                        Ident@4..5 "z"
+                      TypeHint@4..21
+                        VarRef@4..5
+                          Ident@4..5 "z"
                         Colon@5..6 ":"
-                        TypeHint@6..21
-                          Whitespace@6..7 " "
-                          TyBuffer@7..21
-                            KwBuffer@7..13 "buffer"
-                            Lt@13..14 "<"
-                            DimHints@14..19
-                              Recovered@14..15
-                                Under@14..15 "_"
-                              Recovered@15..16
-                                Comma@15..16 ","
-                              Recovered@16..17
-                                Under@16..17 "_"
-                              Recovered@17..18
-                                Comma@17..18 ","
-                              Recovered@18..19
-                                Under@18..19 "_"
-                            Gt@19..20 ">"
-                            Whitespace@20..21 " "
+                        Whitespace@6..7 " "
+                        TyBuffer@7..21
+                          KwBuffer@7..13 "buffer"
+                          Lt@13..14 "<"
+                          DimHints@14..19
+                            Recovered@14..15
+                              Under@14..15 "_"
+                            Recovered@15..16
+                              Comma@15..16 ","
+                            Recovered@16..17
+                              Under@16..17 "_"
+                            Recovered@17..18
+                              Comma@17..18 ","
+                            Recovered@18..19
+                              Under@18..19 "_"
+                          Gt@19..20 ">"
+                          Whitespace@20..21 " "
                       Eq@21..22 "="
                       Whitespace@22..23 " "
                       Literal@23..28
@@ -554,23 +554,23 @@ mod tests {
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..42
-                      VarRef@4..22
-                        Ident@4..5 "z"
-                        Whitespace@5..6 " "
+                      TypeHint@4..22
+                        VarRef@4..6
+                          Ident@4..5 "z"
+                          Whitespace@5..6 " "
                         Colon@6..7 ":"
-                        TypeHint@7..22
-                          Whitespace@7..8 " "
-                          TyTensor@8..22
-                            KwTensor@8..14 "tensor"
-                            Lt@14..15 "<"
-                            DimHints@15..20
-                              Under@15..16 "_"
-                              Comma@16..17 ","
-                              Under@17..18 "_"
-                              Comma@18..19 ","
-                              Under@19..20 "_"
-                            Gt@20..21 ">"
-                            Whitespace@21..22 " "
+                        Whitespace@7..8 " "
+                        TyTensor@8..22
+                          KwTensor@8..14 "tensor"
+                          Lt@14..15 "<"
+                          DimHints@15..20
+                            Under@15..16 "_"
+                            Comma@16..17 ","
+                            Under@17..18 "_"
+                            Comma@18..19 ","
+                            Under@19..20 "_"
+                          Gt@20..21 ">"
+                          Whitespace@21..22 " "
                       Eq@22..23 "="
                       Whitespace@23..24 " "
                       Call@24..42
@@ -646,36 +646,36 @@ mod tests {
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..49
-                      VarRef@4..28
-                        Ident@4..5 "z"
-                        Whitespace@5..6 " "
+                      TypeHint@4..29
+                        VarRef@4..6
+                          Ident@4..5 "z"
+                          Whitespace@5..6 " "
                         Colon@6..7 ":"
-                        TypeHint@7..28
-                          Whitespace@7..8 " "
-                          TyTensor@8..28
-                            KwTensor@8..14 "tensor"
-                            Lt@14..15 "<"
-                            DimHints@15..20
-                              Int@15..16 "3"
-                              Comma@16..17 ","
-                              Int@17..18 "3"
-                              Comma@18..19 ","
-                              Int@19..20 "3"
-                            Gt@20..21 ">"
-                            Lt@21..22 "<"
-                            TypeHint@22..27
-                              Recovered@22..23
-                                Int@22..23 "1"
-                              Recovered@23..24
-                                Comma@23..24 ","
-                              Recovered@24..25
-                                Int@24..25 "1"
-                              Recovered@25..26
-                                Comma@25..26 ","
-                              Recovered@26..27
-                                Int@26..27 "1"
-                            Gt@27..28 ">"
-                      Whitespace@28..29 " "
+                        Whitespace@7..8 " "
+                        TyTensor@8..28
+                          KwTensor@8..14 "tensor"
+                          Lt@14..15 "<"
+                          DimHints@15..20
+                            Int@15..16 "3"
+                            Comma@16..17 ","
+                            Int@17..18 "3"
+                            Comma@18..19 ","
+                            Int@19..20 "3"
+                          Gt@20..21 ">"
+                          Lt@21..22 "<"
+                          TypeHint@22..27
+                            Recovered@22..23
+                              Int@22..23 "1"
+                            Recovered@23..24
+                              Comma@23..24 ","
+                            Recovered@24..25
+                              Int@24..25 "1"
+                            Recovered@25..26
+                              Comma@25..26 ","
+                            Recovered@26..27
+                              Int@26..27 "1"
+                          Gt@27..28 ">"
+                        Whitespace@28..29 " "
                       Eq@29..30 "="
                       Whitespace@30..31 " "
                       Literal@31..49

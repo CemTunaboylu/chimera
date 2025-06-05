@@ -101,13 +101,13 @@ mod tests {
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..25
-                      VarRef@4..19
-                        Ident@4..7 "foo"
-                        Whitespace@7..8 " "
+                      TypeHint@4..19
+                        VarRef@4..8
+                          Ident@4..7 "foo"
+                          Whitespace@7..8 " "
                         Colon@8..9 ":"
-                        TypeHint@9..19
-                          Whitespace@9..10 " "
-                          StructAsType@10..19 "Important"
+                        Whitespace@9..10 " "
+                        StructAsType@10..19 "Important"
                       Whitespace@19..20 " "
                       Eq@20..21 "="
                       Whitespace@21..22 " "
@@ -121,22 +121,22 @@ mod tests {
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..28
-                      VarRef@4..22
-                        Ident@4..7 "foo"
-                        Whitespace@7..8 " "
+                      TypeHint@4..23
+                        VarRef@4..8
+                          Ident@4..7 "foo"
+                          Whitespace@7..8 " "
                         Colon@8..9 ":"
-                        TypeHint@9..22
-                          Whitespace@9..10 " "
-                          TyFn@10..22
-                            KwFn@10..12 "fn"
-                            LParen@12..13 "("
-                            ParamDecl@13..16
-                              TyI32@13..16 "i32"
-                            RParen@16..17 ")"
-                            RetType@17..22
-                              RArrow@17..19 "->"
-                              TyI32@19..22 "i32"
-                      Whitespace@22..23 " "
+                        Whitespace@9..10 " "
+                        TyFn@10..22
+                          KwFn@10..12 "fn"
+                          LParen@12..13 "("
+                          ParamDecl@13..16
+                            TyI32@13..16 "i32"
+                          RParen@16..17 ")"
+                          RetType@17..22
+                            RArrow@17..19 "->"
+                            TyI32@19..22 "i32"
+                        Whitespace@22..23 " "
                       Eq@23..24 "="
                       Whitespace@24..25 " "
                       VarRef@25..28
@@ -150,16 +150,16 @@ mod tests {
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..23
-                      Mut@4..17
-                        KwMut@4..7 "mut"
-                        VarRef@7..17
-                          Whitespace@7..8 " "
-                          Ident@8..11 "foo"
-                          Whitespace@11..12 " "
-                          Colon@12..13 ":"
-                          TypeHint@13..17
-                            Whitespace@13..14 " "
-                            TyI32@14..17 "i32"
+                      TypeHint@4..17
+                        Mut@4..12
+                          KwMut@4..7 "mut"
+                          VarRef@7..12
+                            Whitespace@7..8 " "
+                            Ident@8..11 "foo"
+                            Whitespace@11..12 " "
+                        Colon@12..13 ":"
+                        Whitespace@13..14 " "
+                        TyI32@14..17 "i32"
                       Whitespace@17..18 " "
                       Eq@18..19 "="
                       Whitespace@19..20 " "
@@ -173,25 +173,25 @@ mod tests {
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..35
-                      Mut@4..29
-                        KwMut@4..7 "mut"
-                        VarRef@7..29
-                          Whitespace@7..8 " "
-                          Ident@8..11 "foo"
-                          Whitespace@11..12 " "
-                          Colon@12..13 ":"
-                          TypeHint@13..29
-                            Whitespace@13..14 " "
-                            Tuple@14..29
-                              LParen@14..15 "("
-                              TyI32@15..18 "i32"
-                              Comma@18..19 ","
-                              Whitespace@19..20 " "
-                              TyI32@20..23 "i32"
-                              Comma@23..24 ","
-                              Whitespace@24..25 " "
-                              TyI32@25..28 "i32"
-                              RParen@28..29 ")"
+                      TypeHint@4..29
+                        Mut@4..12
+                          KwMut@4..7 "mut"
+                          VarRef@7..12
+                            Whitespace@7..8 " "
+                            Ident@8..11 "foo"
+                            Whitespace@11..12 " "
+                        Colon@12..13 ":"
+                        Whitespace@13..14 " "
+                        Tuple@14..29
+                          LParen@14..15 "("
+                          TyI32@15..18 "i32"
+                          Comma@18..19 ","
+                          Whitespace@19..20 " "
+                          TyI32@20..23 "i32"
+                          Comma@23..24 ","
+                          Whitespace@24..25 " "
+                          TyI32@25..28 "i32"
+                          RParen@28..29 ")"
                       Whitespace@29..30 " "
                       Eq@30..31 "="
                       Whitespace@31..32 " "
@@ -205,34 +205,34 @@ mod tests {
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..44
-                      Mut@4..38
-                        KwMut@4..7 "mut"
-                        VarRef@7..38
-                          Whitespace@7..8 " "
-                          Ident@8..11 "foo"
-                          Whitespace@11..12 " "
-                          Colon@12..13 ":"
-                          TypeHint@13..38
-                            Whitespace@13..14 " "
-                            Tuple@14..38
-                              LParen@14..15 "("
-                              Tuple@15..25
-                                LParen@15..16 "("
-                                TyI32@16..19 "i32"
-                                Comma@19..20 ","
-                                Whitespace@20..21 " "
-                                TyI32@21..24 "i32"
-                                RParen@24..25 ")"
-                              Comma@25..26 ","
-                              Whitespace@26..27 " "
-                              Tuple@27..37
-                                LParen@27..28 "("
-                                TyF32@28..31 "f32"
-                                Comma@31..32 ","
-                                Whitespace@32..33 " "
-                                TyF32@33..36 "f32"
-                                RParen@36..37 ")"
-                              RParen@37..38 ")"
+                      TypeHint@4..38
+                        Mut@4..12
+                          KwMut@4..7 "mut"
+                          VarRef@7..12
+                            Whitespace@7..8 " "
+                            Ident@8..11 "foo"
+                            Whitespace@11..12 " "
+                        Colon@12..13 ":"
+                        Whitespace@13..14 " "
+                        Tuple@14..38
+                          LParen@14..15 "("
+                          Tuple@15..25
+                            LParen@15..16 "("
+                            TyI32@16..19 "i32"
+                            Comma@19..20 ","
+                            Whitespace@20..21 " "
+                            TyI32@21..24 "i32"
+                            RParen@24..25 ")"
+                          Comma@25..26 ","
+                          Whitespace@26..27 " "
+                          Tuple@27..37
+                            LParen@27..28 "("
+                            TyF32@28..31 "f32"
+                            Comma@31..32 ","
+                            Whitespace@32..33 " "
+                            TyF32@33..36 "f32"
+                            RParen@36..37 ")"
+                          RParen@37..38 ")"
                       Whitespace@38..39 " "
                       Eq@39..40 "="
                       Whitespace@40..41 " "

@@ -297,6 +297,13 @@ impl SyntaxKind {
                 let operators: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
                 context_update[2] = RestrictionType::Add(operators);
             }
+            Colon => {
+                context_update[0] = RestrictionType::Add([StructAsType, TypeHint].as_ref().into());
+                let can_be_parameter: SyntaxKindBitSet =
+                    SyntaxKind::can_be_parameter().as_ref().into();
+                let allowed: SyntaxKindBitSet = [And, LParen, KwMut].as_ref().into();
+                context_update[2] = RestrictionType::Override(can_be_parameter + allowed);
+            }
             Condition => {
                 context_update[1] = RestrictionType::Add([LBrace, KwElif, KwElse].as_ref().into());
                 let operators: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();

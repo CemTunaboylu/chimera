@@ -192,7 +192,11 @@ impl Op for AssocBinOp {
 #[allow(clippy::from_over_into)]
 impl Into<SyntaxKind> for AssocBinOp {
     fn into(self) -> SyntaxKind {
-        SyntaxKind::InfixBinOp
+        if self == AssocBinOp::TypeHint {
+            SyntaxKind::TypeHint
+        } else {
+            SyntaxKind::InfixBinOp
+        }
     }
 }
 
