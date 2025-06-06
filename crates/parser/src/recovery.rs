@@ -15,6 +15,10 @@ impl Parser<'_> {
         })
     }
 
+    fn can_recover_kind(&self, kind: SyntaxKind) -> bool {
+        self.context.borrow().is_recovery_allowed(kind)
+    }
+
     fn move_lexer_to_the_next(&self) {
         if self.can_recover() {
             self.lexer.borrow_mut().next();
@@ -67,11 +71,15 @@ impl Parser<'_> {
     }
 
     pub fn recover_restricted(&self, restricted: SyntaxKind) -> Option<()> {
+        let recover = self.can_recover_kind(restricted);
+        if !recover {
+            return None;
+        }
         let allowed: ThinVec<SyntaxKind> = self.context.borrow().get_allowed().into();
         self.push_event(Event::Error {
             err: ParseError::new(self.lexer.borrow().span().clone(), allowed, restricted),
         });
-        if self.can_recover() {
+        if recover {
             self.bump_with_marker(SyntaxKind::Recovered);
         }
         None

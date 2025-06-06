@@ -224,7 +224,7 @@ impl Parser<'_> {
             }
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
             operator if is_an_operator(operator) => {
-                self.recover();
+                self.recover_restricted(operator);
                 None
             }
             _ => None,
@@ -352,7 +352,7 @@ impl Parser<'_> {
             // A variable definition is a statement, thus will be recovered
             KwIf => self.parse_conditionals(),
             KwLet => {
-                self.recover();
+                self.recover_restricted(KwLet);
                 None
             }
             KwMut if self.is_allowed(KwMut) => self.parse_mut(),
