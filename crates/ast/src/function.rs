@@ -80,7 +80,6 @@ impl TryFrom<&SyntaxNode> for Callable {
         for param in Param::get_params_nodes_from(fn_def_or_lambda) {
             parameters.push(Param::try_from(&param)?);
         }
-
         let return_type = RetType::get_return_type_from(fn_def_or_lambda);
         let body = get_block_from(fn_def_or_lambda)?;
 
@@ -352,9 +351,9 @@ mod tests {
                         is_mut: true,
                         ty: Box::new(Type::Integer32)
                     }),
-                    5..6
+                    1..16
                 ),
-                Param::new_named(false, "b".into(), Some(Type::Integer32), 17..18),
+                Param::new_named(false, "b".into(), Some(Type::Integer32), 18..24),
             ]),
         );
         assert!(lambda.0.return_type.is_none());
@@ -369,7 +368,7 @@ mod tests {
         if let [Stmt::Expr(Expr::Literal(Literal(Value::Lambda(l))))] = stmts.as_ref() {
             assert_eq!(
                 l.0.parameters,
-                thin_vec![Param::new_generic("f".into(), false, 28..29)]
+                thin_vec![Param::new_generic("f".into(), false, 29..30)]
             );
             assert!(l.0.return_type.is_none());
             assert!(matches!(l.0.body, Block::Semi(_)));
