@@ -116,25 +116,16 @@ impl Parser<'_> {
     }
 
     #[allow(unused_variables)]
-    fn try_to_parse_selfref_if_any(&self) {
-        if !self.is_next_in([And, KwMut, SelfRef].as_ref().into()) {
+    fn try_to_parse_ref_mut_self_ref_if_any(&self) {
+        if !self.is_next_in([And].as_ref().into()) {
             return;
         }
         let marker = self.start();
-        if self.is_next(And) {
-            let rollback_when_dropped = self.by_forbidding_all();
-            self.allow_in_ctx([And, SelfRef, KwMut].as_ref());
-            self.parse_prefix_unary_operation(And);
-            self.complete_marker_with(marker, ParamDecl);
-        } else if self.is_next(KwMut) {
-            let rollback_when_dropped = self.by_forbidding_all();
-            self.allow_in_ctx([SelfRef, KwMut].as_ref());
-            self.parse_left_hand_side();
-            self.complete_marker_with(marker, ParamDecl);
-        } else if self.is_next(SelfRef) {
-            self.expect_and_bump(SelfRef);
-            self.complete_marker_with(marker, ParamDecl);
-        }
+        let rollback_when_dropped = self.by_forbidding_all();
+        self.allow_in_ctx([And, SelfRef, KwMut].as_ref());
+        self.parse_prefix_unary_operation(And);
+        self.complete_marker_with(marker, ParamDecl);
+        self.bump_if(Comma);
     }
 
     #[allow(unused_variables)]
@@ -144,7 +135,7 @@ impl Parser<'_> {
     ) {
         let rollback_when_dropped = self.impose_context_for_parsing(ParamDecl);
         use Element::*;
-        self.try_to_parse_selfref_if_any();
+        self.try_to_parse_ref_mut_self_ref_if_any();
 
         let arg_elements = thin_vec![ParseExprWith(starting_precedence())];
         self.parse_separated_by(&arg_elements, ParamDecl, Comma, until);
@@ -966,8 +957,7 @@ mod tests {
                           Whitespace@17..18 " "
                           SelfRef@18..22
                             Kwself@18..22 "self"
-                    ParamDecl@22..23
-                      Comma@22..23 ","
+                    Comma@22..23 ","
                     Whitespace@23..24 " "
                     ParamDecl@24..37
                       TypeHint@24..37
@@ -1082,8 +1072,7 @@ mod tests {
                           Whitespace@17..18 " "
                           SelfRef@18..22
                             Kwself@18..22 "self"
-                    ParamDecl@22..23
-                      Comma@22..23 ","
+                    Comma@22..23 ","
                     Whitespace@23..24 " "
                     ParamDecl@24..38
                       TypeHint@24..38

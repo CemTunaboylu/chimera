@@ -76,8 +76,7 @@ mod tests {
                                Whitespace@30..31 " "
                                SelfRef@31..35
                                  Kwself@31..35 "self"
-                         ParamDecl@35..36
-                           Comma@35..36 ","
+                         Comma@35..36 ","
                          Whitespace@36..37 " "
                          ParamDecl@37..46
                            TypeHint@37..46
