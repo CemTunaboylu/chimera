@@ -114,18 +114,18 @@ impl Op for AssocBinOp {
         use AssocBinOp::*;
         use Precedence::*;
         match self {
-            Assgmt | AssgmtWith(_) => Assignment,
-            Range => Ranging,
-            BoolOr => BooleanOr,
-            BoolAnd => BooleanAnd,
-            EqEq | Gt | Ge | Lt | Le | NotEq => Comparison,
-            BitOr => BitwiseOr,
-            Xor => BitwiseXor,
-            BitAnd => BitwiseAnd,
-            LShift | RShift => Shift,
             Add | Sub => Additive,
-            Mul | Div | Mod => Multiplicative,
+            Assgmt | AssgmtWith(_) => Assignment,
+            BitAnd => BitwiseAnd,
+            BitOr => BitwiseOr,
+            BoolAnd => BooleanAnd,
+            BoolOr => BooleanOr,
             Dot | TypeHint | Namespaced => Coupling,
+            EqEq | Gt | Ge | Lt | Le | NotEq => Comparison,
+            LShift | RShift => Shift,
+            Mul | Div | Mod => Multiplicative,
+            Range => Ranging,
+            Xor => BitwiseXor,
         }
     }
 
