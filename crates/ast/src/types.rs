@@ -119,13 +119,7 @@ impl TryFrom<&SyntaxNode> for Type {
             Tuple => {
                 let types = vector_of_children_and_tokens_as(
                     parent_node,
-                    [
-                        SyntaxKind::Comma,
-                        SyntaxKind::LParen,
-                        SyntaxKind::RParen,
-                        SyntaxKind::Whitespace,
-                    ]
-                    .as_ref(),
+                    ASTTuple::to_remove_from_tuples(),
                     |ch| Type::try_from(ch),
                 )?;
                 Self::Tuple(types)

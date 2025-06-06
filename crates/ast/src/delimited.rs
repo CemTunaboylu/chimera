@@ -1,4 +1,4 @@
-use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
+use syntax::{bitset::SyntaxKindBitSet, language::SyntaxNode, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
 use crate::{
@@ -15,18 +15,21 @@ use crate::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tuple(pub(crate) SyntaxNode);
 impl Tuple {
+    pub fn to_remove_from_tuples() -> SyntaxKindBitSet {
+        [
+            SyntaxKind::Comma,
+            SyntaxKind::LParen,
+            SyntaxKind::RParen,
+            SyntaxKind::Whitespace,
+        ]
+        .as_ref()
+        .into()
+    }
     pub fn elements(&self) -> ASTResult<ThinVec<Expr>> {
-        let elements = vector_of_children_and_tokens_as(
-            &self.0,
-            [
-                SyntaxKind::Comma,
-                SyntaxKind::LParen,
-                SyntaxKind::RParen,
-                SyntaxKind::Whitespace,
-            ]
-            .as_ref(),
-            |ch| Expr::try_from(ch),
-        )?;
+        let elements =
+            vector_of_children_and_tokens_as(&self.0, Self::to_remove_from_tuples(), |ch| {
+                Expr::try_from(ch)
+            })?;
         Ok(elements)
     }
 }
