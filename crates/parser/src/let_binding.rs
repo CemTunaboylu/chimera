@@ -153,8 +153,8 @@ mod tests {
                       TypeHint@4..17
                         Mut@4..12
                           KwMut@4..7 "mut"
-                          VarRef@7..12
-                            Whitespace@7..8 " "
+                          Whitespace@7..8 " "
+                          VarRef@8..12
                             Ident@8..11 "foo"
                             Whitespace@11..12 " "
                         Colon@12..13 ":"
@@ -176,8 +176,8 @@ mod tests {
                       TypeHint@4..29
                         Mut@4..12
                           KwMut@4..7 "mut"
-                          VarRef@7..12
-                            Whitespace@7..8 " "
+                          Whitespace@7..8 " "
+                          VarRef@8..12
                             Ident@8..11 "foo"
                             Whitespace@11..12 " "
                         Colon@12..13 ":"
@@ -208,8 +208,8 @@ mod tests {
                       TypeHint@4..38
                         Mut@4..12
                           KwMut@4..7 "mut"
-                          VarRef@7..12
-                            Whitespace@7..8 " "
+                          Whitespace@7..8 " "
+                          VarRef@8..12
                             Ident@8..11 "foo"
                             Whitespace@11..12 " "
                         Colon@12..13 ":"

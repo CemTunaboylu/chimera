@@ -55,15 +55,15 @@ mod tests {
     create_parser_test! {
     impl_block_for_struct: ("impl Point { fn translate(&mut self, by: Point) { self.x += by.x; self.y += by.y; }\n}",
                expect![[r#"
-                   Root@0..84
-                     ImplBlock@0..84
+                   Root@0..85
+                     ImplBlock@0..85
                        KwImpl@0..4 "impl"
                        Whitespace@4..5 " "
                        StructAsType@5..10 "Point"
                        Whitespace@10..11 " "
                        LBrace@11..12 "{"
                        Whitespace@12..13 " "
-                       FnDef@13..82
+                       FnDef@13..83
                          KwFn@13..15 "fn"
                          Whitespace@15..16 " "
                          Ident@16..25 "translate"
@@ -76,58 +76,62 @@ mod tests {
                                Whitespace@30..31 " "
                                SelfRef@31..35
                                  Kwself@31..35 "self"
-                         Whitespace@35..36 " "
-                         ParamDecl@36..45
-                           Ident@36..38 "by"
-                           Colon@38..39 ":"
-                           Whitespace@39..40 " "
-                           StructAsType@40..45 "Point"
-                         RParen@45..46 ")"
-                         Whitespace@46..47 " "
-                         Block@47..82
-                           LBrace@47..48 "{"
-                           Whitespace@48..49 " "
-                           Semi@49..64
-                             InfixBinOp@49..63
-                               InfixBinOp@49..56
-                                 SelfRef@49..53
-                                   Kwself@49..53 "self"
-                                 Dot@53..54 "."
-                                 VarRef@54..56
-                                   Ident@54..55 "x"
-                                   Whitespace@55..56 " "
-                               PlusEq@56..58 "+="
-                               Whitespace@58..59 " "
-                               InfixBinOp@59..63
-                                 VarRef@59..61
-                                   Ident@59..61 "by"
-                                 Dot@61..62 "."
-                                 VarRef@62..63
-                                   Ident@62..63 "x"
-                             Semi@63..64 ";"
-                           Whitespace@64..65 " "
-                           Semi@65..80
-                             InfixBinOp@65..79
-                               InfixBinOp@65..72
-                                 SelfRef@65..69
-                                   Kwself@65..69 "self"
-                                 Dot@69..70 "."
-                                 VarRef@70..72
-                                   Ident@70..71 "y"
-                                   Whitespace@71..72 " "
-                               PlusEq@72..74 "+="
-                               Whitespace@74..75 " "
-                               InfixBinOp@75..79
-                                 VarRef@75..77
-                                   Ident@75..77 "by"
-                                 Dot@77..78 "."
-                                 VarRef@78..79
-                                   Ident@78..79 "y"
-                             Semi@79..80 ";"
-                           Whitespace@80..81 " "
-                           RBrace@81..82 "}"
-                       Whitespace@82..83 "\n"
-                       RBrace@83..84 "}""#]],
+                         ParamDecl@35..36
+                           Comma@35..36 ","
+                         Whitespace@36..37 " "
+                         ParamDecl@37..46
+                           TypeHint@37..46
+                             VarRef@37..39
+                               Ident@37..39 "by"
+                             Colon@39..40 ":"
+                             Whitespace@40..41 " "
+                             StructAsType@41..46 "Point"
+                         RParen@46..47 ")"
+                         Whitespace@47..48 " "
+                         Block@48..83
+                           LBrace@48..49 "{"
+                           Whitespace@49..50 " "
+                           Semi@50..65
+                             InfixBinOp@50..64
+                               InfixBinOp@50..57
+                                 SelfRef@50..54
+                                   Kwself@50..54 "self"
+                                 Dot@54..55 "."
+                                 VarRef@55..57
+                                   Ident@55..56 "x"
+                                   Whitespace@56..57 " "
+                               PlusEq@57..59 "+="
+                               Whitespace@59..60 " "
+                               InfixBinOp@60..64
+                                 VarRef@60..62
+                                   Ident@60..62 "by"
+                                 Dot@62..63 "."
+                                 VarRef@63..64
+                                   Ident@63..64 "x"
+                             Semi@64..65 ";"
+                           Whitespace@65..66 " "
+                           Semi@66..81
+                             InfixBinOp@66..80
+                               InfixBinOp@66..73
+                                 SelfRef@66..70
+                                   Kwself@66..70 "self"
+                                 Dot@70..71 "."
+                                 VarRef@71..73
+                                   Ident@71..72 "y"
+                                   Whitespace@72..73 " "
+                               PlusEq@73..75 "+="
+                               Whitespace@75..76 " "
+                               InfixBinOp@76..80
+                                 VarRef@76..78
+                                   Ident@76..78 "by"
+                                 Dot@78..79 "."
+                                 VarRef@79..80
+                                   Ident@79..80 "y"
+                             Semi@80..81 ";"
+                           Whitespace@81..82 " "
+                           RBrace@82..83 "}"
+                       Whitespace@83..84 "\n"
+                       RBrace@84..85 "}""#]],
            ),
 
        }

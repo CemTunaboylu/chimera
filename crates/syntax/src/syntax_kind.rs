@@ -358,12 +358,12 @@ impl SyntaxKind {
                 context_update[2] = RestrictionType::Sub([Comma].as_ref().into());
             }
             ParamDecl => {
-                context_update[0] = RestrictionType::Add([StructAsType, TypeHint].as_ref().into());
                 let misc: SyntaxKindBitSet = [And, Colon, Comma, Ident, KwMut, LParen, RParen]
                     .as_ref()
                     .into();
-                let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-                context_update[2] = RestrictionType::Override(misc + types);
+                let can_be_parameter: SyntaxKindBitSet =
+                    SyntaxKind::can_be_parameter().as_ref().into();
+                context_update[2] = RestrictionType::Override(misc + can_be_parameter);
             }
             PrefixUnaryOp => {
                 context_update[2] =
@@ -375,6 +375,7 @@ impl SyntaxKind {
             RetType => {
                 context_update[0] = RestrictionType::Add([StructAsType].as_ref().into());
                 let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
+                context_update[1] = RestrictionType::Add([LBrace].as_ref().into());
                 let ref_struct_as_type: SyntaxKindBitSet = [And, StructAsType].as_ref().into();
                 context_update[2] = RestrictionType::Add(types + ref_struct_as_type);
             }

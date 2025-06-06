@@ -344,7 +344,7 @@ impl Parser<'_> {
             }
         // * We are in the lhs of the identifier, thus expect to parse an identifier
         } else {
-            self.parse_starting_with_identifier();
+            self.parse_left_hand_side();
         }
         Some(self.complete_marker_with(marker, Mut))
     }

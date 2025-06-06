@@ -258,8 +258,8 @@ mod tests {
                     LParen@0..1 "("
                     Mut@1..6
                       KwMut@1..4 "mut"
-                      VarRef@4..6
-                        Whitespace@4..5 " "
+                      Whitespace@4..5 " "
+                      VarRef@5..6
                         Ident@5..6 "x"
                     Comma@6..7 ","
                     RParen@7..8 ")""#]]
@@ -287,8 +287,8 @@ mod tests {
                       Whitespace@2..3 " "
                       Mut@3..8
                         KwMut@3..6 "mut"
-                        VarRef@6..8
-                          Whitespace@6..7 " "
+                        Whitespace@6..7 " "
+                        VarRef@7..8
                           Ident@7..8 "x"
                     Comma@8..9 ","
                     RParen@9..10 ")""#]]
@@ -351,15 +351,15 @@ mod tests {
                           LParen@5..6 "("
                           Mut@6..11
                             KwMut@6..9 "mut"
-                            VarRef@9..11
-                              Whitespace@9..10 " "
+                            Whitespace@9..10 " "
+                            VarRef@10..11
                               Ident@10..11 "x"
                           Comma@11..12 ","
                           Whitespace@12..13 " "
                           Mut@13..18
                             KwMut@13..16 "mut"
-                            VarRef@16..18
-                              Whitespace@16..17 " "
+                            Whitespace@16..17 " "
+                            VarRef@17..18
                               Ident@17..18 "y"
                           RParen@18..19 ")"
                         Comma@19..20 ","
@@ -424,8 +424,8 @@ mod tests {
                         TypeHint@5..14
                           Mut@5..10
                             KwMut@5..8 "mut"
-                            VarRef@8..10
-                              Whitespace@8..9 " "
+                            Whitespace@8..9 " "
+                            VarRef@9..10
                               Ident@9..10 "x"
                           Colon@10..11 ":"
                           TyI32@11..14 "i32"

@@ -306,8 +306,8 @@ mod tests {
                         Comma@8..9 ","
                         Mut@9..16
                           KwMut@9..12 "mut"
-                          VarRef@12..16
-                            Whitespace@12..13 " "
+                          Whitespace@12..13 " "
+                          VarRef@13..16
                             Ident@13..16 "elm"
                         RParen@16..17 ")"
                       Comma@17..18 ","
@@ -316,15 +316,15 @@ mod tests {
                         LParen@19..20 "("
                         Mut@20..27
                           KwMut@20..23 "mut"
-                          VarRef@23..27
-                            Whitespace@23..24 " "
+                          Whitespace@23..24 " "
+                          VarRef@24..27
                             Ident@24..27 "ix2"
                         Comma@27..28 ","
                         Whitespace@28..29 " "
                         Mut@29..37
                           KwMut@29..32 "mut"
-                          VarRef@32..37
-                            Whitespace@32..33 " "
+                          Whitespace@32..33 " "
+                          VarRef@33..37
                             Ident@33..37 "elm2"
                         Comma@37..38 ","
                         RParen@38..39 ")"
