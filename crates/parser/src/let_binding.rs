@@ -130,8 +130,7 @@ mod tests {
                         TyFn@10..22
                           KwFn@10..12 "fn"
                           LParen@12..13 "("
-                          ParamDecl@13..16
-                            TyI32@13..16 "i32"
+                          TyI32@13..16 "i32"
                           RParen@16..17 ")"
                           RetType@17..22
                             RArrow@17..19 "->"

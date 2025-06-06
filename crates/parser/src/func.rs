@@ -4,10 +4,10 @@ use crate::{
     parse::{Element, Finished},
     parser::{IsNext, Parser},
 };
-use syntax::{Syntax, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
+use syntax::{bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
 
 use SyntaxKind::*;
-use thin_vec::{ThinVec, thin_vec};
+use thin_vec::thin_vec;
 
 impl Parser<'_> {
     // fn <ident>({parameters as CSV}) {-> RetType} {}
@@ -95,7 +95,7 @@ impl Parser<'_> {
         self.expect_and_bump(LParen);
         if !self.is_next(RParen) {
             let rollback_after_drop = self.impose_restrictions_of_kind_on_context(RParen);
-            self.parse_comma_separated_types_until(|syntax: Syntax| !syntax.is_of_kind(RParen));
+            self.parse_comma_separated_types_until(RParen);
         }
 
         self.expect_and_bump(RParen);
@@ -128,18 +128,12 @@ impl Parser<'_> {
     }
 
     #[allow(unused_variables)]
-    pub fn parse_comma_separated_types_until(&self, until_false: fn(Syntax) -> bool) {
+    pub fn parse_comma_separated_types_until(&self, until: impl Into<SyntaxKindBitSet>) {
         let rollback_when_dropped = self.impose_context_for_parsing(ParamDecl);
         use Element::*;
 
         let arg_elements = thin_vec![ParseExprWith(starting_precedence())];
-
-        while let Some(Ok(peeked)) = self.peek() {
-            if !until_false(peeked.clone()) {
-                break;
-            }
-            self.parse_arg(&arg_elements);
-        }
+        self.bump_separated_by(&arg_elements, Comma, until);
     }
 
     #[allow(unused_variables)]
@@ -177,53 +171,13 @@ impl Parser<'_> {
         self.parse_separated_by(&arg_elements, ParamDecl, Comma, until);
     }
 
-    fn parse_arg(&self, elements: &ThinVec<Element>) {
-        let marker = self.start();
-        self.parse_possible_ref_mut_arg_and_elms(elements);
-        // since we stopped at Comma above, we need to consume Comma if there is one now to enable the following parse
-        self.ignore_if(Comma);
-        self.complete_marker_with(marker, ParamDecl);
-    }
-
-    pub fn parse_possible_ref_mut_arg_and_elms(&self, elements: &ThinVec<Element>) {
-        if self.is_next(And) {
-            self.parse_ref_arg(elements);
-        } else if self.is_next(KwMut) {
-            self.parse_mut_arg(elements);
-        } else {
-            self.parse_arg_with(elements);
-        }
-    }
-    fn parse_ref_arg(&self, elements: &ThinVec<Element>) -> Finished {
-        let marker = self.start();
-        self.expect_and_bump(And);
-        if self.is_next(KwMut) {
-            self.parse_mut_arg(elements);
-        } else {
-            self.parse_arg_with(elements);
-        }
-        self.complete_marker_with(marker, PrefixUnaryOp)
-    }
-
-    fn parse_mut_arg(&self, elements: &ThinVec<Element>) -> Finished {
-        let mut_marker = self.start();
-        self.expect_and_bump(KwMut);
-        self.parse_arg_with(elements);
-        self.complete_marker_with(mut_marker, Mut)
-    }
-
-    fn parse_arg_with(&self, elements: &ThinVec<Element>) {
-        self.parse_with(elements);
-    }
-
     #[allow(unused_variables)]
     pub fn parse_comma_separated_arguments_until(&self, unwanted: impl Into<SyntaxKindBitSet>) {
         let rollback_when_dropped = self.impose_context_for_parsing(FnArg);
         use Element::*;
-        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
-        let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];
 
-        self.parse_separated_by(&can_be, FnArg, Comma, unwanted);
+        let arg_elements = thin_vec![ParseExprWith(starting_precedence())];
+        self.parse_separated_by(&arg_elements, FnArg, Comma, unwanted);
     }
 }
 
@@ -493,9 +447,8 @@ mod tests {
                     TyFn@11..29
                       KwFn@11..13 "fn"
                       LParen@13..14 "("
-                      ParamDecl@14..20
-                        TyTensor@14..20
-                          KwTensor@14..20 "tensor"
+                      TyTensor@14..20
+                        KwTensor@14..20 "tensor"
                       RParen@20..21 ")"
                       RetType@21..29
                         RArrow@21..23 "->"
@@ -1194,15 +1147,15 @@ mod tests {
                 FnArg@6..18
                   PrefixUnaryOp@6..18
                     And@6..7 "&"
-                    Mut@7..18
-                      KwMut@7..10 "mut"
-                      Whitespace@10..11 " "
-                      InfixBinOp@11..18
+                    InfixBinOp@7..18
+                      Mut@7..13
+                        KwMut@7..10 "mut"
+                        Whitespace@10..11 " "
                         VarRef@11..13
                           Ident@11..13 "me"
-                        Dot@13..14 "."
-                        VarRef@14..18
-                          Ident@14..18 "mine"
+                      Dot@13..14 "."
+                      VarRef@14..18
+                        Ident@14..18 "mine"
                 RParen@18..19 ")""#]],
     ),
 

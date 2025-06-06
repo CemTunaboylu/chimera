@@ -29,7 +29,6 @@ pub enum Element {
     KindWithMarker(SyntaxKind, SyntaxKind),
     Optional(SyntaxKindBitSet),
     ParseExprWith(Bound),
-    RefMut(ThinVec<Element>),
 }
 
 impl Parser<'_> {
@@ -86,7 +85,6 @@ impl Parser<'_> {
             &LeftHandSide => true,
             Optional(_) => true,
             ParseExprWith(_) => true,
-            RefMut(elements) => self.does_first_element_pass(elements.first().unwrap()),
         }
     }
     pub fn parse_with(&self, elements_in_order: &[Element]) {
@@ -128,9 +126,6 @@ impl Parser<'_> {
                 }
                 ParseExprWith(bound) => {
                     self.parse_expression_until_binding_power(bound.clone());
-                }
-                RefMut(elements) => {
-                    self.parse_possible_ref_mut_arg_and_elms(elements);
                 }
             }
         }
