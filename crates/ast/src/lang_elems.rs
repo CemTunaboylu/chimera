@@ -25,11 +25,11 @@ pub fn get_name(not: &NodeOrToken) -> SmolStr {
 
 pub fn vector_of_children_and_tokens_as<T>(
     node: &SyntaxNode,
-    set: impl Into<SyntaxKindBitSet>,
+    remove: impl Into<SyntaxKindBitSet>,
     f: fn(&NodeOrToken) -> ASTResult<T>,
 ) -> ASTResult<ThinVec<T>> {
     let mut types: ThinVec<T> = thin_vec![];
-    for ch in children_with_tokens_without_unwanted(&node, set) {
+    for ch in children_with_tokens_without_unwanted(&node, remove) {
         let t = f(&ch).map_err(|e| ASTError::new(ch.text_range().into(), e, ch.kind()))?;
         types.push(t);
     }

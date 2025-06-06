@@ -10,16 +10,18 @@ use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
     ast::ASTResult,
+    delimited::Tuple as ASTTuple,
     errors::ASTError,
     expression::Expr,
     function::RetType as ASTRetType,
     lang_elems::{
         children_with_tokens_without_unwanted, ensure_node_kind_is_any, error_for_token,
-        filtered_children_with_tokens, get_children_with_tokens_in_f, get_first_child_in,
-        get_token_of_errs, vector_of_children_and_tokens_as,
+        get_children_with_tokens_in_f, get_first_child_in, get_token_of_errs,
+        vector_of_children_and_tokens_as,
     },
     literal::{Literal, Value, parse_into},
-    parameter::Param,
+    mutable::Mut as ASTMut,
+    operation::Binary,
     self_ref::SelfRef,
 };
 
@@ -55,6 +57,15 @@ pub enum Type {
         shape: ThinVec<Option<Expr>>,
     },
     Tuple(ThinVec<Type>),
+}
+
+impl Type {
+    fn to_remove_for_fn_type() -> SyntaxKindBitSet {
+        use SyntaxKind::*;
+        [Comma, KwFn, LParen, RetType, RParen, Whitespace]
+            .as_ref()
+            .into()
+    }
 }
 
 fn extract_type_hint_from(type_hint_node: &SyntaxNode) -> ASTResult<Type> {
@@ -160,19 +171,13 @@ impl TryFrom<&SyntaxNode> for Type {
                 }
             }
             TyFn => {
-                let param_nodes = Param::get_params_nodes_from(parent_node);
+                let param_nodes = children_with_tokens_without_unwanted(
+                    parent_node,
+                    Type::to_remove_for_fn_type(),
+                );
                 let mut parameters = ThinVec::with_capacity(param_nodes.len());
-                // TOOD: take care of mut
-                let can_be_param: SyntaxKindBitSet = SyntaxKind::can_be_parameter().as_ref().into();
                 for param_decl in param_nodes {
-                    let type_param =
-                        get_first_child_in(&param_decl, can_be_param).ok_or_else(|| {
-                            ASTError::with_err_msg(
-                                param_decl.text_range().into(),
-                                "expected a type that can be a parameter".to_string(),
-                            )
-                        })?;
-                    let typed = Type::try_from(&type_param)?;
+                    let typed = Type::try_from(&param_decl)?;
                     parameters.push(typed);
                 }
                 let return_type = ASTRetType::get_return_type_from(parent_node)
@@ -265,6 +270,33 @@ pub enum Hint {
     Type(Type),
 }
 
+pub fn parse_type_hinted(type_hint_node: &SyntaxNode) -> ASTResult<(Expr, Type)> {
+    let nodes = children_with_tokens_without_unwanted(type_hint_node, [Colon, Whitespace].as_ref());
+    if nodes.len() != 2 {
+        return Err(ASTError::with_err_msg(
+            type_hint_node.text_range().into(),
+            format!("expected 2 nodes for type hint but got {:?}", nodes),
+        ));
+    }
+    let ident = nodes.first().unwrap();
+    let type_hinted = match ident.kind() {
+        Mut => Expr::Mut(ASTMut::try_from(ident.as_node().unwrap())?),
+        VarRef => Expr::try_from(ident)?,
+        _ => {
+            return Err(ASTError::with_err_msg(
+                type_hint_node.text_range().into(),
+                format!(
+                    "expected a valid identifier to type hint but got {:?}",
+                    ident
+                ),
+            ));
+        }
+    };
+    let rhs = nodes.last().unwrap();
+    let ty = Type::try_from(rhs)?;
+    Ok((type_hinted, ty))
+}
+
 impl Hint {
     pub fn is_type(&self) -> bool {
         matches!(self, Self::Type(_))
@@ -314,7 +346,9 @@ impl Hint {
 mod tests {
 
     use super::*;
-    use crate::{ast::ASTResult, ast_root_from, cast_node_into_type, cast_token_into_type};
+    use crate::{
+        ast::ASTResult, ast_root_from, cast_node_into_type, cast_token_into_type, parameter::Param,
+    };
     use parameterized_test::create;
 
     create! {
@@ -369,14 +403,23 @@ mod tests {
     fn tuple_with_struct_identifier() {
         let program = "fn def(arg:(char, Structure, Structure,))";
         let ast_root = ast_root_from(program);
-
         let fn_def_node = ast_root.get_root().first_child().unwrap();
         let param_node = fn_def_node
             .children()
             .find(|node| node.kind() == ParamDecl)
             .unwrap();
-        let tuple_as_type = param_node.first_child().unwrap();
-        cast_node_into_type::<Type>(&tuple_as_type);
+        let param = Param::try_from(&param_node).expect("should have been parsed");
+        assert_eq!(param.name, "arg");
+        assert_eq!(param.is_mut, false);
+        assert_eq!(param.by_ref, false);
+        assert_eq!(
+            param.param_type,
+            Some(Type::Tuple(thin_vec![
+                Type::Char,
+                Type::Struct("Structure".to_smolstr()),
+                Type::Struct("Structure".to_smolstr()),
+            ]))
+        );
     }
 
     #[test]
@@ -386,10 +429,25 @@ mod tests {
 
         let fn_def_node = ast_root.get_root().first_child().unwrap();
         let param_node = Param::get_params_nodes_from(&fn_def_node);
-        let fn_as_type_node =
-            get_first_child_in(param_node.first().unwrap(), TyFn).expect("TyFn node ");
+        let param =
+            Param::try_from(param_node.first().unwrap()).expect("should have been param decl");
 
-        cast_node_into_type::<Type>(&fn_as_type_node);
+        assert_eq!(param.name, "f");
+        assert_eq!(param.is_mut, false);
+        assert_eq!(param.by_ref, false);
+        assert_eq!(
+            param.param_type,
+            Some(Type::Fn {
+                parameters: thin_vec![Type::Tensor {
+                    ty: None,
+                    shape: thin_vec![]
+                }],
+                return_type: Some(Box::new(Type::Tensor {
+                    ty: None,
+                    shape: thin_vec![]
+                })),
+            })
+        );
     }
 
     #[test]

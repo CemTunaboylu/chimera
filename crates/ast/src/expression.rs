@@ -1,3 +1,4 @@
+use smol_str::SmolStr;
 use syntax::{
     language::{NodeOrToken, SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
@@ -7,7 +8,7 @@ use crate::{
     container_ref::ContainerRef as ASTContainerRef,
     delimited::{Block as ASTBlock, Indexing as ASTIndexing, Paren, Tuple as ASTTuple},
     errors::ASTError,
-    function::Call as ASTCall,
+    function::{Call as ASTCall, On},
     let_binding::VarRef as ASTVarRef,
     literal::Literal as ASTLiteral,
     mutable::Mut as ASTMut,
@@ -33,6 +34,21 @@ pub enum Expr {
     VarRef(ASTVarRef),
 }
 
+impl Expr {
+    pub fn name(&self) -> Option<SmolStr> {
+        match self {
+            Self::Mut(mut_) => mut_.expr().name(),
+            Self::VarRef(var_ref) => Some(var_ref.name().clone()),
+            Self::ContainerRef(container_ref) => Some(container_ref.name().clone()),
+            Self::Call(call) => match &call.on {
+                On::Binding(name) => Some(name.clone()),
+                On::Literal(_) => None,
+            },
+            _ => None,
+        }
+    }
+}
+
 impl TryFrom<&SyntaxNode> for Expr {
     type Error = ASTError;
 
@@ -43,7 +59,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                 let block = ASTBlock::try_from(node)?;
                 Self::Block(block)
             }
-            TyBool | TyBuffer | TyF32 | TyI32 | TyChar | TyStr | TyTensor => {
+            TyBool | TyBuffer | TyF32 | TyFn | TyI32 | TyChar | TyStr | TyTensor => {
                 let class = Type::try_from(node)?;
                 Self::Class(class)
             }

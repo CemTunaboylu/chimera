@@ -3,7 +3,9 @@ use std::ops::Range;
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
     language::SyntaxNode,
-    syntax_kind::SyntaxKind::{Eq, Ident, InfixBinOp, Mut, Tuple, TypeHint, VarRef as VarRefKind},
+    syntax_kind::SyntaxKind::{
+        self, Eq, Ident, InfixBinOp, Mut, Tuple, TypeHint, VarRef as VarRefKind,
+    },
 };
 use thin_vec::ThinVec;
 
@@ -12,9 +14,9 @@ use crate::{
     expression::Expr,
     lang_elems::{
         ensure_node_kind_is, first_child_of_kind_errs, get_children_in, get_first_child_in,
-        get_token, get_token_of_errs,
+        get_token_of_errs,
     },
-    types::Hint,
+    types::{Type, parse_type_hinted},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -27,7 +29,7 @@ pub struct SpannedIdentifier {
 pub struct Identifier {
     is_mut: bool,
     spanned_name: SpannedIdentifier,
-    type_hint: Option<Hint>,
+    type_hint: Option<Type>,
 }
 
 impl Identifier {
@@ -41,7 +43,7 @@ impl Identifier {
         self.spanned_name.span.clone()
     }
 
-    pub fn type_hint(&self) -> Option<&Hint> {
+    pub fn type_hint(&self) -> Option<&Type> {
         self.type_hint.as_ref()
     }
 }
@@ -50,29 +52,44 @@ impl TryFrom<&SyntaxNode> for Identifier {
     type Error = ASTError;
 
     fn try_from(node: &SyntaxNode) -> Result<Self, ASTError> {
-        let is_mut = node.kind() == Mut;
-        if is_mut {
-            let child_of_mut = first_child_of_kind_errs(&node, [VarRefKind].as_ref())?;
-            let mut identifier = Self::try_from(&child_of_mut)?;
-            identifier.is_mut = true;
-            return Ok(identifier);
-        }
-        let name = get_token_of_errs(node, Ident)?.text().to_smolstr();
-        let type_hint = if let Some(type_hint_node) = get_first_child_in(node, TypeHint) {
-            // can be a prefix unary op with &, or directly a type hint
-            let h = Hint::type_hint(&type_hint_node)?;
-            if h.is_type() { Some(h) } else { None }
-        } else {
-            None
+        let identifier = match node.kind() {
+            Mut => {
+                let child_of_mut = first_child_of_kind_errs(&node, [VarRefKind].as_ref())?;
+                let mut identifier = Self::try_from(&child_of_mut)?;
+                identifier.is_mut = true;
+                identifier
+            }
+            TypeHint => {
+                let (hinted, ty) = parse_type_hinted(node)?;
+                let is_mut = matches!(hinted, Expr::Mut(_));
+                Self {
+                    is_mut,
+                    spanned_name: SpannedIdentifier {
+                        name: hinted.name().or(Some("".to_smolstr())).unwrap(),
+                        span: node.text_range().into(),
+                    },
+                    type_hint: Some(ty),
+                }
+            }
+            VarRefKind => {
+                let var_ref = VarRef::try_from(node)?;
+                Self {
+                    is_mut: false,
+                    spanned_name: SpannedIdentifier {
+                        name: var_ref.name().clone(),
+                        span: var_ref.span(),
+                    },
+                    type_hint: None,
+                }
+            }
+            _ => {
+                return Err(ASTError::with_err_msg(
+                    node.text_range().into(),
+                    format!("expected a valid identifier but got {:?}", node.kind()),
+                ));
+            }
         };
-        Ok(Identifier {
-            is_mut,
-            spanned_name: SpannedIdentifier {
-                name,
-                span: node.text_range().into(),
-            },
-            type_hint,
-        })
+        Ok(identifier)
     }
 }
 
@@ -95,7 +112,7 @@ impl Pattern {
             Pattern::Tuple(_) => None,
         }
     }
-    pub fn type_hint(&self) -> Option<&Hint> {
+    pub fn type_hint(&self) -> Option<&Type> {
         match self {
             Pattern::Ident(identifier) => identifier.type_hint(),
             Pattern::Tuple(_) => None,
@@ -107,6 +124,9 @@ impl Pattern {
             Pattern::Tuple(_) => None,
         }
     }
+    fn lhs_kinds() -> [SyntaxKind; 4] {
+        [Mut, Tuple, TypeHint, VarRefKind]
+    }
 }
 
 impl TryFrom<&SyntaxNode> for Pattern {
@@ -115,7 +135,7 @@ impl TryFrom<&SyntaxNode> for Pattern {
     fn try_from(node: &SyntaxNode) -> Result<Self, Self::Error> {
         if node.kind() == Tuple {
             let mut patterns = ThinVec::new();
-            for child_node in get_children_in(node, [Mut, Tuple, VarRefKind].as_ref()) {
+            for child_node in get_children_in(node, Pattern::lhs_kinds().as_ref()) {
                 let pattern = if child_node.kind() == Tuple {
                     Pattern::try_from(&child_node)?
                 } else {
@@ -162,8 +182,7 @@ impl TryFrom<&SyntaxNode> for LetBinding {
     fn try_from(let_binding_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let child = first_child_of_kind_errs(let_binding_node, [InfixBinOp].as_ref())?;
         get_token_of_errs(&child, Eq)?;
-
-        let lhs = first_child_of_kind_errs(&child, [Tuple, VarRefKind].as_ref())?;
+        let lhs = first_child_of_kind_errs(&child, Pattern::lhs_kinds().as_ref())?;
         let pattern = Pattern::try_from(&lhs)?;
 
         let assignment = child.last_child().unwrap();
@@ -180,13 +199,13 @@ impl TryFrom<&SyntaxNode> for LetBinding {
 pub struct VarRef {
     pub name: SmolStr,
     pub span: Range<usize>,
-    pub type_hint: Option<Hint>,
+    pub type_hint: Option<Type>,
 }
 
-fn get_type_hint(var_ref_node: &SyntaxNode) -> Option<Hint> {
+fn get_type_hint(var_ref_node: &SyntaxNode) -> Option<Type> {
     let type_hint_node = get_first_child_in(var_ref_node, TypeHint)?;
     // note: silenlty ignoring the failed type hint
-    Hint::type_hint(&type_hint_node).ok()
+    Type::try_from(&type_hint_node).ok()
 }
 
 impl TryFrom<&SyntaxNode> for VarRef {
@@ -194,7 +213,10 @@ impl TryFrom<&SyntaxNode> for VarRef {
 
     fn try_from(var_ref_node: &SyntaxNode) -> Result<Self, Self::Error> {
         ensure_node_kind_is(var_ref_node, VarRefKind)?;
-        let name = get_token(var_ref_node).unwrap().text().to_smolstr();
+        let name = get_token_of_errs(var_ref_node, Ident)
+            .unwrap()
+            .text()
+            .to_smolstr();
         let type_hint = get_type_hint(var_ref_node);
         let span = var_ref_node.text_range().into();
         Ok(Self {
@@ -212,7 +234,7 @@ impl VarRef {
     pub fn span(&self) -> Range<usize> {
         self.span.clone()
     }
-    pub fn type_hint(&self) -> Option<&Hint> {
+    pub fn type_hint(&self) -> Option<&Type> {
         self.type_hint.as_ref()
     }
 }
@@ -247,7 +269,7 @@ mod tests {
         }
     }
 
-    fn match_varref_with(expr: &Expr, name: &str, type_hint: Option<&Hint>) -> bool {
+    fn match_varref_with(expr: &Expr, name: &str, type_hint: Option<&Type>) -> bool {
         matches!(expr, Expr::VarRef(varref) if varref.name() == &name.to_smolstr() && varref.type_hint() == type_hint)
     }
 
@@ -275,7 +297,7 @@ mod tests {
         at: usize,
         name: &str,
         is_mut: bool,
-        type_hint: Option<&Hint>,
+        type_hint: Option<&Type>,
     ) {
         assert_eq!(identifiers[at].name(), name);
         assert_eq!(identifiers[at].is_mut(), is_mut);
@@ -304,14 +326,14 @@ mod tests {
             0,
             "p1_norm",
             true,
-            Some(&Hint::Type(Type::Struct(SmolStr::from("Point")))),
+            Some(&Type::Struct(SmolStr::from("Point"))),
         );
         assert_ident_in_tuple(
             &identifiers,
             1,
             "p2_norm",
             false,
-            Some(&Hint::Type(Type::Struct(SmolStr::from("Point")))),
+            Some(&Type::Struct(SmolStr::from("Point"))),
         );
         let elements = get_tuple_elements_from_expr(let_binding.value().unwrap());
         assert_eq!(elements.len(), 2);
@@ -346,14 +368,14 @@ mod tests {
             0,
             "p1_norm",
             true,
-            Some(&Hint::Type(Type::Struct(SmolStr::from("Point")))),
+            Some(&Type::Struct(SmolStr::from("Point"))),
         );
         assert_ident_in_tuple(
             &identifiers,
             1,
             "p2_norm",
             false,
-            Some(&Hint::Type(Type::Struct(SmolStr::from("Point")))),
+            Some(&Type::Struct(SmolStr::from("Point"))),
         );
         let identifier = &nested_tuple_pattern[1];
         assert_eq!(
@@ -362,9 +384,9 @@ mod tests {
                 is_mut: true,
                 spanned_name: SpannedIdentifier {
                     name: "distance".to_smolstr(),
-                    span: 48..62,
+                    span: 45..62,
                 },
-                type_hint: Some(Hint::Type(Type::Integer32)),
+                type_hint: Some(Type::Integer32),
             })
         );
 
@@ -395,7 +417,7 @@ mod tests {
         let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
         assert_eq!("diff_norm", let_binding.pattern().name().unwrap().as_str());
         assert_eq!(
-            &Hint::Type(Type::Struct(SmolStr::from("Point"))),
+            &Type::Struct(SmolStr::from("Point")),
             let_binding
                 .pattern()
                 .type_hint()
@@ -404,13 +426,13 @@ mod tests {
         assert!(!let_binding.pattern().is_mut().unwrap());
     }
 
-    // #[test]
-    // fn mut_let_binding() {
-    //     let program = "let mut diff_norm = (point_1.locus() - point_2.locus()).normalize();";
-    //     let ast_root = ast_root_from(program);
-    //     let let_binding_node = ast_root.get_root().first_child().unwrap();
-    //     let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
-    //     assert_eq!("diff_norm", let_binding.pattern().name().unwrap().as_str());
-    //     assert!(let_binding.pattern().is_mut().unwrap());
-    // }
+    #[test]
+    fn mut_let_binding() {
+        let program = "let mut diff_norm = (point_1.locus() - point_2.locus()).normalize();";
+        let ast_root = ast_root_from(program);
+        let let_binding_node = ast_root.get_root().first_child().unwrap();
+        let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
+        assert_eq!("diff_norm", let_binding.pattern().name().unwrap().as_str());
+        assert!(let_binding.pattern().is_mut().unwrap());
+    }
 }
