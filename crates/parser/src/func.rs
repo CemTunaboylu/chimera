@@ -83,10 +83,6 @@ impl Parser<'_> {
         let rollback_after_drop = self.parsing(TyFn);
         let marker = self.start();
         self.expect_and_bump(KwFn);
-        {
-            let rollback_after_drop = self.impose_restrictions_of_kind_on_context(Ident);
-            self.expect_and_bump(Ident);
-        }
         self.expect_and_bump(LParen);
         if !self.is_next(RParen) {
             let rollback_after_drop = self.impose_restrictions_of_kind_on_context(RParen);
