@@ -26,9 +26,6 @@ impl PreComputed {
     fn get_nth_expr(&self, n: usize) -> Option<&Expr> {
         self.exprs.get(n)
     }
-    pub(crate) fn get_node(&self) -> &SyntaxNode {
-        &self.node
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
