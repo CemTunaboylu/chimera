@@ -41,12 +41,7 @@ impl Parser<'_> {
             let ret_type_marker = self.start();
             self.expect_and_bump(RArrow);
             let rollback_after_drop = self.impose_context_for_parsing(RetType);
-
-            if self.is_next(And) {
-                self.parse_prefix_unary_operation(And);
-            } else {
-                self.parse_left_hand_side();
-            }
+            self.parse_expression_until_binding_power(starting_precedence());
             self.complete_marker_with(ret_type_marker, RetType);
         }
     }
@@ -99,19 +94,7 @@ impl Parser<'_> {
         }
 
         self.expect_and_bump(RParen);
-
-        if self.is_next(RArrow) {
-            let ret_type_marker = self.start();
-            self.expect_and_bump(RArrow);
-            let rollback_after_drop = self.impose_context_for_parsing(RetType);
-
-            if self.is_next(And) {
-                self.parse_prefix_unary_operation(And);
-            } else {
-                self.parse_left_hand_side();
-            }
-            self.complete_marker_with(ret_type_marker, RetType);
-        }
+        self.parse_return_type_if_any();
 
         Some(self.complete_marker_with(marker, SyntaxKind::TyFn))
     }
@@ -569,7 +552,7 @@ mod tests {
                     StructAsType@40..49 "Structure"
                 RParen@49..50 ")"
                 Whitespace@50..51 " "
-                RetType@51..76
+                RetType@51..77
                   RArrow@51..53 "->"
                   Whitespace@53..54 " "
                   Tuple@54..76
@@ -582,8 +565,8 @@ mod tests {
                     Whitespace@65..66 " "
                     StructAsType@66..75 "Structure"
                     RParen@75..76 ")"
-                Block@76..79
                   Whitespace@76..77 " "
+                Block@77..79
                   LBrace@77..78 "{"
                   RBrace@78..79 "}""#]],
     ),
@@ -690,7 +673,7 @@ mod tests {
                           StructAsType@42..51 "Structure"
                       Or@51..52 "|"
                       Whitespace@52..53 " "
-                      RetType@53..78
+                      RetType@53..79
                         RArrow@53..55 "->"
                         Whitespace@55..56 " "
                         Tuple@56..78
@@ -703,8 +686,8 @@ mod tests {
                           Whitespace@67..68 " "
                           StructAsType@68..77 "Structure"
                           RParen@77..78 ")"
-                      Block@78..110
                         Whitespace@78..79 " "
+                      Block@79..110
                         LBrace@79..80 "{"
                         Whitespace@80..81 " "
                         InfixBinOp@81..109

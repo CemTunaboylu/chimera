@@ -376,8 +376,9 @@ impl SyntaxKind {
                 context_update[0] = RestrictionType::Add([StructAsType].as_ref().into());
                 let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
                 context_update[1] = RestrictionType::Add([LBrace].as_ref().into());
-                let ref_struct_as_type: SyntaxKindBitSet = [And, StructAsType].as_ref().into();
-                context_update[2] = RestrictionType::Add(types + ref_struct_as_type);
+                let ref_struct_as_type: SyntaxKindBitSet =
+                    [And, StructAsType, LParen].as_ref().into();
+                context_update[2] = RestrictionType::Override(types + ref_struct_as_type);
             }
             RParen => {
                 context_update[1] = RestrictionType::Add([LParen, RParen].as_ref().into());
