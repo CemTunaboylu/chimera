@@ -289,6 +289,10 @@ mod tests {
          "|| { a += b; }",
          DOES_NOT_RETURN, 0,
         ),
+        tuple_returning_no_parameter_lambda: (
+         "|| -> (i32, i32,i32) { (0, 1, 2) }",
+         RETURNS, 0,
+        ),
     }
 
     create! {
