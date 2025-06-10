@@ -243,6 +243,10 @@ mod tests {
          "fn f(&mut self) -> Self {0}",
          "f", RETURNS, 1,
         ),
+        mut_self_without_return: (
+         "fn f(mut self) {0}",
+         "f", DOES_NOT_RETURN, 1,
+        ),
         non_returning_function_def: (
          "fn f(a: &mut i32, b: i32) { a += b;}",
          "f", DOES_NOT_RETURN, 2,
