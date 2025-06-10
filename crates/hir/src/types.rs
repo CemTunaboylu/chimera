@@ -101,6 +101,7 @@ impl HIRBuilder {
                 // }
                 todo!()
             }
+            ASTType::Unit => Type::Unit,
             _ => {
                 unreachable!()
             }

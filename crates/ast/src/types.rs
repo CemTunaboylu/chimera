@@ -57,6 +57,7 @@ pub enum Type {
         shape: ThinVec<Option<Expr>>,
     },
     Tuple(ThinVec<Type>),
+    Unit,
 }
 
 impl Type {
@@ -222,6 +223,7 @@ impl TryFrom<&SyntaxNode> for Type {
                     shape,
                 }
             }
+            Unit => Self::Unit,
             _ => {
                 ensure_node_kind_is_any(
                     parent_node,
@@ -245,6 +247,7 @@ impl TryFrom<&SyntaxToken> for Type {
             TyI32 => Self::Integer32,
             // str slice is a ref str
             TyStr => Self::String,
+            Unit => Self::Unit,
             StructAsType => Self::Struct(token.text().to_smolstr()),
             _ => return Err(error_for_token(token, SyntaxKind::types())),
         };
@@ -324,21 +327,18 @@ impl Hint {
     }
 
     pub fn type_hint(typehint_node: &SyntaxNode) -> ASTResult<Self> {
-        let is_a_type_or_modifier: SyntaxKindBitSet = [PrefixUnaryOp].as_ref().into();
-        let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-        if let Some(type_node) =
-            filtered_children_with_tokens(typehint_node, is_a_type_or_modifier + types).first()
-        {
-            let type_ = match type_node {
-                NodeOrToken::Node(node) => Type::try_from(node)?,
-                NodeOrToken::Token(token) => Type::try_from(token)?,
-            };
-            return Ok(Self::Type(type_));
+        // ! for container
+        let type_hint = Binary::new(typehint_node)?;
+        assert_eq!(type_hint.op(), Some(Colon));
+        let type_ = type_hint.lhs().unwrap();
+        if let Expr::Class(ty) = type_ {
+            Ok(Self::Type(ty.clone()))
+        } else {
+            return Err(ASTError::with_err_msg(
+                typehint_node.text_range().into(),
+                format!("expected a valid type hint but got {:?}", type_hint),
+            ));
         }
-        return Err(ASTError::with_err_msg(
-            typehint_node.text_range().into(),
-            format!("expected a valid type hint but got {:?}", typehint_node),
-        ));
     }
 }
 
@@ -384,6 +384,7 @@ mod tests {
         valid_type_hinted_tensor: "tensor<f32>",
         valid_type_partially_dim_hinted_tensor: "tensor<3,_,3>",
         valid_tuple: "(i32, char)",
+        unit: "()",
     }
 
     #[test]

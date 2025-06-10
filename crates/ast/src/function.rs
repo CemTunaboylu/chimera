@@ -231,6 +231,10 @@ mod tests {
          "fn f() -> i32 {return 0;}",
          "f", RETURNS, 0,
         ),
+        unit_returning_function_def: (
+         "fn f() -> () {}",
+         "f", RETURNS, 0,
+        ),
         tuple_returning_function_def: (
          "fn f() -> (i32, i32) {return (0, 1);}",
          "f", RETURNS, 0,
@@ -312,6 +316,7 @@ mod tests {
 
     happy_path_func_call_test! {
         fn_call_with_bin_expr: ("foo(3+2)", "foo", 1),
+        fn_call_with_unit: ("foo(())", "foo", 1),
         fn_call_with_complex_expr: ("am_i_happy(me.expectation().as_tensor() - reality.variable_tensor)", "am_i_happy", 1),
         fn_call_with_complex_expr_tuple: ("am_i_happy((me.expectation().as_tensor(), reality.variable_tensor))", "am_i_happy", 1),
         fn_call_with_no_args: ("solitude()", "solitude", 0),

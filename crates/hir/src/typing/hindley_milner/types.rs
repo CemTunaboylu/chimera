@@ -6,10 +6,7 @@ use std::collections::HashSet;
 use la_arena::Idx;
 use thin_vec::{ThinVec, thin_vec};
 
-use crate::{
-    literal::Value,
-    resolution::{Reference, Unresolved},
-};
+use crate::{literal::Value, resolution::Unresolved};
 
 use super::{inference::TypeKey, store::TypeVarId};
 
@@ -62,6 +59,7 @@ pub enum Type {
         data_type: Maybe<Type>,
     },
     Tuple(ThinVec<Type>),
+    Unit,
     Var(TypeVarId), // type variable
 }
 

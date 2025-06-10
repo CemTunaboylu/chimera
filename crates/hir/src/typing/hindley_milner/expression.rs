@@ -14,6 +14,7 @@ use crate::{
     literal::Value,
     operation::{BinaryOp, UnaryOp},
     resolution::{Baggage, Reference},
+    scope::ExprIdx,
     self_ref::SelfRef,
 };
 
@@ -78,6 +79,7 @@ pub enum HMExpr {
         shape: ThinVec<Option<usize>>,
     },
     Tuple(ThinVec<HMExpr>),
+    Unit,
     Unary(UnaryOp, Box<HMExpr>),
     Var(TypeKey),
 }
@@ -174,6 +176,15 @@ impl HIRBuilder {
                 expect_non_baggage(&baggage, type_key)?;
                 Ok(HMExpr::StructAsType(type_key))
             }
+            Expr::Tuple(tuple) => {
+                let to_hm = |idx: &ExprIdx, hir: &HIRBuilder| {
+                    let expr = hir.get_expr(*idx);
+                    hir.try_into_hm_expr(expr)
+                };
+                let types = clone_with_err(tuple.0.as_slice(), self, to_hm)?;
+                Ok(HMExpr::Tuple(types))
+            }
+            Expr::Unit => Ok(HMExpr::Unit),
             // TODO: will be modified as a literal, delete this after its finished
             // Expr::StructInit(struct_init) => todo!(),
             Expr::Unary(unary) => {

@@ -183,6 +183,39 @@ mod tests {
     };
 
     #[test]
+    fn fn_def_with_unit_tuples_everywhere() {
+        let program = "fn foo() -> () { () }";
+
+        let ast_root = ast_root_from(program);
+        let ast_fn_def =
+            cast_node_into_type::<ASTFnDef>(ast_root.get_root().first_child().as_ref().unwrap());
+
+        let mut hir_builder = HIRBuilder::new(ast_root);
+        let fn_def_idx = hir_builder
+            .lower_fn_def(&ast_fn_def)
+            .expect("should have been ok");
+
+        let scope_idx = hir_builder.current_scope_cursor;
+        let scope = hir_builder.get_current_scope();
+        let fn_defs = &scope.fn_allocator.definitions;
+        let fn_names = &scope.fn_allocator.names;
+
+        let fn_def = &fn_defs[fn_def_idx];
+        let fn_name = &fn_names[fn_def.name_index];
+
+        assert_eq!("foo", fn_name);
+        assert_eq!(scope_idx, fn_def.scope_idx);
+
+        let params = fn_def.callable.parameters.as_slice();
+        assert_eq!(params.len(), 0);
+
+        assert_eq!(
+            &RetType(Type::Unit),
+            fn_def.callable.return_type.as_ref().unwrap()
+        );
+    }
+
+    #[test]
     fn fn_def() {
         let program = "fn foo(i: &Structure) -> bool { i.can_foo() }";
 

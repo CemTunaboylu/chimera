@@ -182,6 +182,16 @@ mod test {
     }
 
     #[test]
+    fn happy_path_for_unit_tuple() {
+        let program = "()";
+        let ast_root = ast_root_from(program);
+        let tuple_node = ast_root.get_root().first_child().unwrap();
+        let tuple = Tuple(tuple_node);
+        let elements = tuple.elements().expect("should have been ok");
+        assert!(elements.len() == 0);
+    }
+
+    #[test]
     fn happy_path_for_returning_block() {
         let program = "{let a = 3; let b =14; a+b}";
         let ast_root = ast_root_from(program);

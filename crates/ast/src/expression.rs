@@ -31,6 +31,7 @@ pub enum Expr {
     SelfRef(ASTSelfRef),
     Tuple(ASTTuple),
     Unary(Unary),
+    Unit,
     VarRef(ASTVarRef),
 }
 
@@ -98,6 +99,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                 Self::SelfRef(self_ref)
             }
             Tuple => Self::Tuple(ASTTuple(node.clone())),
+            Unit => Self::Unit,
             VarRef => {
                 let var_ref = ASTVarRef::try_from(node)?;
                 Self::VarRef(var_ref)
@@ -120,6 +122,7 @@ impl TryFrom<&SyntaxNode> for Expr {
                         SelfRef,
                         StructLit,
                         Tuple,
+                        Unit,
                         VarRef,
                     ]
                     .as_ref(),
@@ -206,5 +209,6 @@ mod tests {
         buffer_type: "buffer<i32><3,3,3>",
         unary: "-[[1,0,0],[0,1,0],[0,0,1]]",
         var_ref: "my_tensor_ref",
+        unit: "()",
     }
 }
