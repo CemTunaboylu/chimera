@@ -38,10 +38,6 @@ impl Default for Block {
 pub struct Indexing(pub(crate) ExprIdx);
 
 impl HIRBuilder {
-    pub fn lower_paren(&mut self, paren: &ASTParen) -> HIRResult<Paren> {
-        let index = self.lower_expr_as_idx(&paren.expr().map_err(HIRError::from_err)?)?;
-        Ok(Paren(index))
-    }
     #[scoped(ScopeKind::Block)]
     pub fn lower_block(&mut self, block: &ASTBlock) -> HIRResult<Block> {
         let statements = block.statements();
@@ -70,6 +66,10 @@ impl HIRBuilder {
     pub fn lower_indexing(&mut self, indexing: &ASTIndexing) -> HIRResult<Indexing> {
         let index = self.lower_expr_as_idx(&indexing.index().map_err(HIRError::from_err)?)?;
         Ok(Indexing(index))
+    }
+    pub fn lower_paren(&mut self, paren: &ASTParen) -> HIRResult<Paren> {
+        let index = self.lower_expr_as_idx(&paren.expr().map_err(HIRError::from_err)?)?;
+        Ok(Paren(index))
     }
 }
 
