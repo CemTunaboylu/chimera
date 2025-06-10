@@ -185,10 +185,9 @@ mod test {
     fn happy_path_for_unit_tuple() {
         let program = "()";
         let ast_root = ast_root_from(program);
-        let tuple_node = ast_root.get_root().first_child().unwrap();
-        let tuple = Tuple(tuple_node);
-        let elements = tuple.elements().expect("should have been ok");
-        assert!(elements.len() == 0);
+        let unit_node = ast_root.get_root().first_child().unwrap();
+        let unit = Expr::try_from(unit_node).expect("should have been ok");
+        assert_eq!(unit, Expr::Unit);
     }
 
     #[test]
