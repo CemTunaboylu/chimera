@@ -9,7 +9,7 @@ use crate::{
     ast::ASTResult,
     errors::ASTError,
     expression::Expr,
-    lang_elems::{get_children_as, get_token_with},
+    lang_elems::{ERR_IF_EMPTY, get_children_as, get_token_with},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -35,7 +35,7 @@ pub enum Binary {
 
 impl Binary {
     pub fn new(infix_bin_op_node: &SyntaxNode) -> ASTResult<Self> {
-        let exprs = get_children_as::<Expr>(infix_bin_op_node)?;
+        let exprs = get_children_as::<Expr>(infix_bin_op_node, ERR_IF_EMPTY)?;
         if exprs.len() != 2 {
             return Err(ASTError::new(
                 infix_bin_op_node.text_range().into(),
@@ -79,7 +79,7 @@ pub enum Unary {
 }
 
 fn prepare_pre_computed(node: &SyntaxNode, variant: fn(PreComputed) -> Unary) -> ASTResult<Unary> {
-    let exprs = get_children_as::<Expr>(node)?;
+    let exprs = get_children_as::<Expr>(node, ERR_IF_EMPTY)?;
     let op = get_token_with(node, |token: &SyntaxToken| token.kind().is_unary_operator())
         .map(|t| t.kind());
     let p = PreComputed {

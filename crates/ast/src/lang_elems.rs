@@ -152,7 +152,10 @@ pub fn children_with_tokens_without_unwanted(
         .collect::<ThinVec<_>>()
 }
 
-pub fn get_children_as<T>(node: &SyntaxNode) -> ASTResult<ThinVec<T>>
+pub const CAN_BE_EMPTY: bool = false;
+pub const ERR_IF_EMPTY: bool = true;
+
+pub fn get_children_as<T>(node: &SyntaxNode, err_if_empty: bool) -> ASTResult<ThinVec<T>>
 where
     T: TryFrom<SyntaxNode> + Debug,
     <T as TryFrom<SyntaxNode>>::Error: Debug,
@@ -162,9 +165,11 @@ where
         .filter_map(|node| T::try_from(node).ok())
         .collect::<ThinVec<_>>();
 
-    // TODO: put a flag
-    if results.is_empty() {
-        Err(error_for_node(node, "non empty"))
+    if err_if_empty && results.is_empty() {
+        Err(error_for_node(
+            node,
+            "children are expected to be non empty",
+        ))
     } else {
         Ok(results)
     }

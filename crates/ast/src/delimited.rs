@@ -6,7 +6,7 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        ensure_node_kind_is, error_for_node, get_children_as, get_children_in,
+        CAN_BE_EMPTY, ensure_node_kind_is, error_for_node, get_children_as, get_children_in,
         get_single_children_as_expr, vector_of_children_and_tokens_as,
     },
     statement::Stmt,
@@ -54,7 +54,7 @@ impl TryFrom<&SyntaxNode> for Block {
     fn try_from(block_node: &SyntaxNode) -> Result<Self, Self::Error> {
         ensure_node_kind_is(block_node, SyntaxKind::Block)?;
         // TODO: for now, we ignore the failures
-        let stmts = get_children_as::<Stmt>(block_node)?;
+        let stmts = get_children_as::<Stmt>(block_node, CAN_BE_EMPTY)?;
         if matches!(stmts.last(), Some(Stmt::Expr(_))) {
             Ok(Self::Returning(stmts))
         } else {
