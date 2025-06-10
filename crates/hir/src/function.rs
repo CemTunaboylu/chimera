@@ -178,8 +178,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        builder::tests::ast_root_from, literal::Value, parameter::By, scope::into_idx,
-        statement::Stmt, typing::hindley_milner::types::Status,
+        builder::tests::ast_root_from, literal::Value, scope::into_idx, statement::Stmt,
+        typing::hindley_milner::types::Status,
     };
 
     #[test]
@@ -207,8 +207,23 @@ mod tests {
         assert_eq!(scope_idx, fn_def.scope_idx);
 
         let params = fn_def.callable.parameters.as_slice();
-        if let &[Param::Named(n, By::Ref, Type::StructAsType(Status::Pending(_)))] = &params {
-            assert_eq!(&SmolStr::from("i"), n);
+        if let &[
+            Param::Named {
+                name,
+                is_mut,
+                param_type,
+            },
+        ] = &params
+        {
+            assert_eq!(&SmolStr::from("i"), name);
+            assert_eq!(false, *is_mut);
+            assert_eq!(
+                Type::Ptr {
+                    of: Box::new(Type::StructAsType(Status::Pending(placeholder_idx())),),
+                    is_mut: false
+                },
+                *param_type
+            );
         } else {
             unreachable!()
         }
@@ -233,8 +248,9 @@ mod tests {
             .expect("should have been ok");
 
         if let Literal(Value::Lambda(callable)) = lambda_literal {
-            if let &[Param::Generic(n)] = &callable.parameters.as_slice() {
-                assert_eq!(&SmolStr::from("i"), n);
+            if let &[Param::Generic { name, is_mut }] = &callable.parameters.as_slice() {
+                assert_eq!(&SmolStr::from("i"), name);
+                assert_eq!(false, *is_mut);
             } else {
                 unreachable!()
             }
@@ -296,8 +312,9 @@ mod tests {
             MayNeedResolution::No(call) => call,
         };
         if let On::Literal(Literal(Value::Lambda(callable))) = call_lambda_literal.on {
-            if let &[Param::Generic(n)] = &callable.parameters.as_slice() {
-                assert_eq!(&SmolStr::from("i"), n);
+            if let &[Param::Generic { name, is_mut }] = &callable.parameters.as_slice() {
+                assert_eq!(&SmolStr::from("i"), name);
+                assert_eq!(false, *is_mut);
             } else {
                 unreachable!()
             }

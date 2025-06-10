@@ -35,7 +35,7 @@ impl Param {
         Self {
             by_ref,
             is_mut,
-            name: SmolStr::from("self"),
+            name: SmolStr::from(""),
             param_type: Some(Type::SelfRef(ASTSelfRef::Instance)),
             span,
         }
@@ -202,7 +202,7 @@ mod tests {
         let Param{ by_ref, is_mut, param_type, name, .. } = p;
         assert_eq!(exp_by_ref, by_ref);
         assert_eq!(exp_is_mut, is_mut);
-        assert_eq!(name, SmolStr::from("self"));
+        assert_eq!(name, SmolStr::from(""));
         assert_eq!(param_type, Some(Type::SelfRef(ASTSelfRef::Instance)));
         }
     }

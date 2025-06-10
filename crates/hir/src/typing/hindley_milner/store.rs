@@ -153,7 +153,7 @@ impl TypeStore {
             Type::FnSig { param_types, .. } => {
                 param_types.iter().any(|t| self.occurs_in_type(vt, t))
             }
-            Type::Ref { of, .. } => self.occurs_in_type(v, &of),
+            Type::Ptr { of, .. } => self.occurs_in_type(v, &of),
             // FIXME: needs a deferred check because idx is on caller, cannot reach it
             Type::StructAsType(status) => match status {
                 Status::Pending(_) => false,

@@ -53,6 +53,13 @@ impl HIRBuilder {
                 }
             }
             ASTType::Integer32 => Type::I32,
+            ASTType::Pointer { ty, is_mut } => {
+                let lowered_pointer_type = self.lower_type(ty)?;
+                Type::Ptr {
+                    of: Box::new(lowered_pointer_type),
+                    is_mut: *is_mut,
+                }
+            }
             ASTType::String => Type::Str,
             ASTType::SelfRef(self_ref) => {
                 let lowered_self_ref = self.lower_self_ref(self_ref)?;

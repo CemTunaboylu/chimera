@@ -45,7 +45,7 @@ pub enum Type {
         return_type: Box<Type>, // if it does not return anything, it will return unit ()
     },
     I32,
-    Ref {
+    Ptr {
         of: Box<Type>,
         is_mut: bool,
     },
@@ -104,7 +104,7 @@ impl From<&Value> for Type {
 // For function parameters (ByRef, ByRefMut, etc.)
 pub fn type_of_param(base: Type, is_ref: bool, is_mut: bool) -> Type {
     if is_ref {
-        Type::Ref {
+        Type::Ptr {
             of: Box::new(base),
             is_mut,
         }

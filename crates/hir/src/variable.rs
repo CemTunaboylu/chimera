@@ -77,7 +77,7 @@ impl HIRBuilder {
     }
     #[with_context(UsageContext::Init)]
     pub fn lower_let_binding(&mut self, ast_let_binding: &ASTVarDef) -> HIRResult<VarDefIdx> {
-        let name = ast_let_binding.name();
+        let name = ast_let_binding.pattern().name().unwrap();
         let expr_index = self.lower_let_binding_rhs(ast_let_binding.value())?;
 
         let let_binding = VarDef {
