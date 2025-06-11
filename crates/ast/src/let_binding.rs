@@ -20,15 +20,15 @@ use crate::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SpannedIdentifier {
-    name: SmolStr,
-    span: Range<usize>,
+pub struct Spanned<A> {
+    pub element: A,
+    pub span: Range<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Identifier {
     is_mut: bool,
-    spanned_name: SpannedIdentifier,
+    spanned_name: Spanned<SmolStr>,
     type_hint: Option<Type>,
 }
 
@@ -37,7 +37,7 @@ impl Identifier {
         self.is_mut
     }
     pub fn name(&self) -> &SmolStr {
-        &self.spanned_name.name
+        &self.spanned_name.element
     }
     pub fn span(&self) -> Range<usize> {
         self.spanned_name.span.clone()
@@ -64,8 +64,8 @@ impl TryFrom<&SyntaxNode> for Identifier {
                 let is_mut = matches!(hinted, Expr::Mut(_));
                 Self {
                     is_mut,
-                    spanned_name: SpannedIdentifier {
-                        name: hinted.name().or(Some("".to_smolstr())).unwrap(),
+                    spanned_name: Spanned::<SmolStr> {
+                        element: hinted.name().or(Some("".to_smolstr())).unwrap(),
                         span: node.text_range().into(),
                     },
                     type_hint: Some(ty),
@@ -75,8 +75,8 @@ impl TryFrom<&SyntaxNode> for Identifier {
                 let var_ref = VarRef::try_from(node)?;
                 Self {
                     is_mut: false,
-                    spanned_name: SpannedIdentifier {
-                        name: var_ref.name().clone(),
+                    spanned_name: Spanned::<SmolStr> {
+                        element: var_ref.name().clone(),
                         span: var_ref.span(),
                     },
                     type_hint: None,
@@ -153,7 +153,7 @@ impl TryFrom<&SyntaxNode> for Pattern {
 #[derive(Clone, Debug, PartialEq)]
 pub struct LetBinding {
     pattern: Pattern,
-    expr: Option<Expr>,
+    spanned_expr: Option<Spanned<Expr>>,
     span: Range<usize>,
 }
 
@@ -168,8 +168,8 @@ impl LetBinding {
             None
         }
     }
-    pub fn value(&self) -> Option<&Expr> {
-        self.expr.as_ref()
+    pub fn value(&self) -> Option<&Spanned<Expr>> {
+        self.spanned_expr.as_ref()
     }
     pub fn span(&self) -> Range<usize> {
         self.span.clone()
@@ -186,11 +186,14 @@ impl TryFrom<&SyntaxNode> for LetBinding {
         let pattern = Pattern::try_from(&lhs)?;
 
         let assignment = child.last_child().unwrap();
-        let expr = Some(Expr::try_from(&assignment)?);
+        let spanned_expr = Some(Spanned::<Expr> {
+            element: Expr::try_from(&assignment)?,
+            span: assignment.text_range().into(),
+        });
         let span = let_binding_node.text_range().into();
         Ok(Self {
             pattern,
-            expr,
+            spanned_expr,
             span,
         })
     }
@@ -335,7 +338,8 @@ mod tests {
             false,
             Some(&Type::Struct(SmolStr::from("Point"))),
         );
-        let elements = get_tuple_elements_from_expr(let_binding.value().unwrap());
+        let expr = &let_binding.value().unwrap().element;
+        let elements = get_tuple_elements_from_expr(expr);
         assert_eq!(elements.len(), 2);
         assert_expr_is_infix_with(
             &elements[0],
@@ -382,15 +386,16 @@ mod tests {
             identifier,
             &Pattern::Ident(Identifier {
                 is_mut: true,
-                spanned_name: SpannedIdentifier {
-                    name: "distance".to_smolstr(),
+                spanned_name: Spanned::<SmolStr> {
+                    element: "distance".to_smolstr(),
                     span: 45..62,
                 },
                 type_hint: Some(Type::Integer32),
             })
         );
 
-        let tuple_elems = get_tuple_elements_from_expr(let_binding.value().unwrap());
+        let expr = &let_binding.value().unwrap().element;
+        let tuple_elems = get_tuple_elements_from_expr(expr);
         let nested_tuple_values = get_tuple_elements_from_expr(&tuple_elems[0]);
         assert_eq!(nested_tuple_values.len(), 2);
         assert_expr_is_infix_with(
