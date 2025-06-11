@@ -9,14 +9,14 @@ use crate::{
     climbing::climb,
     context::UsageContext,
     delimited::Indexing,
+    let_binding::LetBinding,
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
-    scope::{Span, VarDefIdx, VarSelector},
-    variable::VarDef,
+    scope::{Span, LetBindingIdx, VarSelector},
 };
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContainerRef {
-    pub name: VarDefIdx,
+    pub name: LetBindingIdx,
     pub indices: ThinVec<Indexing>,
 }
 
@@ -44,10 +44,10 @@ impl HIRBuilder {
     }
     pub fn resolve_container_ref(
         &self,
-        unresolved: &Reference<VarDef>,
-    ) -> HIRResult<Reference<VarDef>> {
+        unresolved: &Reference<LetBinding>,
+    ) -> HIRResult<Reference<LetBinding>> {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);
-        resolve::<VarDef, VarSelector>(scope_climbing_iter, unresolved)
+        resolve::<LetBinding, VarSelector>(scope_climbing_iter, unresolved)
     }
 }
 

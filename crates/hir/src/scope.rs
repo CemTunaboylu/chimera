@@ -8,10 +8,10 @@ use crate::{
     errors::HIRError,
     expression::Expr,
     function::FnDef,
+    let_binding::LetBinding,
     metadata::{FnMeta, StructMeta, VarMeta},
     resolution::Unresolved,
     structure::StructDef,
-    variable::VarDef,
 };
 
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
@@ -22,7 +22,7 @@ pub type ScopeIdx = Idx<Scope>;
 pub type StrIdx = Idx<SmolStr>;
 pub type StructDefIdx = Idx<StructDef>;
 pub type ContainerLiteralIdx = Idx<CanonicalBuffer>;
-pub type VarDefIdx = Idx<VarDef>;
+pub type LetBindingIdx = Idx<LetBinding>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
 
@@ -112,7 +112,7 @@ pub type MetaHolder<L, M> = HashMap<Idx<L>, M>;
 
 #[derive(Debug, Default)]
 pub struct MetadataStore {
-    pub vars: MetaHolder<VarDef, VarMeta>,
+    pub vars: MetaHolder<LetBinding, VarMeta>,
     pub fns: MetaHolder<FnDef, FnMeta>,
     pub structs: MetaHolder<StructDef, StructMeta>,
 }
@@ -122,11 +122,11 @@ pub trait Selector<E: Clone + Debug + PartialEq + NameIndexed> {
 }
 // note: container refs are also variable refs.
 pub struct VarSelector {}
-impl Selector<VarDef> for VarSelector {
-    fn select_alloc(scope: &Scope) -> &DefAllocator<VarDef> {
+impl Selector<LetBinding> for VarSelector {
+    fn select_alloc(scope: &Scope) -> &DefAllocator<LetBinding> {
         &scope.variable_allocator
     }
-    fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<VarDef> {
+    fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<LetBinding> {
         &mut scope.variable_allocator
     }
 }
@@ -158,7 +158,7 @@ pub struct Scope {
     pub(crate) exprs: Arena<Expr>,
     pub(crate) fn_allocator: DefAllocator<FnDef>,
     pub(crate) struct_allocator: DefAllocator<StructDef>,
-    pub(crate) variable_allocator: DefAllocator<VarDef>,
+    pub(crate) variable_allocator: DefAllocator<LetBinding>,
 
     pub(crate) metadata: MetadataStore,
 
@@ -174,7 +174,7 @@ impl Scope {
     pub fn new(parent: ScopeIdx, kind: ScopeKind) -> Self {
         let exprs = expr_arena_with_missing();
 
-        let variable_allocator = DefAllocator::<VarDef>::default();
+        let variable_allocator = DefAllocator::<LetBinding>::default();
         let struct_allocator = DefAllocator::<StructDef>::default();
         let fn_allocator = DefAllocator::<FnDef>::default();
 

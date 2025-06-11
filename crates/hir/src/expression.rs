@@ -7,6 +7,7 @@ use crate::{
     container_ref::ContainerRef,
     delimited::{Block, Indexing, Paren, Tuple},
     function::{Call, MayNeedResolution},
+    let_binding::VarRef,
     literal::Literal,
     mutable::Mut,
     operation::{BinaryInfix, Unary},
@@ -16,7 +17,6 @@ use crate::{
     structure::StructRef,
     typing::hindley_milner::types::Type,
     unwrap_or_err,
-    variable::VarRef,
 };
 
 #[derive(Clone, Debug, PartialEq)]

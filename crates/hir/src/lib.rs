@@ -11,6 +11,7 @@ pub mod function;
 pub mod hir;
 pub mod impl_block;
 pub mod jump;
+pub mod let_binding;
 pub mod literal;
 pub mod loops;
 pub mod metadata;
@@ -26,7 +27,6 @@ pub mod statement;
 pub mod structure;
 pub mod types;
 pub mod typing;
-pub mod variable;
 
 use builder::HIRBuilder;
 use errors::HIRError;

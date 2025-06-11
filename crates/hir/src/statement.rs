@@ -1,4 +1,5 @@
 use ast::statement::Stmt as ASTStmt;
+use thin_vec::ThinVec;
 
 use crate::{
     HIRResult,
@@ -8,7 +9,7 @@ use crate::{
     jump::Jump,
     loops::Loop,
     return_stmt::Return,
-    scope::{ExprIdx, FnDefIdx, StructDefIdx, VarDefIdx},
+    scope::{ExprIdx, FnDefIdx, LetBindingIdx, StructDefIdx},
     semi::Semi,
 };
 
@@ -25,7 +26,7 @@ pub enum Stmt {
     Return(Return),
     Semi(Semi),
     StructDef(StructDefIdx),
-    VarDef(VarDefIdx),
+    LetBinding(ThinVec<LetBindingIdx>),
 }
 
 impl HIRBuilder {
@@ -71,7 +72,7 @@ impl HIRBuilder {
             }
             ASTStmt::LetBinding(let_binding) => {
                 let low_let_binding = self.lower_let_binding(let_binding)?;
-                Stmt::VarDef(low_let_binding)
+                Stmt::LetBinding(low_let_binding)
             }
         };
         Ok(lowered)

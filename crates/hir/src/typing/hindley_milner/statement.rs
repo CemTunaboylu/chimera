@@ -143,7 +143,7 @@ impl HIRBuilder {
             Stmt::Return(_) => todo!(),
             Stmt::Semi(semi) => todo!(),
             Stmt::StructDef(idx) => todo!(),
-            Stmt::VarDef(idx) => todo!(),
+            Stmt::LetBinding(idx) => todo!(),
         }
     }
 }

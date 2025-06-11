@@ -15,6 +15,7 @@ use crate::{
     builder::HIRBuilder,
     climbing::climb,
     errors::HIRError,
+    let_binding::LetBinding,
     metadata::VarMeta,
     resolution::{Reference, ResolutionType, Unresolved, resolve},
     scope::{
@@ -22,7 +23,6 @@ use crate::{
         placeholder_idx,
     },
     typing::hindley_milner::types::Type,
-    variable::VarDef,
 };
 
 #[derive(Clone, Debug)]
@@ -132,7 +132,7 @@ impl Default for StructRef {
 pub struct StructLiteral {
     pub struct_ref: Reference<StructRef>,
     pub internal_with_field_values: InternalStructure<ExprIdx>,
-    pub field_metadata: MetaHolder<VarDef, VarMeta>,
+    pub field_metadata: MetaHolder<LetBinding, VarMeta>,
 }
 
 impl PartialOrd for StructLiteral {
