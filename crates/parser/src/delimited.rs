@@ -20,14 +20,6 @@ impl Parser<'_> {
             OpeningDelimiter(expected_token_kind) => match kind {
                 LParen => self.parse_parenthesised(),
                 LBrace => self.parse_block(),
-                LBrack => {
-                    if self.is_expected(ContainerRef) {
-                        self.parse_container_indexing();
-                    } else {
-                        self.parse_buffer_literal();
-                    }
-                    None
-                }
                 _ => unreachable!(),
             },
             ClosingDelimiter(expected_token_kind) => None,

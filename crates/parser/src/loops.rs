@@ -115,23 +115,23 @@ mod tests {
                   In@8..27
                     KwIn@8..10 "in"
                     Whitespace@10..11 " "
-                    ContainerRef@11..27
-                      Ident@11..14 "arr"
-                      Indexing@14..27
-                        LBrack@14..15 "["
-                        InfixBinOp@15..26
-                          Literal@15..16
-                            Int@15..16 "0"
-                          Under@16..17 "_"
-                          InfixBinOp@17..26
-                            VarRef@17..20
-                              Ident@17..20 "arr"
-                            Dot@20..21 "."
-                            Call@21..26
-                              Ident@21..24 "len"
-                              LParen@24..25 "("
-                              RParen@25..26 ")"
-                        RBrack@26..27 "]"
+                    Indexing@11..27
+                      VarRef@11..14
+                        Ident@11..14 "arr"
+                      LBrack@14..15 "["
+                      InfixBinOp@15..26
+                        Literal@15..16
+                          Int@15..16 "0"
+                        Under@16..17 "_"
+                        InfixBinOp@17..26
+                          VarRef@17..20
+                            Ident@17..20 "arr"
+                          Dot@20..21 "."
+                          Call@21..26
+                            Ident@21..24 "len"
+                            LParen@24..25 "("
+                            RParen@25..26 ")"
+                      RBrack@26..27 "]"
                   Block@27..41
                     LBrace@27..28 "{"
                     Whitespace@28..29 " "
@@ -165,23 +165,23 @@ mod tests {
                     KwIn@13..15 "in"
                     Whitespace@15..16 " "
                     InfixBinOp@16..45
-                      ContainerRef@16..32
-                        Ident@16..19 "arr"
-                        Indexing@19..32
-                          LBrack@19..20 "["
-                          InfixBinOp@20..31
-                            Literal@20..21
-                              Int@20..21 "0"
-                            Under@21..22 "_"
-                            InfixBinOp@22..31
-                              VarRef@22..25
-                                Ident@22..25 "arr"
-                              Dot@25..26 "."
-                              Call@26..31
-                                Ident@26..29 "len"
-                                LParen@29..30 "("
-                                RParen@30..31 ")"
-                          RBrack@31..32 "]"
+                      Indexing@16..32
+                        VarRef@16..19
+                          Ident@16..19 "arr"
+                        LBrack@19..20 "["
+                        InfixBinOp@20..31
+                          Literal@20..21
+                            Int@20..21 "0"
+                          Under@21..22 "_"
+                          InfixBinOp@22..31
+                            VarRef@22..25
+                              Ident@22..25 "arr"
+                            Dot@25..26 "."
+                            Call@26..31
+                              Ident@26..29 "len"
+                              LParen@29..30 "("
+                              RParen@30..31 ")"
+                        RBrack@31..32 "]"
                       Dot@32..33 "."
                       Call@33..44
                         Ident@33..42 "enumerate"
@@ -239,23 +239,23 @@ mod tests {
                     KwIn@27..29 "in"
                     Whitespace@29..30 " "
                     InfixBinOp@30..59
-                      ContainerRef@30..46
-                        Ident@30..33 "arr"
-                        Indexing@33..46
-                          LBrack@33..34 "["
-                          InfixBinOp@34..45
-                            Literal@34..35
-                              Int@34..35 "0"
-                            Under@35..36 "_"
-                            InfixBinOp@36..45
-                              VarRef@36..39
-                                Ident@36..39 "arr"
-                              Dot@39..40 "."
-                              Call@40..45
-                                Ident@40..43 "len"
-                                LParen@43..44 "("
-                                RParen@44..45 ")"
-                          RBrack@45..46 "]"
+                      Indexing@30..46
+                        VarRef@30..33
+                          Ident@30..33 "arr"
+                        LBrack@33..34 "["
+                        InfixBinOp@34..45
+                          Literal@34..35
+                            Int@34..35 "0"
+                          Under@35..36 "_"
+                          InfixBinOp@36..45
+                            VarRef@36..39
+                              Ident@36..39 "arr"
+                            Dot@39..40 "."
+                            Call@40..45
+                              Ident@40..43 "len"
+                              LParen@43..44 "("
+                              RParen@44..45 ")"
+                        RBrack@45..46 "]"
                       Dot@46..47 "."
                       Call@47..58
                         Ident@47..56 "enumerate"
@@ -335,23 +335,23 @@ mod tests {
                     KwIn@42..44 "in"
                     Whitespace@44..45 " "
                     InfixBinOp@45..74
-                      ContainerRef@45..61
-                        Ident@45..48 "arr"
-                        Indexing@48..61
-                          LBrack@48..49 "["
-                          InfixBinOp@49..60
-                            Literal@49..50
-                              Int@49..50 "0"
-                            Under@50..51 "_"
-                            InfixBinOp@51..60
-                              VarRef@51..54
-                                Ident@51..54 "arr"
-                              Dot@54..55 "."
-                              Call@55..60
-                                Ident@55..58 "len"
-                                LParen@58..59 "("
-                                RParen@59..60 ")"
-                          RBrack@60..61 "]"
+                      Indexing@45..61
+                        VarRef@45..48
+                          Ident@45..48 "arr"
+                        LBrack@48..49 "["
+                        InfixBinOp@49..60
+                          Literal@49..50
+                            Int@49..50 "0"
+                          Under@50..51 "_"
+                          InfixBinOp@51..60
+                            VarRef@51..54
+                              Ident@51..54 "arr"
+                            Dot@54..55 "."
+                            Call@55..60
+                              Ident@55..58 "len"
+                              LParen@58..59 "("
+                              RParen@59..60 ")"
+                        RBrack@60..61 "]"
                       Dot@61..62 "."
                       Call@62..73
                         Ident@62..71 "enumerate"
@@ -403,23 +403,23 @@ mod tests {
                     KwIn@11..13 "in"
                     Whitespace@13..14 " "
                     InfixBinOp@14..43
-                      ContainerRef@14..30
-                        Ident@14..17 "arr"
-                        Indexing@17..30
-                          LBrack@17..18 "["
-                          InfixBinOp@18..29
-                            Literal@18..19
-                              Int@18..19 "0"
-                            Under@19..20 "_"
-                            InfixBinOp@20..29
-                              VarRef@20..23
-                                Ident@20..23 "arr"
-                              Dot@23..24 "."
-                              Call@24..29
-                                Ident@24..27 "len"
-                                LParen@27..28 "("
-                                RParen@28..29 ")"
-                          RBrack@29..30 "]"
+                      Indexing@14..30
+                        VarRef@14..17
+                          Ident@14..17 "arr"
+                        LBrack@17..18 "["
+                        InfixBinOp@18..29
+                          Literal@18..19
+                            Int@18..19 "0"
+                          Under@19..20 "_"
+                          InfixBinOp@20..29
+                            VarRef@20..23
+                              Ident@20..23 "arr"
+                            Dot@23..24 "."
+                            Call@24..29
+                              Ident@24..27 "len"
+                              LParen@27..28 "("
+                              RParen@28..29 ")"
+                        RBrack@29..30 "]"
                       Dot@30..31 "."
                       Call@31..42
                         Ident@31..40 "enumerate"
@@ -469,13 +469,13 @@ mod tests {
                         Ident@15..20 "print"
                         LParen@20..21 "("
                         FnArg@21..28
-                          ContainerRef@21..28
-                            Ident@21..24 "arr"
-                            Indexing@24..28
-                              LBrack@24..25 "["
-                              VarRef@25..27
-                                Ident@25..27 "ix"
-                              RBrack@27..28 "]"
+                          Indexing@21..28
+                            VarRef@21..24
+                              Ident@21..24 "arr"
+                            LBrack@24..25 "["
+                            VarRef@25..27
+                              Ident@25..27 "ix"
+                            RBrack@27..28 "]"
                         RParen@28..29 ")"
                       Whitespace@29..30 " "
                       RBrace@30..31 "}""#]],

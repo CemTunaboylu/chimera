@@ -76,7 +76,8 @@ pub enum Precedence {
     // unary operators : *(deref), &(ref), -, !(not)
     Prefix,
     // coupling operators that couple its operands:
-    // .(member) , :(typing), ::(namespace), ?(unwrap)
+    // .(member) , :(typing), ::(namespace)
+    // and postfix operators: ?(unwrap) [ ] (indexing)
     Coupling,
 }
 
@@ -209,12 +210,19 @@ pub enum AssocUnOp {
     Not,
     // Postfix
     QMark,
+    Indexing, // <indexable> [ <expression> ]
+}
+
+impl AssocUnOp {
+    fn is_postfix(&self) -> bool {
+        matches!(self, Self::QMark | Self::Indexing)
+    }
 }
 
 impl Op for AssocUnOp {
     // in ascending order
     fn precedence(&self) -> Precedence {
-        if matches!(self, AssocUnOp::QMark) {
+        if self.is_postfix() {
             Precedence::Coupling
         } else {
             Precedence::Prefix
@@ -241,6 +249,7 @@ impl Op for AssocUnOp {
         let op = match kind {
             And => Self::Ref,
             Excl => Self::Not,
+            LBrack => Self::Indexing,
             Minus => Self::Neg,
             QMark => Self::QMark,
             Star => Self::Deref,
@@ -256,6 +265,7 @@ impl Into<SyntaxKind> for AssocUnOp {
         use AssocUnOp::*;
         match self {
             QMark => SyntaxKind::PostfixUnaryOp,
+            Indexing => SyntaxKind::Indexing,
             Not | Neg | Deref | Ref => SyntaxKind::PrefixUnaryOp,
         }
     }

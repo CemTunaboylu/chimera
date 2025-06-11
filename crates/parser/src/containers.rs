@@ -142,28 +142,8 @@ impl HintParser {
 
 #[allow(unused_variables)]
 impl Parser<'_> {
-    // the identifier is already bumped at this point because we ended up here
-    // from parsing an identifier and saw a LBrack as well.
     #[allow(unused_variables)]
-    pub fn parse_container_indexing(&self) {
-        let rollback_when_dropped = self.impose_context_for_parsing(Indexing);
-        while IsNext::Yes == self.is_next_strict(LBrack) {
-            let marker = self.start();
-            {
-                let rollback_when_dropped = self.impose_context_for_parsing(LBrack);
-                self.expect_and_bump(LBrack);
-                self.parse_expression_until_binding_power(starting_precedence());
-            }
-            {
-                self.impose_context_for_parsing(RBrack);
-                self.expect_and_bump(RBrack);
-            }
-            self.complete_marker_with(marker, Indexing);
-        }
-    }
-
-    #[allow(unused_variables)]
-    pub fn parse_buffer_literal(&self) {
+    pub fn parse_buffer_literal(&self) -> Option<Finished> {
         let marker = self.start();
         {
             let rollback_when_dropped = self.impose_context_for_parsing(LBrack);
@@ -176,7 +156,8 @@ impl Parser<'_> {
         }
         let dim_values_marker = self.complete_marker_with(marker, BufferLit);
         let literal_marker = self.precede_marker_with(&dim_values_marker);
-        self.complete_marker_with(literal_marker, Literal);
+        let completed = self.complete_marker_with(literal_marker, Literal);
+        Some(completed)
     }
 
     fn comma_separated_expressions_until(
@@ -327,42 +308,43 @@ mod tests {
         arr_indexing: ("arr[arr.len() - 1]",
             expect![[r#"
                 Root@0..18
-                  ContainerRef@0..18
-                    Ident@0..3 "arr"
-                    Indexing@3..18
-                      LBrack@3..4 "["
-                      InfixBinOp@4..17
-                        InfixBinOp@4..14
-                          VarRef@4..7
-                            Ident@4..7 "arr"
-                          Dot@7..8 "."
-                          Call@8..13
-                            Ident@8..11 "len"
-                            LParen@11..12 "("
-                            RParen@12..13 ")"
-                          Whitespace@13..14 " "
-                        Minus@14..15 "-"
-                        Whitespace@15..16 " "
-                        Literal@16..17
-                          Int@16..17 "1"
-                      RBrack@17..18 "]""#]],
+                  Indexing@0..18
+                    VarRef@0..3
+                      Ident@0..3 "arr"
+                    LBrack@3..4 "["
+                    InfixBinOp@4..17
+                      InfixBinOp@4..14
+                        VarRef@4..7
+                          Ident@4..7 "arr"
+                        Dot@7..8 "."
+                        Call@8..13
+                          Ident@8..11 "len"
+                          LParen@11..12 "("
+                          RParen@12..13 ")"
+                        Whitespace@13..14 " "
+                      Minus@14..15 "-"
+                      Whitespace@15..16 " "
+                      Literal@16..17
+                        Int@16..17 "1"
+                    RBrack@17..18 "]""#]],
         ),
         tensor_indexing: ("matrix[matrix[0].len() - 1][0]",
             expect![[r#"
                 Root@0..30
-                  ContainerRef@0..30
-                    Ident@0..6 "matrix"
-                    Indexing@6..27
+                  Indexing@0..30
+                    Indexing@0..27
+                      VarRef@0..6
+                        Ident@0..6 "matrix"
                       LBrack@6..7 "["
                       InfixBinOp@7..26
                         InfixBinOp@7..23
-                          ContainerRef@7..16
-                            Ident@7..13 "matrix"
-                            Indexing@13..16
-                              LBrack@13..14 "["
-                              Literal@14..15
-                                Int@14..15 "0"
-                              RBrack@15..16 "]"
+                          Indexing@7..16
+                            VarRef@7..13
+                              Ident@7..13 "matrix"
+                            LBrack@13..14 "["
+                            Literal@14..15
+                              Int@14..15 "0"
+                            RBrack@15..16 "]"
                           Dot@16..17 "."
                           Call@17..22
                             Ident@17..20 "len"
@@ -374,11 +356,93 @@ mod tests {
                         Literal@25..26
                           Int@25..26 "1"
                       RBrack@26..27 "]"
-                    Indexing@27..30
-                      LBrack@27..28 "["
-                      Literal@28..29
-                        Int@28..29 "0"
-                      RBrack@29..30 "]""#]]
+                    LBrack@27..28 "["
+                    Literal@28..29
+                      Int@28..29 "0"
+                    RBrack@29..30 "]""#]]
+        ),
+        indexing_a_2d_tensor_literal: ("[[1,0,0],[0,1,0],[0,0,1]][0][0]",
+            expect![[r#"
+                Root@0..23
+                  Indexing@0..23
+                    Indexing@0..20
+                      Literal@0..17
+                        BufferLit@0..17
+                          LBrack@0..1 "["
+                          DimValue@1..6
+                            Literal@1..6
+                              BufferLit@1..6
+                                LBrack@1..2 "["
+                                DimValue@2..3
+                                  Literal@2..3
+                                    Int@2..3 "1"
+                                DimValue@3..4
+                                  Literal@3..4
+                                    Int@3..4 "0"
+                                DimValue@4..5
+                                  Literal@4..5
+                                    Int@4..5 "0"
+                                RBrack@5..6 "]"
+                          DimValue@6..11
+                            Literal@6..11
+                              BufferLit@6..11
+                                LBrack@6..7 "["
+                                DimValue@7..8
+                                  Literal@7..8
+                                    Int@7..8 "0"
+                                DimValue@8..9
+                                  Literal@8..9
+                                    Int@8..9 "1"
+                                DimValue@9..10
+                                  Literal@9..10
+                                    Int@9..10 "0"
+                                RBrack@10..11 "]"
+                          DimValue@11..16
+                            Literal@11..16
+                              BufferLit@11..16
+                                LBrack@11..12 "["
+                                DimValue@12..13
+                                  Literal@12..13
+                                    Int@12..13 "0"
+                                DimValue@13..14
+                                  Literal@13..14
+                                    Int@13..14 "0"
+                                DimValue@14..15
+                                  Literal@14..15
+                                    Int@14..15 "1"
+                                RBrack@15..16 "]"
+                          RBrack@16..17 "]"
+                      LBrack@17..18 "["
+                      Literal@18..19
+                        Int@18..19 "0"
+                      RBrack@19..20 "]"
+                    LBrack@20..21 "["
+                    Literal@21..22
+                      Int@21..22 "0"
+                    RBrack@22..23 "]""#]]
+        ),
+        indexing_a_fn_call: ("random_3d_tensor()[0][0][0]",
+            expect![[r#"
+                Root@0..27
+                  Indexing@0..27
+                    Indexing@0..24
+                      Indexing@0..21
+                        Call@0..18
+                          Ident@0..16 "random_3d_tensor"
+                          LParen@16..17 "("
+                          RParen@17..18 ")"
+                        LBrack@18..19 "["
+                        Literal@19..20
+                          Int@19..20 "0"
+                        RBrack@20..21 "]"
+                      LBrack@21..22 "["
+                      Literal@22..23
+                        Int@22..23 "0"
+                      RBrack@23..24 "]"
+                    LBrack@24..25 "["
+                    Literal@25..26
+                      Int@25..26 "0"
+                    RBrack@26..27 "]""#]]
         ),
         let_binding_from_arr: ("let z = arr[me.z - she.z];",
             expect![[r#"
@@ -392,27 +456,27 @@ mod tests {
                         Whitespace@5..6 " "
                       Eq@6..7 "="
                       Whitespace@7..8 " "
-                      ContainerRef@8..25
-                        Ident@8..11 "arr"
-                        Indexing@11..25
-                          LBrack@11..12 "["
-                          InfixBinOp@12..24
-                            InfixBinOp@12..17
-                              VarRef@12..14
-                                Ident@12..14 "me"
-                              Dot@14..15 "."
-                              VarRef@15..17
-                                Ident@15..16 "z"
-                                Whitespace@16..17 " "
-                            Minus@17..18 "-"
-                            Whitespace@18..19 " "
-                            InfixBinOp@19..24
-                              VarRef@19..22
-                                Ident@19..22 "she"
-                              Dot@22..23 "."
-                              VarRef@23..24
-                                Ident@23..24 "z"
-                          RBrack@24..25 "]"
+                      Indexing@8..25
+                        VarRef@8..11
+                          Ident@8..11 "arr"
+                        LBrack@11..12 "["
+                        InfixBinOp@12..24
+                          InfixBinOp@12..17
+                            VarRef@12..14
+                              Ident@12..14 "me"
+                            Dot@14..15 "."
+                            VarRef@15..17
+                              Ident@15..16 "z"
+                              Whitespace@16..17 " "
+                          Minus@17..18 "-"
+                          Whitespace@18..19 " "
+                          InfixBinOp@19..24
+                            VarRef@19..22
+                              Ident@19..22 "she"
+                            Dot@22..23 "."
+                            VarRef@23..24
+                              Ident@23..24 "z"
+                        RBrack@24..25 "]"
                     Semi@25..26 ";""#]]
         ),
         let_binding_with_buffer_literal: ("let z = [1,1,1];",
@@ -547,6 +611,7 @@ mod tests {
                           RBrack@24..25 "]"
                     Semi@25..26 ";""#]]
         ),
+
         let_binding_with_fully_generic_shaped_tensor: ("let z : tensor<_,_,_> = random_3d_tensor();",
             expect![[r#"
                 Root@0..43
@@ -738,27 +803,25 @@ mod tests {
     tensor_initializer_with_dim_and_typehint_and_default_value_wont_work: ("tensor<f32><100,100,100>[0.0]",
             expect![[r#"
                 Root@0..29
-                  TyTensor@0..24
-                    KwTensor@0..6 "tensor"
-                    Lt@6..7 "<"
-                    TypeHint@7..10
-                      TyF32@7..10 "f32"
-                    Gt@10..11 ">"
-                    Lt@11..12 "<"
-                    DimHints@12..23
-                      Int@12..15 "100"
-                      Comma@15..16 ","
-                      Int@16..19 "100"
-                      Comma@19..20 ","
-                      Int@20..23 "100"
-                    Gt@23..24 ">"
-                  Literal@24..29
-                    BufferLit@24..29
-                      LBrack@24..25 "["
-                      DimValue@25..28
-                        Literal@25..28
-                          Float@25..28 "0.0"
-                      RBrack@28..29 "]""#]]
+                  Indexing@0..29
+                    TyTensor@0..24
+                      KwTensor@0..6 "tensor"
+                      Lt@6..7 "<"
+                      TypeHint@7..10
+                        TyF32@7..10 "f32"
+                      Gt@10..11 ">"
+                      Lt@11..12 "<"
+                      DimHints@12..23
+                        Int@12..15 "100"
+                        Comma@15..16 ","
+                        Int@16..19 "100"
+                        Comma@19..20 ","
+                        Int@20..23 "100"
+                      Gt@23..24 ">"
+                    LBrack@24..25 "["
+                    Literal@25..28
+                      Float@25..28 "0.0"
+                    RBrack@28..29 "]""#]]
         ),
     tensor_type_with_dim_and_typehint: ("tensor<f32><100,100,100>",
             expect![[r#"

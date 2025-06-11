@@ -211,6 +211,7 @@ impl Parser<'_> {
         match kind {
             Ident => self.parse_starting_with_identifier(),
             Int | Float | StrLit | CharLit | KwTrue | KwFalse => self.parse_literal(kind),
+            LBrack => self.parse_buffer_literal(),
             // & (ref), ! (bool negate), - (negative), * (deref)
             And | Excl | Minus | Star => self.parse_prefix_unary_operation(kind),
             // Note: OrOr is a special case for a lambda definition with no parameters, and since OrOr is a binary infix operator,
@@ -274,9 +275,6 @@ impl Parser<'_> {
 
         let finished = if self.is_next(LParen) {
             self.parse_call(marker)
-        } else if self.is_next(LBrack) {
-            self.parse_container_indexing();
-            self.complete_marker_with(marker, ContainerRef)
         } else if self.is_next(LBrace) && self.is_allowed(StructLit) {
             self.parse_struct_init_block();
             self.complete_marker_with(marker, StructLit)
@@ -377,7 +375,8 @@ impl Parser<'_> {
         Some(self.complete_marker_with(marker, prefix_unary_op.into()))
     }
 
-    fn parse_postfix_unary_operation(
+    #[allow(unused_variables)]
+    pub fn parse_postfix_unary_operation(
         &self,
         kind: SyntaxKind,
         min_precedence: &Bound,
@@ -390,6 +389,11 @@ impl Parser<'_> {
         }
         let marker = self.precede_marker_with(marker);
         self.expect_and_bump(kind);
+        if kind == LBrack {
+            let rollback_when_dropped = self.impose_restrictions_of_kind_on_context(kind);
+            self.parse_expression_until_binding_power(starting_precedence());
+            self.expect_and_bump(RBrack);
+        }
         Some(self.complete_marker_with(marker, postfix_unary_op.into()))
     }
 

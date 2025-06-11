@@ -45,7 +45,6 @@ pub enum SyntaxKind {
     Block,
     Condition,
     Conditional,
-    ContainerRef,
     ControlFlow,
     FnArg,
     FnDef,
@@ -152,25 +151,25 @@ pub fn from_token_kinds(token_kinds: ThinVec<TokenKind>) -> ThinVec<SyntaxKind> 
 impl SyntaxKind {
     pub fn is_delimiter(&self) -> bool {
         use SyntaxKind::*;
-        matches!(self, LBrace | LParen | LBrack | RBrace | RParen | RBrack)
+        matches!(self, LBrace | LParen | RBrace | RParen)
     }
 
     pub fn opening_delimiters() -> ThinVec<SyntaxKind> {
         use SyntaxKind::*;
-        thin_vec![LBrace, LParen, LBrack]
+        thin_vec![LBrace, LParen]
     }
 
     pub fn closing_delimiters() -> ThinVec<SyntaxKind> {
         use SyntaxKind::*;
-        thin_vec![RBrace, RParen, RBrack]
+        thin_vec![RBrace, RParen]
     }
     pub fn is_opening_delimiter(&self) -> bool {
         use SyntaxKind::*;
-        matches!(self, LBrace | LParen | LBrack)
+        matches!(self, LBrace | LParen)
     }
     pub fn is_closing_delimiter(&self) -> bool {
         use SyntaxKind::*;
-        matches!(self, RBrace | RParen | RBrack)
+        matches!(self, RBrace | RParen)
     }
     // TODO: a closure is a literal value?
     pub fn is_literal_value(&self) -> bool {
@@ -252,15 +251,15 @@ impl SyntaxKind {
 
     pub fn is_posfix_unary_operator(&self) -> bool {
         use SyntaxKind::*;
-        matches!(self, QMark)
+        matches!(self, QMark | LBrack)
     }
 
     pub fn operators() -> ThinVec<Self> {
         use SyntaxKind::*;
         thin_vec![
-            And, AndAnd, AndEq, Colon, ColonColon, Dot, Eq, EqEq, Excl, Gt, Ge, LShift, LShiftEq,
-            Lt, Le, Minus, MinusEq, NotEq, Or, OrEq, OrOr, Percent, PercentEq, Plus, PlusEq, QMark,
-            RArrow, RShift, RShiftEq, Slash, SlashEq, Star, StarEq, Under, Xor,
+            And, AndAnd, AndEq, Colon, ColonColon, Dot, Eq, EqEq, Excl, Gt, Ge, LBrack, LShift,
+            LShiftEq, Lt, Le, Minus, MinusEq, NotEq, Or, OrEq, OrOr, Percent, PercentEq, Plus,
+            PlusEq, QMark, RArrow, RShift, RShiftEq, Slash, SlashEq, Star, StarEq, Under, Xor,
         ]
     }
 
@@ -333,6 +332,7 @@ impl SyntaxKind {
             In => context_update[2] = RestrictionType::Sub(StructLit.into()),
             Indexing => {
                 let non_assigning_operators: SyntaxKindBitSet = non_assigning_operators();
+                context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
                 context_update[2] = RestrictionType::Add(non_assigning_operators);
             }
             Jump | Return => {
