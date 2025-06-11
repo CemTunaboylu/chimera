@@ -26,7 +26,7 @@ pub type LetBindingIdx = Idx<LetBinding>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
