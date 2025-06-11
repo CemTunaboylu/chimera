@@ -216,6 +216,65 @@ mod tests {
     }
 
     #[test]
+    fn fn_def_with_with_tuples_everywhere() {
+        let program =
+            "fn foo(mut t: ((i32, i32,i32), &mut RigidBody) ) -> ((f32,f32),(f32,f32)) {}";
+
+        let ast_root = ast_root_from(program);
+        let ast_fn_def =
+            cast_node_into_type::<ASTFnDef>(ast_root.get_root().first_child().as_ref().unwrap());
+
+        let mut hir_builder = HIRBuilder::new(ast_root);
+        let fn_def_idx = hir_builder
+            .lower_fn_def(&ast_fn_def)
+            .expect("should have been ok");
+
+        let scope_idx = hir_builder.current_scope_cursor;
+        let scope = hir_builder.get_current_scope();
+        let fn_defs = &scope.fn_allocator.definitions;
+        let fn_names = &scope.fn_allocator.names;
+
+        let fn_def = &fn_defs[fn_def_idx];
+        let fn_name = &fn_names[fn_def.name_index];
+
+        assert_eq!("foo", fn_name);
+        assert_eq!(scope_idx, fn_def.scope_idx);
+
+        let params = fn_def.callable.parameters.as_slice();
+
+        if let &[
+            Param::Named {
+                name,
+                is_mut,
+                param_type,
+            },
+        ] = &params
+        {
+            assert_eq!(&SmolStr::from("t"), name);
+            assert_eq!(true, *is_mut);
+            assert_eq!(
+                Type::Tuple(thin_vec![
+                    Type::Tuple(thin_vec![Type::I32, Type::I32, Type::I32,]),
+                    Type::Ptr {
+                        of: Box::new(Type::StructAsType(Status::Pending(placeholder_idx()))),
+                        is_mut: true
+                    }
+                ]),
+                *param_type
+            );
+        } else {
+            unreachable!()
+        }
+        assert_eq!(
+            &RetType(Type::Tuple(thin_vec![
+                Type::Tuple(thin_vec![Type::F32, Type::F32]),
+                Type::Tuple(thin_vec![Type::F32, Type::F32]),
+            ])),
+            fn_def.callable.return_type.as_ref().unwrap()
+        );
+    }
+
+    #[test]
     fn fn_def() {
         let program = "fn foo(i: &Structure) -> bool { i.can_foo() }";
 

@@ -17,6 +17,7 @@ use crate::{
     resolution::{Reference, ResolutionType, Unresolved, resolve},
     scope::{ExprIdx, NameIndexed, Span, StrIdx, VarDefIdx, VarSelector, placeholder_idx},
 };
+
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
 pub struct VarDef {
     pub name_index: StrIdx,

@@ -1,6 +1,7 @@
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    mut_clone_with_err,
     self_ref::SelfRef,
     typing::hindley_milner::{
         store::placeholder_type_var_id,
@@ -100,6 +101,11 @@ impl HIRBuilder {
                 //     data_type,
                 // }
                 todo!()
+            }
+            ASTType::Tuple(types) => {
+                let to_hm = |ast_type: &ASTType, hir: &mut HIRBuilder| hir.lower_type(ast_type);
+                let types = mut_clone_with_err(types, self, to_hm)?;
+                Type::Tuple(types)
             }
             ASTType::Unit => Type::Unit,
             _ => {
