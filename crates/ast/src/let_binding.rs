@@ -13,8 +13,7 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        ensure_node_kind_is, first_child_of_kind_errs, get_children_in, get_first_child_in,
-        get_token_of_errs,
+        ensure_node_kind_is, first_child_of_kind_errs, get_children_in, get_token_of_errs,
     },
     types::{Type, parse_type_hinted},
 };
@@ -202,13 +201,6 @@ impl TryFrom<&SyntaxNode> for LetBinding {
 pub struct VarRef {
     pub name: SmolStr,
     pub span: Range<usize>,
-    pub type_hint: Option<Type>,
-}
-
-fn get_type_hint(var_ref_node: &SyntaxNode) -> Option<Type> {
-    let type_hint_node = get_first_child_in(var_ref_node, TypeHint)?;
-    // note: silenlty ignoring the failed type hint
-    Type::try_from(&type_hint_node).ok()
 }
 
 impl TryFrom<&SyntaxNode> for VarRef {
@@ -220,13 +212,8 @@ impl TryFrom<&SyntaxNode> for VarRef {
             .unwrap()
             .text()
             .to_smolstr();
-        let type_hint = get_type_hint(var_ref_node);
         let span = var_ref_node.text_range().into();
-        Ok(Self {
-            name,
-            span,
-            type_hint,
-        })
+        Ok(Self { name, span })
     }
 }
 
@@ -236,9 +223,6 @@ impl VarRef {
     }
     pub fn span(&self) -> Range<usize> {
         self.span.clone()
-    }
-    pub fn type_hint(&self) -> Option<&Type> {
-        self.type_hint.as_ref()
     }
 }
 
@@ -272,8 +256,8 @@ mod tests {
         }
     }
 
-    fn match_varref_with(expr: &Expr, name: &str, type_hint: Option<&Type>) -> bool {
-        matches!(expr, Expr::VarRef(varref) if varref.name() == &name.to_smolstr() && varref.type_hint() == type_hint)
+    fn match_varref_with(expr: &Expr, name: &str) -> bool {
+        matches!(expr, Expr::VarRef(varref) if varref.name() == &name.to_smolstr())
     }
 
     fn match_call_with(expr: &Expr, on: On, args: ThinVec<FnArg>) -> bool {
@@ -344,13 +328,13 @@ mod tests {
         assert_expr_is_infix_with(
             &elements[0],
             SyntaxKind::Dot,
-            |lhs| match_varref_with(lhs, "point_1", None),
+            |lhs| match_varref_with(lhs, "point_1"),
             |rhs| match_call_with(rhs, On::Binding(SmolStr::from("normalize")), ThinVec::new()),
         );
         assert_expr_is_infix_with(
             &elements[1],
             SyntaxKind::Dot,
-            |lhs| match_varref_with(lhs, "point_2", None),
+            |lhs| match_varref_with(lhs, "point_2"),
             |rhs| match_call_with(rhs, On::Binding(SmolStr::from("normalize")), ThinVec::new()),
         );
     }
@@ -401,13 +385,13 @@ mod tests {
         assert_expr_is_infix_with(
             &nested_tuple_values[0],
             SyntaxKind::Dot,
-            |lhs| match_varref_with(lhs, "point_1", None),
+            |lhs| match_varref_with(lhs, "point_1"),
             |rhs| match_call_with(rhs, On::Binding(SmolStr::from("normalize")), ThinVec::new()),
         );
         assert_expr_is_infix_with(
             &nested_tuple_values[1],
             SyntaxKind::Dot,
-            |lhs| match_varref_with(lhs, "point_2", None),
+            |lhs| match_varref_with(lhs, "point_2"),
             |rhs| match_call_with(rhs, On::Binding(SmolStr::from("normalize")), ThinVec::new()),
         );
         let hundred = tuple_elems[1].clone();

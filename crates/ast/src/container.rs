@@ -275,7 +275,6 @@ mod tests {
                 shape: Shape::MaybeUnknown(thin_vec![Some(Expr::VarRef(VarRef {
                     name: SmolStr::from("dynamic"),
                     span: 12..19,
-                    type_hint: None
                 }))]),
             })))
         );
@@ -295,7 +294,6 @@ mod tests {
                 shape: Shape::MaybeUnknown(thin_vec![Some(Expr::VarRef(VarRef {
                     name: SmolStr::from("dynamic"),
                     span: 22..29,
-                    type_hint: None
                 }))]),
             })))
         );
@@ -327,7 +325,6 @@ mod tests {
                 value: Box::new(Expr::VarRef(VarRef {
                     name: SmolStr::from("value"),
                     span: 7..12,
-                    type_hint: None,
                 })),
                 shape: Shape::MaybeUnknown(thin_vec![
                     Some(Expr::Literal(Literal(Value::Int(3)))),
