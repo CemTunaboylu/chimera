@@ -1,5 +1,4 @@
 use syntax::{
-    is_a_binary_operator,
     language::{SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
@@ -44,7 +43,7 @@ impl Binary {
             ));
         }
         let op = get_token_with(infix_bin_op_node, |token: &SyntaxToken| {
-            is_a_binary_operator(token.kind())
+            token.kind().is_binary_operator()
         })
         .map(|t| t.kind());
         Ok(Self::Infix(PreComputed {

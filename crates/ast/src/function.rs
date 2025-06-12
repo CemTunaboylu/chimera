@@ -8,8 +8,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        children_with_tokens_without_unwanted, error_for_node, filtered_children_with_tokens,
-        first_child_of_kind, get_children_in, get_first_child_in, get_token_of_errs,
+        error_for_node, filter_irrelevant_out, filtered_children_with_tokens, first_child_of_kind,
+        get_children_in, get_first_child_in, get_kind_on_node_or_token, get_token_of_errs,
     },
     literal::Literal,
     parameter::Param,
@@ -21,11 +21,8 @@ pub struct RetType(SyntaxNode);
 
 impl RetType {
     pub fn return_type(&self) -> Option<Type> {
-        if let Some(c) = children_with_tokens_without_unwanted(
-            &self.0,
-            [SyntaxKind::Whitespace, SyntaxKind::RArrow].as_slice(),
-        )
-        .last()
+        if let Some(c) =
+            filter_irrelevant_out(self.0.children_with_tokens(), get_kind_on_node_or_token).last()
         {
             Type::try_from(c).ok()
         } else {

@@ -1,7 +1,4 @@
-use syntax::{
-    Syntax, bitset::SyntaxKindBitSet, is_a_type, is_an_assignment, is_an_operator,
-    syntax_kind::SyntaxKind,
-};
+use syntax::{Syntax, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
 
 use crate::{
@@ -156,7 +153,7 @@ impl Parser<'_> {
                 }
                 Ok(syntax) => {
                     let kind = syntax.get_kind();
-                    if !is_an_operator(kind) {
+                    if !kind.is_operator() {
                         break;
                     }
                     if !self.is_allowed(kind) && !self.is_expected(kind) {
@@ -177,7 +174,7 @@ impl Parser<'_> {
                             self.parse_binary_operation(syntax, &min_precedence, &lhs_marker)
                         {
                             lhs_marker = marker;
-                            if is_an_assignment(kind)
+                            if kind.is_assignment()
                                 && !self.is_in_the_middle_of_parsing(LetBinding)
                                 && self.is_next(Semi)
                             {
@@ -219,12 +216,12 @@ impl Parser<'_> {
             Or | OrOr => self.parse_lambda_def(),
             delimiter if delimiter.is_delimiter() => self.parse_delimited(syntax),
             container if matches!(container, KwBuffer | KwTensor) => self.parse_type(&syntax),
-            typing if is_a_type(typing) => {
+            typing if typing.is_type() => {
                 let rollback_when_dropped = self.by_expecting(StructAsType);
                 self.parse_type(&syntax)
             }
             keyword if keyword.is_keyword() => self.parse_keyword_expression(syntax),
-            operator if is_an_operator(operator) => {
+            operator if operator.is_operator() => {
                 self.recover_restricted(operator);
                 None
             }
@@ -252,7 +249,7 @@ impl Parser<'_> {
             LParen => {
                 self.parse_parenthesised();
             }
-            t if is_a_type(t) => {
+            t if t.is_type() => {
                 self.bump();
             }
             _ => {}

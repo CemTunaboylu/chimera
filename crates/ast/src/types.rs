@@ -1,7 +1,5 @@
 use smol_str::{SmolStr, ToSmolStr};
-use syntax::{
-    bitset::SyntaxKindBitSet, is_a_type, language::SyntaxToken, syntax_kind::SyntaxKind::*,
-};
+use syntax::{bitset::SyntaxKindBitSet, language::SyntaxToken, syntax_kind::SyntaxKind::*};
 use syntax::{
     language::{NodeOrToken, SyntaxNode},
     syntax_kind::SyntaxKind,
@@ -15,9 +13,9 @@ use crate::{
     expression::Expr,
     function::RetType as ASTRetType,
     lang_elems::{
-        children_with_tokens_without_unwanted, ensure_node_kind_is_any, error_for_token,
-        get_children_with_tokens_in_f, get_first_child_in, get_token_of_errs,
-        vector_of_children_and_tokens_as,
+        ensure_node_kind_is_any, error_for_token, filter_irrelevant_out,
+        filtered_children_with_tokens, get_first_child_in, get_kind_on_node_or_token,
+        get_token_of_errs, vector_of_children_and_tokens_as,
     },
     literal::{Literal, Value, parse_into},
     mutable::Mut as ASTMut,
@@ -60,17 +58,8 @@ pub enum Type {
     Unit,
 }
 
-impl Type {
-    fn to_remove_for_fn_type() -> SyntaxKindBitSet {
-        use SyntaxKind::*;
-        [Comma, KwFn, LParen, RetType, RParen, Whitespace]
-            .as_ref()
-            .into()
-    }
-}
-
 fn extract_type_hint_from(type_hint_node: &SyntaxNode) -> ASTResult<Type> {
-    let type_node = get_children_with_tokens_in_f(type_hint_node, is_a_type);
+    let type_node = filtered_children_with_tokens(type_hint_node, SyntaxKind::types());
     let type_node = type_node.first().ok_or(ASTError::with_err_msg(
         type_hint_node.text_range().into(),
         "expected a type".to_string(),
@@ -106,16 +95,16 @@ impl TryFrom<&SyntaxNode> for Type {
         let t = match parent_node.kind() {
             PrefixUnaryOp => {
                 get_token_of_errs(parent_node, And)?;
-                let children = children_with_tokens_without_unwanted(
-                    parent_node,
-                    [And, Comma, Whitespace].as_ref(),
+                let children = filter_irrelevant_out(
+                    parent_node.children_with_tokens(),
+                    get_kind_on_node_or_token,
                 );
                 let child = children.first().unwrap();
                 let is_mut = child.kind() == Mut;
                 let ty = if is_mut {
-                    let grand_children = children_with_tokens_without_unwanted(
-                        child.as_node().unwrap(),
-                        [Comma, KwMut, Whitespace].as_ref(),
+                    let grand_children = filter_irrelevant_out(
+                        child.as_node().unwrap().children_with_tokens(),
+                        get_kind_on_node_or_token,
                     );
                     let grand_child = grand_children.first().unwrap();
                     Type::try_from(grand_child)?
@@ -172,9 +161,9 @@ impl TryFrom<&SyntaxNode> for Type {
                 }
             }
             TyFn => {
-                let param_nodes = children_with_tokens_without_unwanted(
-                    parent_node,
-                    Type::to_remove_for_fn_type(),
+                let param_nodes = filter_irrelevant_out(
+                    parent_node.children_with_tokens(),
+                    get_kind_on_node_or_token,
                 );
                 let mut parameters = ThinVec::with_capacity(param_nodes.len());
                 for param_decl in param_nodes {
@@ -274,7 +263,10 @@ pub enum Hint {
 }
 
 pub fn parse_type_hinted(type_hint_node: &SyntaxNode) -> ASTResult<(Expr, Type)> {
-    let nodes = children_with_tokens_without_unwanted(type_hint_node, [Colon, Whitespace].as_ref());
+    let nodes = filter_irrelevant_out(
+        type_hint_node.children_with_tokens(),
+        get_kind_on_node_or_token,
+    );
     if nodes.len() != 2 {
         return Err(ASTError::with_err_msg(
             type_hint_node.text_range().into(),
@@ -486,7 +478,6 @@ mod tests {
         let program = "tensor<f32><i32>";
         let ast_root = ast_root_from(program);
         let tensor_init_node = ast_root.get_root().first_child().unwrap();
-        println!("tensor_init_node: {:?}", tensor_init_node);
         cast_node_into_type::<Literal>(&tensor_init_node);
     }
 }

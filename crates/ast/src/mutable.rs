@@ -3,7 +3,7 @@ use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use crate::{
     errors::ASTError,
     expression::Expr,
-    lang_elems::{children_with_tokens_without_unwanted, error_for_node},
+    lang_elems::{error_for_node, filter_irrelevant_out, get_kind_on_node_or_token},
 };
 
 // In Rust‐style syntax, it is only ever seen “&mut T” or “&T” in type hints—there’s no syntax for “mut T” at the type‐level
@@ -23,7 +23,8 @@ impl TryFrom<&SyntaxNode> for Mut {
     fn try_from(mut_node: &SyntaxNode) -> Result<Self, Self::Error> {
         use SyntaxKind::{KwMut, Whitespace};
         if let Some(child) =
-            children_with_tokens_without_unwanted(mut_node, [KwMut, Whitespace].as_ref()).first()
+            filter_irrelevant_out(mut_node.children_with_tokens(), get_kind_on_node_or_token)
+                .first()
         {
             let expr = Expr::try_from(child)?;
             Ok(Self(Box::new(expr)))

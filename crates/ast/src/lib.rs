@@ -6,13 +6,13 @@ use std::fmt::Debug;
 
 pub mod ast;
 pub mod container;
-pub mod container_ref;
 pub mod control_flow;
 pub mod delimited;
 pub mod errors;
 pub mod expression;
 pub mod function;
 pub mod impl_block;
+pub mod indexing;
 pub mod jump;
 mod lang_elems;
 pub mod let_binding;

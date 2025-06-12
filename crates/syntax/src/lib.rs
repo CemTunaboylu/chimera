@@ -8,67 +8,7 @@ use std::ops::Range;
 
 use bitset::SyntaxKindBitSet;
 use lexer::{lexer::Token, token_type::TokenType};
-use num_traits::{FromPrimitive, ToPrimitive};
 use syntax_kind::SyntaxKind;
-
-use lazy_static::lazy_static;
-
-lazy_static! {
-    pub static ref ASSIGNMENTS: SyntaxKindBitSet = SyntaxKind::assignments().as_ref().into();
-    pub static ref CAN_BE_PARAMETERS: SyntaxKindBitSet =
-        SyntaxKind::can_be_parameter().as_ref().into();
-    pub static ref OPERATORS: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
-    pub static ref BINARY_OPERATORS: SyntaxKindBitSet = {
-        use SyntaxKind::*;
-        let ranges = [
-            (And, ColonColon),
-            (Dot, Excl),
-            (Lt, NotEq),
-            (Or, QMark),
-            (Slash, StarEq),
-        ];
-        let mut set = SyntaxKindBitSet::empty();
-        for (start, end) in ranges {
-            for kind in start.to_u16().unwrap()..=end.to_u16().unwrap() {
-                let kind: SyntaxKind = SyntaxKind::from_u16(kind).unwrap();
-                set += kind.into();
-            }
-        }
-
-        set += [Gt, Ge, LShift, LShiftEq, RShift, RShiftEq, Under, Xor]
-            .as_ref()
-            .into();
-        set
-    };
-    pub static ref TYPES: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-}
-
-pub fn is_an_assignment(kind: SyntaxKind) -> bool {
-    ASSIGNMENTS.contains(kind)
-}
-pub fn is_an_operator(kind: SyntaxKind) -> bool {
-    OPERATORS.contains(kind)
-}
-pub fn is_a_binary_operator(kind: SyntaxKind) -> bool {
-    BINARY_OPERATORS.contains(kind)
-}
-pub fn can_be_a_parameter(kind: SyntaxKind) -> bool {
-    CAN_BE_PARAMETERS.contains(kind)
-}
-
-pub fn non_assigning_operators() -> SyntaxKindBitSet {
-    let a: SyntaxKindBitSet = SyntaxKind::assignments().as_ref().into();
-    let o: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
-    o - a
-}
-
-pub fn is_a_type(kind: SyntaxKind) -> bool {
-    TYPES.contains(kind)
-}
-
-pub fn is_of_type(syntax: &Syntax) -> bool {
-    TYPES.contains(syntax.get_kind())
-}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum RestrictionType {
@@ -141,7 +81,7 @@ impl Syntax {
                 // allowed
                 context_update[2] = RestrictionType::Add(closing_syntax_kind.into());
             }
-            TokenType::Operator if is_an_assignment(self.kind) => {
+            TokenType::Operator if self.kind.is_assignment() => {
                 context_update[0] = RestrictionType::Add(Semi.into());
             }
             _ => {}

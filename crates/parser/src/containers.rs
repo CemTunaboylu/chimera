@@ -170,7 +170,7 @@ impl Parser<'_> {
             let marker = self.start();
             self.parse_expression_until_binding_power(starting_precedence());
             self.complete_marker_with(marker, with);
-            self.ignore_if(Comma);
+            self.bump_if(Comma);
         }
     }
 
@@ -363,63 +363,71 @@ mod tests {
         ),
         indexing_a_2d_tensor_literal: ("[[1,0,0],[0,1,0],[0,0,1]][0][0]",
             expect![[r#"
-                Root@0..23
-                  Indexing@0..23
-                    Indexing@0..20
-                      Literal@0..17
-                        BufferLit@0..17
+                Root@0..31
+                  Indexing@0..31
+                    Indexing@0..28
+                      Literal@0..25
+                        BufferLit@0..25
                           LBrack@0..1 "["
-                          DimValue@1..6
-                            Literal@1..6
-                              BufferLit@1..6
+                          DimValue@1..8
+                            Literal@1..8
+                              BufferLit@1..8
                                 LBrack@1..2 "["
                                 DimValue@2..3
                                   Literal@2..3
                                     Int@2..3 "1"
-                                DimValue@3..4
-                                  Literal@3..4
-                                    Int@3..4 "0"
+                                Comma@3..4 ","
                                 DimValue@4..5
                                   Literal@4..5
                                     Int@4..5 "0"
-                                RBrack@5..6 "]"
-                          DimValue@6..11
-                            Literal@6..11
-                              BufferLit@6..11
-                                LBrack@6..7 "["
-                                DimValue@7..8
-                                  Literal@7..8
-                                    Int@7..8 "0"
-                                DimValue@8..9
-                                  Literal@8..9
-                                    Int@8..9 "1"
-                                DimValue@9..10
-                                  Literal@9..10
-                                    Int@9..10 "0"
-                                RBrack@10..11 "]"
-                          DimValue@11..16
-                            Literal@11..16
-                              BufferLit@11..16
-                                LBrack@11..12 "["
+                                Comma@5..6 ","
+                                DimValue@6..7
+                                  Literal@6..7
+                                    Int@6..7 "0"
+                                RBrack@7..8 "]"
+                          Comma@8..9 ","
+                          DimValue@9..16
+                            Literal@9..16
+                              BufferLit@9..16
+                                LBrack@9..10 "["
+                                DimValue@10..11
+                                  Literal@10..11
+                                    Int@10..11 "0"
+                                Comma@11..12 ","
                                 DimValue@12..13
                                   Literal@12..13
-                                    Int@12..13 "0"
-                                DimValue@13..14
-                                  Literal@13..14
-                                    Int@13..14 "0"
+                                    Int@12..13 "1"
+                                Comma@13..14 ","
                                 DimValue@14..15
                                   Literal@14..15
-                                    Int@14..15 "1"
+                                    Int@14..15 "0"
                                 RBrack@15..16 "]"
-                          RBrack@16..17 "]"
-                      LBrack@17..18 "["
-                      Literal@18..19
-                        Int@18..19 "0"
-                      RBrack@19..20 "]"
-                    LBrack@20..21 "["
-                    Literal@21..22
-                      Int@21..22 "0"
-                    RBrack@22..23 "]""#]]
+                          Comma@16..17 ","
+                          DimValue@17..24
+                            Literal@17..24
+                              BufferLit@17..24
+                                LBrack@17..18 "["
+                                DimValue@18..19
+                                  Literal@18..19
+                                    Int@18..19 "0"
+                                Comma@19..20 ","
+                                DimValue@20..21
+                                  Literal@20..21
+                                    Int@20..21 "0"
+                                Comma@21..22 ","
+                                DimValue@22..23
+                                  Literal@22..23
+                                    Int@22..23 "1"
+                                RBrack@23..24 "]"
+                          RBrack@24..25 "]"
+                      LBrack@25..26 "["
+                      Literal@26..27
+                        Int@26..27 "0"
+                      RBrack@27..28 "]"
+                    LBrack@28..29 "["
+                    Literal@29..30
+                      Int@29..30 "0"
+                    RBrack@30..31 "]""#]]
         ),
         indexing_a_fn_call: ("random_3d_tensor()[0][0][0]",
             expect![[r#"
@@ -481,38 +489,40 @@ mod tests {
         ),
         let_binding_with_buffer_literal: ("let z = [1,1,1];",
             expect![[r#"
-                Root@0..14
-                  LetBinding@0..14
+                Root@0..16
+                  LetBinding@0..16
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    InfixBinOp@4..13
+                    InfixBinOp@4..15
                       VarRef@4..6
                         Ident@4..5 "z"
                         Whitespace@5..6 " "
                       Eq@6..7 "="
                       Whitespace@7..8 " "
-                      Literal@8..13
-                        BufferLit@8..13
+                      Literal@8..15
+                        BufferLit@8..15
                           LBrack@8..9 "["
                           DimValue@9..10
                             Literal@9..10
                               Int@9..10 "1"
-                          DimValue@10..11
-                            Literal@10..11
-                              Int@10..11 "1"
+                          Comma@10..11 ","
                           DimValue@11..12
                             Literal@11..12
                               Int@11..12 "1"
-                          RBrack@12..13 "]"
-                    Semi@13..14 ";""#]]
+                          Comma@12..13 ","
+                          DimValue@13..14
+                            Literal@13..14
+                              Int@13..14 "1"
+                          RBrack@14..15 "]"
+                    Semi@15..16 ";""#]]
         ),
         let_binding_with_generic_dim_hinted_buffer_fails: ("let z: buffer<_,_,_> = [1,1,1];",
             expect![[r#"
-                Root@0..29
-                  LetBinding@0..29
+                Root@0..31
+                  LetBinding@0..31
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    InfixBinOp@4..28
+                    InfixBinOp@4..30
                       TypeHint@4..21
                         VarRef@4..5
                           Ident@4..5 "z"
@@ -536,80 +546,90 @@ mod tests {
                           Whitespace@20..21 " "
                       Eq@21..22 "="
                       Whitespace@22..23 " "
-                      Literal@23..28
-                        BufferLit@23..28
+                      Literal@23..30
+                        BufferLit@23..30
                           LBrack@23..24 "["
                           DimValue@24..25
                             Literal@24..25
                               Int@24..25 "1"
-                          DimValue@25..26
-                            Literal@25..26
-                              Int@25..26 "1"
+                          Comma@25..26 ","
                           DimValue@26..27
                             Literal@26..27
                               Int@26..27 "1"
-                          RBrack@27..28 "]"
-                    Semi@28..29 ";""#]]
+                          Comma@27..28 ","
+                          DimValue@28..29
+                            Literal@28..29
+                              Int@28..29 "1"
+                          RBrack@29..30 "]"
+                    Semi@30..31 ";""#]]
         ),
         let_binding_with_2d_tensor_literal: ("let u = [[1,0,0],[0,1,0],[0,0,1]];",
             expect![[r#"
-                Root@0..26
-                  LetBinding@0..26
+                Root@0..34
+                  LetBinding@0..34
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
-                    InfixBinOp@4..25
+                    InfixBinOp@4..33
                       VarRef@4..6
                         Ident@4..5 "u"
                         Whitespace@5..6 " "
                       Eq@6..7 "="
                       Whitespace@7..8 " "
-                      Literal@8..25
-                        BufferLit@8..25
+                      Literal@8..33
+                        BufferLit@8..33
                           LBrack@8..9 "["
-                          DimValue@9..14
-                            Literal@9..14
-                              BufferLit@9..14
+                          DimValue@9..16
+                            Literal@9..16
+                              BufferLit@9..16
                                 LBrack@9..10 "["
                                 DimValue@10..11
                                   Literal@10..11
                                     Int@10..11 "1"
-                                DimValue@11..12
-                                  Literal@11..12
-                                    Int@11..12 "0"
+                                Comma@11..12 ","
                                 DimValue@12..13
                                   Literal@12..13
                                     Int@12..13 "0"
-                                RBrack@13..14 "]"
-                          DimValue@14..19
-                            Literal@14..19
-                              BufferLit@14..19
-                                LBrack@14..15 "["
-                                DimValue@15..16
-                                  Literal@15..16
-                                    Int@15..16 "0"
-                                DimValue@16..17
-                                  Literal@16..17
-                                    Int@16..17 "1"
-                                DimValue@17..18
-                                  Literal@17..18
-                                    Int@17..18 "0"
-                                RBrack@18..19 "]"
-                          DimValue@19..24
-                            Literal@19..24
-                              BufferLit@19..24
-                                LBrack@19..20 "["
+                                Comma@13..14 ","
+                                DimValue@14..15
+                                  Literal@14..15
+                                    Int@14..15 "0"
+                                RBrack@15..16 "]"
+                          Comma@16..17 ","
+                          DimValue@17..24
+                            Literal@17..24
+                              BufferLit@17..24
+                                LBrack@17..18 "["
+                                DimValue@18..19
+                                  Literal@18..19
+                                    Int@18..19 "0"
+                                Comma@19..20 ","
                                 DimValue@20..21
                                   Literal@20..21
-                                    Int@20..21 "0"
-                                DimValue@21..22
-                                  Literal@21..22
-                                    Int@21..22 "0"
+                                    Int@20..21 "1"
+                                Comma@21..22 ","
                                 DimValue@22..23
                                   Literal@22..23
-                                    Int@22..23 "1"
+                                    Int@22..23 "0"
                                 RBrack@23..24 "]"
-                          RBrack@24..25 "]"
-                    Semi@25..26 ";""#]]
+                          Comma@24..25 ","
+                          DimValue@25..32
+                            Literal@25..32
+                              BufferLit@25..32
+                                LBrack@25..26 "["
+                                DimValue@26..27
+                                  Literal@26..27
+                                    Int@26..27 "0"
+                                Comma@27..28 ","
+                                DimValue@28..29
+                                  Literal@28..29
+                                    Int@28..29 "0"
+                                Comma@29..30 ","
+                                DimValue@30..31
+                                  Literal@30..31
+                                    Int@30..31 "1"
+                                RBrack@31..32 "]"
+                          RBrack@32..33 "]"
+                    Semi@33..34 ";""#]]
         ),
 
         let_binding_with_fully_generic_shaped_tensor: ("let z : tensor<_,_,_> = random_3d_tensor();",

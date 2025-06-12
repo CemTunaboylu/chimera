@@ -14,7 +14,7 @@ use crate::{
     expression::Expr,
     lang_elems::{
         error_for_node, filtered_children_with_tokens, get_children_in, get_first_child_in,
-        get_name, get_token,
+        get_text, get_token,
     },
     self_ref::SelfRef as ASTSelfRef,
     types::{Type, parse_type_hinted},
@@ -72,7 +72,7 @@ impl Param {
         use SyntaxKind::*;
         let allowed_nodes: SyntaxKindBitSet =
             [Mut, PrefixUnaryOp, TypeHint, VarRef].as_ref().into();
-        let can_be_param: SyntaxKindBitSet = SyntaxKind::can_be_parameter().as_ref().into();
+        let can_be_param: SyntaxKindBitSet = SyntaxKind::can_be_parameter().into();
         let nodes = filtered_children_with_tokens(param_decl_node, allowed_nodes + can_be_param);
         if nodes.is_empty() {
             return Err(error_for_node(
@@ -179,7 +179,7 @@ impl TryFrom<&SyntaxNode> for Param {
                 return Ok(param);
             }
         }
-        let name = get_name(child);
+        let name = get_text(child);
         Ok(Self::new_generic(name, is_mut, span))
     }
 }
