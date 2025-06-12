@@ -6,8 +6,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        CAN_BE_EMPTY, ensure_node_kind_is, error_for_node, get_children_as, get_children_in,
-        get_single_children_as_expr, vector_of_children_and_tokens_as,
+        CAN_BE_EMPTY, ensure_node_kind_is, get_children_as, get_single_children_as_expr,
+        vector_of_children_and_tokens_as,
     },
     statement::Stmt,
 };
@@ -72,34 +72,13 @@ impl Block {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Indexing(pub(crate) SyntaxNode);
-
-impl Indexing {
-    pub fn get_indexing_nodes_from(node: &SyntaxNode) -> ThinVec<SyntaxNode> {
-        get_children_in(node, SyntaxKind::Indexing)
-    }
-    pub fn index(&self) -> ASTResult<Expr> {
-        if let Some(node) = self.0.children().find(|node_or_token| {
-            !matches!(
-                node_or_token.kind(),
-                SyntaxKind::LBrack | SyntaxKind::RBrack
-            )
-        }) {
-            Expr::try_from(&node)
-        } else {
-            Err(error_for_node(&self.0, "non empty child"))
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
 
     use super::*;
     use crate::{
         ast::Root,
-        ast_root_from, cast_node_into_type,
+        ast_root_from,
         literal::{Literal, Value},
         operation::{Binary, test::assert_infix_bin_op_with},
     };
@@ -238,22 +217,6 @@ mod test {
             assert!(matches!(
                 stmts.get(0).unwrap(),
                 Stmt::Expr(Expr::Infix(Binary::Infix(_)))
-            ));
-        }
-    }
-
-    #[test]
-    fn happy_path_for_indexing() {
-        let program = "arr[arr.len()-1]";
-        let ast_root = ast_root_from(program);
-        let container_ref = ast_root.get_root().first_child().unwrap();
-        let indexing = cast_node_into_type::<Expr>(&container_ref.first_child().unwrap());
-
-        assert!(matches!(indexing, Expr::Indexing(_)));
-        if let Expr::Indexing(indexing) = indexing {
-            assert!(matches!(
-                indexing.index().expect("should have been ok"),
-                Expr::Infix(Binary::Infix(_))
             ));
         }
     }
