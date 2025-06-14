@@ -77,7 +77,7 @@ pub fn vector_of_children_and_tokens_as<T>(
     Ok(types)
 }
 
-pub fn err_if_empty<T>(a: &ThinVec<T>, span: Range<usize>, exp: &str) -> ASTResult<()> {
+pub fn err_if_empty<T>(a: &[T], span: Range<usize>, exp: &str) -> ASTResult<()> {
     if a.is_empty() {
         return Err(ASTError::with_err_msg(span, exp.to_string()));
     }

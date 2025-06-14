@@ -207,10 +207,7 @@ impl TryFrom<&Value> for HMExpr {
                 data_type,
             } => Ok(HMExpr::Buffer {
                 data_type: data_type.clone(),
-                shape: shape
-                    .get()
-                    .expect("a valid shape from Buffer value")
-                    .clone(),
+                shape: shape.get().expect("a valid shape from Buffer value").into(),
             }),
             Value::Tensor {
                 idx: _,

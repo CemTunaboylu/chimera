@@ -300,7 +300,7 @@ mod tests {
     }
 
     fn assert_ident_in_tuple(
-        identifiers: &ThinVec<Identifier>,
+        identifiers: &[Identifier],
         at: usize,
         name: &str,
         is_mut: bool,

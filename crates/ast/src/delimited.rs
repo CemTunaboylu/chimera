@@ -64,10 +64,10 @@ impl TryFrom<&SyntaxNode> for Block {
 }
 
 impl Block {
-    pub fn statements(&self) -> &ThinVec<Stmt> {
+    pub fn statements(&self) -> &[Stmt] {
         match self {
-            Self::Returning(stmts) => stmts,
-            Self::Semi(stmts) => stmts,
+            Self::Returning(stmts) => stmts.as_slice(),
+            Self::Semi(stmts) => stmts.as_slice(),
         }
     }
 }

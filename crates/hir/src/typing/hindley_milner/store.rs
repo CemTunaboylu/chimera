@@ -21,8 +21,8 @@ pub enum TypeTerm {
 }
 
 fn shape_validation_for<T: Debug + PartialEq>(
-    s1: &ThinVec<T>,
-    s2: &ThinVec<T>,
+    s1: &[T],
+    s2: &[T],
     on_type: &str,
 ) -> TypeInferenceResult<()> {
     if s1 == s2 {

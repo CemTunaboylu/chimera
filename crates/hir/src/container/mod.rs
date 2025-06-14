@@ -37,9 +37,9 @@ pub enum Shape {
     Tensor(ThinVec<Dim>),
 }
 impl Shape {
-    pub fn get(&self) -> Option<&ThinVec<usize>> {
+    pub fn get(&self) -> Option<&[usize]> {
         match self {
-            Shape::Buffer(shape) => Some(shape),
+            Shape::Buffer(shape) => Some(shape.as_slice()),
             Shape::Tensor(_) => None,
         }
     }

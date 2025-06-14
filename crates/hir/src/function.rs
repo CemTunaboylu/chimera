@@ -132,7 +132,7 @@ impl HIRBuilder {
     ) -> HIRResult<(Block, ThinVec<Param>)> {
         let body = self.lower_block(callable.body())?;
         let parameters = mut_clone_with_err(
-            callable.parameters().as_slice(),
+            callable.parameters(),
             self,
             |p: &ASTParam, hir: &mut HIRBuilder| hir.lower_parameter(p),
         )?;

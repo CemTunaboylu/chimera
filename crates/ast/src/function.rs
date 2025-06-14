@@ -61,8 +61,8 @@ impl Callable {
     pub fn body(&self) -> &ASTBlock {
         &self.body
     }
-    pub fn parameters(&self) -> &ThinVec<Param> {
-        &self.parameters
+    pub fn parameters(&self) -> &[Param] {
+        self.parameters.as_slice()
     }
     pub fn return_type(&self) -> Option<&RetType> {
         self.return_type.as_ref()
