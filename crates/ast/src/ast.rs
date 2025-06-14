@@ -26,9 +26,8 @@ impl Root {
             .filter_map(|syntax_node| match Stmt::try_from(&syntax_node) {
                 Ok(s) => Some(s),
                 Err(ast_err) => {
-                    let src = self.root.text().to_string();
-                    let report: Report = ast_err.into();
-                    println!("{:?}", report.with_source_code(src));
+                    let _: Report = ast_err.into();
+                    let _ = self.root.text().to_string();
                     None
                 }
             })
@@ -77,7 +76,7 @@ pub mod tests {
             Recovered@4..5
                 Int@4..5 "9"
      */
-    fn try_from_var_def_malformed_with_no_name() {
+    fn try_from_let_binding_malformed_with_no_name() {
         let malformed = "let = 9";
         let root = ast_root_from(&malformed);
         let stmts = root.statements();

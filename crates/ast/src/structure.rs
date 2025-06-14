@@ -1,5 +1,6 @@
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{
+    bitset::SyntaxKindBitSet,
     language::{SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
@@ -9,8 +10,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        children_with_tokens_without_unwanted, first_child_of_kind_errs, get_children_in,
-        get_token_of_errs, get_tokens_in_errs,
+        filter_irrelevant_out, first_child_of_kind_errs, get_children_in,
+        get_kind_on_node_or_token, get_token_of_errs, get_tokens_in_errs,
     },
     types::Type,
 };
@@ -31,9 +32,11 @@ impl TryFrom<&SyntaxNode> for StructField {
     type Error = ASTError;
 
     fn try_from(field_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let mut types = SyntaxKind::types();
-        types.extend_from_slice([SyntaxKind::Ident, SyntaxKind::StructAsType].as_ref());
-        let idents = get_tokens_in_errs(field_node, types.as_ref())?;
+        let mut types: SyntaxKindBitSet = SyntaxKind::types().into();
+        types += [SyntaxKind::Ident, SyntaxKind::StructAsType]
+            .as_ref()
+            .into();
+        let idents = get_tokens_in_errs(field_node, types)?;
         if idents.is_empty() {
             return Err(ASTError::new(
                 field_node.text_range().into(),
@@ -84,10 +87,8 @@ impl TryFrom<&SyntaxNode> for StructFieldInit {
     type Error = ASTError;
 
     fn try_from(field_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        let field_name_and_value = children_with_tokens_without_unwanted(
-            field_node,
-            [SyntaxKind::Whitespace, SyntaxKind::Colon, SyntaxKind::Comma].as_ref(),
-        );
+        let field_name_and_value =
+            filter_irrelevant_out(field_node.children_with_tokens(), get_kind_on_node_or_token);
         if field_name_and_value.len() != 2 {
             return Err(ASTError::with_err_msg(
                 field_node.text_range().into(),

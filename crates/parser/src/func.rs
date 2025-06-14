@@ -4,10 +4,10 @@ use crate::{
     parse::{Element, Finished},
     parser::{IsNext, Parser},
 };
-use syntax::{Syntax, bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
+use syntax::{bitset::SyntaxKindBitSet, syntax_kind::SyntaxKind};
 
 use SyntaxKind::*;
-use thin_vec::{ThinVec, thin_vec};
+use thin_vec::thin_vec;
 
 impl Parser<'_> {
     // fn <ident>({parameters as CSV}) {-> RetType} {}
@@ -23,9 +23,7 @@ impl Parser<'_> {
         self.expect_and_bump(LParen);
         if !self.is_next(RParen) {
             let rollback_after_drop = self.impose_restrictions_of_kind_on_context(RParen);
-            self.parse_comma_separated_typed_declarations_until(|syntax: Syntax| {
-                !syntax.is_of_kind(RParen)
-            });
+            self.parse_comma_separated_typed_declarations_until(RParen);
         }
 
         let rollback_after_drop = self.impose_restrictions_of_kind_on_context(LBrace);
@@ -42,14 +40,8 @@ impl Parser<'_> {
         if self.is_next(RArrow) {
             let ret_type_marker = self.start();
             self.expect_and_bump(RArrow);
-            let rollback_after_drop =
-                self.impose_restrictions_of_currently_parsing_on_context(RetType);
-
-            if self.is_next(And) {
-                self.parse_prefix_unary_operation(And);
-            } else {
-                self.parse_left_hand_side();
-            }
+            let rollback_after_drop = self.impose_context_for_parsing(RetType);
+            self.parse_expression_until_binding_power(starting_precedence());
             self.complete_marker_with(ret_type_marker, RetType);
         }
     }
@@ -58,7 +50,7 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_lambda_def(&self) -> Option<Finished> {
         let marker = self.start();
-        let rollback_after_drop = self.impose_restrictions_of_currently_parsing_on_context(Lambda);
+        let rollback_after_drop = self.impose_context_for_parsing(Lambda);
 
         if self.is_next(OrOr) {
             self.expect_and_bump(OrOr);
@@ -67,9 +59,7 @@ impl Parser<'_> {
             if !self.is_next(Or) {
                 let rollback_after_drop = self.roll_back_context_after_drop();
                 self.dont_recover_in_ctx(Or);
-                self.parse_comma_separated_declarations_with_optional_type_declarations_until(
-                    |syntax: Syntax| !syntax.is_of_kind(Or),
-                );
+                self.parse_comma_separated_typed_declarations_until(Or);
             }
             self.expect_and_bump(Or);
         }
@@ -93,31 +83,14 @@ impl Parser<'_> {
         let rollback_after_drop = self.parsing(TyFn);
         let marker = self.start();
         self.expect_and_bump(KwFn);
-        {
-            let rollback_after_drop = self.impose_restrictions_of_kind_on_context(Ident);
-            self.expect_and_bump(Ident);
-        }
         self.expect_and_bump(LParen);
         if !self.is_next(RParen) {
             let rollback_after_drop = self.impose_restrictions_of_kind_on_context(RParen);
-            self.parse_comma_separated_types_until(|syntax: Syntax| !syntax.is_of_kind(RParen));
+            self.parse_comma_separated_types_until(RParen);
         }
 
         self.expect_and_bump(RParen);
-
-        if self.is_next(RArrow) {
-            let ret_type_marker = self.start();
-            self.expect_and_bump(RArrow);
-            let rollback_after_drop =
-                self.impose_restrictions_of_currently_parsing_on_context(RetType);
-
-            if self.is_next(And) {
-                self.parse_prefix_unary_operation(And);
-            } else {
-                self.parse_left_hand_side();
-            }
-            self.complete_marker_with(ret_type_marker, RetType);
-        }
+        self.parse_return_type_if_any();
 
         Some(self.complete_marker_with(marker, SyntaxKind::TyFn))
     }
@@ -127,146 +100,54 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_call(&self, marker: Marker<Incomplete>) -> Finished {
         self.expect_and_bump(LParen);
-        let rollback_when_dropped = self.impose_restrictions_of_currently_parsing_on_context(Call);
+        let rollback_when_dropped = self.impose_context_for_parsing(Call);
         self.parse_comma_separated_arguments_until(RParen);
         self.expect_and_bump(RParen);
         self.complete_marker_with(marker, Call)
     }
 
     #[allow(unused_variables)]
-    pub fn parse_comma_separated_types_until(&self, until_false: fn(Syntax) -> bool) {
-        let rollback_when_dropped =
-            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
+    pub fn parse_comma_separated_types_until(&self, until: impl Into<SyntaxKindBitSet>) {
+        let rollback_when_dropped = self.impose_context_for_parsing(ParamDecl);
         use Element::*;
 
-        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
-        let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-        let arg_elements = thin_vec![ref_mut_with(Branched(
-            thin_vec![KindAs(Ident, StructAsType)],
-            // thin_vec![InSet(types_set)],
-            thin_vec![ParseExprWith(starting_precedence())],
-        ))];
-
-        while let Some(Ok(peeked)) = self.peek() {
-            if !until_false(peeked.clone()) {
-                break;
-            }
-            self.parse_arg(&arg_elements);
-        }
+        let arg_elements = thin_vec![ParseExprWith(starting_precedence())];
+        self.bump_separated_by(&arg_elements, Comma, until);
     }
 
     #[allow(unused_variables)]
-    pub fn parse_comma_separated_typed_declarations_until(&self, until_false: fn(Syntax) -> bool) {
-        let rollback_when_dropped =
-            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
-        use Element::*;
-
-        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
-        let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-        let arg_elements = thin_vec![
-            Kind(Ident),
-            Kind(Colon),
-            ref_mut_with(Branched(
-                thin_vec![KindAs(Ident, StructAsType)],
-                // thin_vec![InSet(types_set)],
-                thin_vec![ParseExprWith(starting_precedence())],
-            ))
-        ];
-        let can_be_a_method = thin_vec![Branched(
-            thin_vec![ref_mut_with(KindWithMarker(Kwself, SelfRef))],
-            arg_elements.clone()
-        )];
-
-        self.parse_arg(&can_be_a_method);
-
-        while let Some(Ok(peeked)) = self.peek() {
-            if !until_false(peeked.clone()) {
-                break;
-            }
-            self.parse_arg(&arg_elements);
+    fn try_to_parse_ref_mut_self_ref_if_any(&self) {
+        if !self.is_next_in([And].as_ref().into()) {
+            return;
         }
-    }
-
-    #[allow(unused_variables)]
-    pub fn parse_comma_separated_declarations_with_optional_type_declarations_until(
-        &self,
-        until_false: fn(Syntax) -> bool,
-    ) {
-        let rollback_when_dropped =
-            self.impose_restrictions_of_currently_parsing_on_context(ParamDecl);
-        use Element::*;
-
-        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
-        let types_set: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-        let arg_elements = thin_vec![
-            Kind(Ident),
-            Branched(
-                thin_vec![
-                    Kind(Colon),
-                    ref_mut_with(Branched(
-                        thin_vec![KindAs(Ident, StructAsType)],
-                        thin_vec![ParseExprWith(starting_precedence())],
-                    ),)
-                ],
-                thin_vec![]
-            ),
-        ];
-
-        while let Some(Ok(peeked)) = self.peek() {
-            if !until_false(peeked.clone()) {
-                break;
-            }
-            self.parse_arg(&arg_elements);
-        }
-    }
-
-    fn parse_arg(&self, elements: &ThinVec<Element>) {
         let marker = self.start();
-        self.parse_possible_ref_mut_arg_and_elms(elements);
-        // since we stopped at Comma above, we need to consume Comma if there is one now to enable the following parse
-        self.ignore_if(Comma);
+        let rollback_when_dropped = self.by_forbidding_all();
+        self.allow_in_ctx([And, SelfRef, KwMut].as_ref());
+        self.parse_prefix_unary_operation(And);
         self.complete_marker_with(marker, ParamDecl);
+        self.bump_if(Comma);
     }
 
-    pub fn parse_possible_ref_mut_arg_and_elms(&self, elements: &ThinVec<Element>) {
-        if self.is_next(And) {
-            self.parse_ref_arg(elements);
-        } else if self.is_next(KwMut) {
-            self.parse_mut_arg(elements);
-        } else {
-            self.parse_arg_with(elements);
-        }
-    }
-    fn parse_ref_arg(&self, elements: &ThinVec<Element>) -> Finished {
-        let marker = self.start();
-        self.expect_and_bump(And);
-        if self.is_next(KwMut) {
-            self.parse_mut_arg(elements);
-        } else {
-            self.parse_arg_with(elements);
-        }
-        self.complete_marker_with(marker, PrefixUnaryOp)
-    }
+    #[allow(unused_variables)]
+    pub fn parse_comma_separated_typed_declarations_until(
+        &self,
+        until: impl Into<SyntaxKindBitSet>,
+    ) {
+        let rollback_when_dropped = self.impose_context_for_parsing(ParamDecl);
+        use Element::*;
+        self.try_to_parse_ref_mut_self_ref_if_any();
 
-    fn parse_mut_arg(&self, elements: &ThinVec<Element>) -> Finished {
-        let mut_marker = self.start();
-        self.expect_and_bump(KwMut);
-        self.parse_arg_with(elements);
-        self.complete_marker_with(mut_marker, Mut)
-    }
-
-    fn parse_arg_with(&self, elements: &ThinVec<Element>) {
-        self.parse_with(elements);
+        let arg_elements = thin_vec![ParseExprWith(starting_precedence())];
+        self.parse_separated_by(&arg_elements, ParamDecl, Comma, until);
     }
 
     #[allow(unused_variables)]
     pub fn parse_comma_separated_arguments_until(&self, unwanted: impl Into<SyntaxKindBitSet>) {
-        let rollback_when_dropped = self.impose_restrictions_of_currently_parsing_on_context(FnArg);
+        let rollback_when_dropped = self.impose_context_for_parsing(FnArg);
         use Element::*;
-        let ref_mut_with = |s: Element| RefMut(thin_vec![s]);
-        let can_be = thin_vec![ref_mut_with(ParseExprWith(starting_precedence()))];
 
-        self.parse_separated_by(&can_be, FnArg, Comma, unwanted);
+        let arg_elements = thin_vec![ParseExprWith(starting_precedence())];
+        self.parse_separated_by(&arg_elements, FnArg, Comma, unwanted);
     }
 }
 
@@ -290,32 +171,38 @@ mod tests {
         let params = "me:human, lang: Language, pet: Cat)";
         let parser = Parser::new(params);
         let root = parser.start();
-        parser.parse_comma_separated_typed_declarations_until(|syntax: Syntax| {
-            !syntax.is_of_kind(RParen)
-        });
+        parser.parse_comma_separated_typed_declarations_until(RParen);
         parser.complete_marker_with(root, Root);
         let lexer = parser.lexer.borrow();
         let sink = Sink::new(parser.event_holder.take().into(), lexer.source());
         let cst = ConcreteSyntaxTree::from(sink);
 
         let expect = expect![[r#"
-            Root@0..32
-              ParamDecl@0..8
-                Ident@0..2 "me"
-                Colon@2..3 ":"
-                StructAsType@3..8 "human"
-              Whitespace@8..9 " "
-              ParamDecl@9..23
-                Ident@9..13 "lang"
-                Colon@13..14 ":"
-                Whitespace@14..15 " "
-                StructAsType@15..23 "Language"
-              Whitespace@23..24 " "
-              ParamDecl@24..32
-                Ident@24..27 "pet"
-                Colon@27..28 ":"
-                Whitespace@28..29 " "
-                StructAsType@29..32 "Cat""#]];
+            Root@0..34
+              ParamDecl@0..9
+                TypeHint@0..8
+                  VarRef@0..2
+                    Ident@0..2 "me"
+                  Colon@2..3 ":"
+                  StructAsType@3..8 "human"
+                Comma@8..9 ","
+              Whitespace@9..10 " "
+              ParamDecl@10..25
+                TypeHint@10..24
+                  VarRef@10..14
+                    Ident@10..14 "lang"
+                  Colon@14..15 ":"
+                  Whitespace@15..16 " "
+                  StructAsType@16..24 "Language"
+                Comma@24..25 ","
+              Whitespace@25..26 " "
+              ParamDecl@26..34
+                TypeHint@26..34
+                  VarRef@26..29
+                    Ident@26..29 "pet"
+                  Colon@29..30 ":"
+                  Whitespace@30..31 " "
+                  StructAsType@31..34 "Cat""#]];
 
         let debug_tree = cst.debug_tree();
         expect.assert_eq(&debug_tree);
@@ -340,7 +227,7 @@ mod tests {
     lambda_with_no_parameters_not_handled: ("let empty = || {0}",
               expect![[r#"
                   Root@0..18
-                    VarDef@0..18
+                    LetBinding@0..18
                       KwLet@0..3 "let"
                       Whitespace@3..4 " "
                       InfixBinOp@4..18
@@ -363,7 +250,7 @@ mod tests {
         call_on_lambda_literal: ("let two = |a| {2*a}(1);",
               expect![[r#"
                   Root@0..23
-                    VarDef@0..23
+                    LetBinding@0..23
                       KwLet@0..3 "let"
                       Whitespace@3..4 " "
                       InfixBinOp@4..22
@@ -377,7 +264,8 @@ mod tests {
                             Lambda@10..19
                               Or@10..11 "|"
                               ParamDecl@11..12
-                                Ident@11..12 "a"
+                                VarRef@11..12
+                                  Ident@11..12 "a"
                               Or@12..13 "|"
                               Whitespace@13..14 " "
                               Block@14..19
@@ -406,9 +294,11 @@ mod tests {
                 Ident@3..8 "empty"
                 LParen@8..9 "("
                 ParamDecl@9..19
-                  Ident@9..15 "single"
-                  Colon@15..16 ":"
-                  TyI32@16..19 "i32"
+                  TypeHint@9..19
+                    VarRef@9..15
+                      Ident@9..15 "single"
+                    Colon@15..16 ":"
+                    TyI32@16..19 "i32"
                 RParen@19..20 ")"
                 Whitespace@20..21 " "
                 Block@21..23
@@ -419,7 +309,7 @@ mod tests {
     lambda_with_single_typeless_parameter: ("let identity = |s| {s};",
         expect![[r#"
             Root@0..23
-              VarDef@0..23
+              LetBinding@0..23
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..22
@@ -432,7 +322,8 @@ mod tests {
                     Lambda@15..22
                       Or@15..16 "|"
                       ParamDecl@16..17
-                        Ident@16..17 "s"
+                        VarRef@16..17
+                          Ident@16..17 "s"
                       Or@17..18 "|"
                       Whitespace@18..19 " "
                       Block@19..22
@@ -446,7 +337,7 @@ mod tests {
     lambda_with_single_type_hinted_parameter: ("let ident = |s:i32| {s};",
         expect![[r#"
             Root@0..24
-              VarDef@0..24
+              LetBinding@0..24
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..23
@@ -459,9 +350,11 @@ mod tests {
                     Lambda@12..23
                       Or@12..13 "|"
                       ParamDecl@13..18
-                        Ident@13..14 "s"
-                        Colon@14..15 ":"
-                        TyI32@15..18 "i32"
+                        TypeHint@13..18
+                          VarRef@13..14
+                            Ident@13..14 "s"
+                          Colon@14..15 ":"
+                          TyI32@15..18 "i32"
                       Or@18..19 "|"
                       Whitespace@19..20 " "
                       Block@20..23
@@ -470,6 +363,42 @@ mod tests {
                           Ident@21..22 "s"
                         RBrace@22..23 "}"
                 Semi@23..24 ";""#]],
+    ),
+    lambda_with_tuple_type_hinted_parameters: ("let ident = |s:(i32, char)| {s};",
+        expect![[r#"
+            Root@0..32
+              LetBinding@0..32
+                KwLet@0..3 "let"
+                Whitespace@3..4 " "
+                InfixBinOp@4..31
+                  VarRef@4..10
+                    Ident@4..9 "ident"
+                    Whitespace@9..10 " "
+                  Eq@10..11 "="
+                  Whitespace@11..12 " "
+                  Literal@12..31
+                    Lambda@12..31
+                      Or@12..13 "|"
+                      ParamDecl@13..26
+                        TypeHint@13..26
+                          VarRef@13..14
+                            Ident@13..14 "s"
+                          Colon@14..15 ":"
+                          Tuple@15..26
+                            LParen@15..16 "("
+                            TyI32@16..19 "i32"
+                            Comma@19..20 ","
+                            Whitespace@20..21 " "
+                            TyChar@21..25 "char"
+                            RParen@25..26 ")"
+                      Or@26..27 "|"
+                      Whitespace@27..28 " "
+                      Block@28..31
+                        LBrace@28..29 "{"
+                        VarRef@29..30
+                          Ident@29..30 "s"
+                        RBrace@30..31 "}"
+                Semi@31..32 ";""#]],
     ),
 
     function_def_with_fn_parameter: ("fn apply(f:fn(tensor)->tensor) {}",
@@ -481,19 +410,20 @@ mod tests {
                 Ident@3..8 "apply"
                 LParen@8..9 "("
                 ParamDecl@9..29
-                  Ident@9..10 "f"
-                  Colon@10..11 ":"
-                  TyFn@11..29
-                    KwFn@11..13 "fn"
-                    LParen@13..14 "("
-                    ParamDecl@14..20
+                  TypeHint@9..29
+                    VarRef@9..10
+                      Ident@9..10 "f"
+                    Colon@10..11 ":"
+                    TyFn@11..29
+                      KwFn@11..13 "fn"
+                      LParen@13..14 "("
                       TyTensor@14..20
                         KwTensor@14..20 "tensor"
-                    RParen@20..21 ")"
-                    RetType@21..29
-                      RArrow@21..23 "->"
-                      TyTensor@23..29
-                        KwTensor@23..29 "tensor"
+                      RParen@20..21 ")"
+                      RetType@21..29
+                        RArrow@21..23 "->"
+                        TyTensor@23..29
+                          KwTensor@23..29 "tensor"
                 RParen@29..30 ")"
                 Whitespace@30..31 " "
                 Block@31..33
@@ -503,152 +433,343 @@ mod tests {
 
     function_def_with_multiple_parameters: ("fn empty(first:i32, second:char, third: Structure) {}",
         expect![[r#"
-            Root@0..51
-              FnDef@0..51
+            Root@0..53
+              FnDef@0..53
                 KwFn@0..2 "fn"
                 Whitespace@2..3 " "
                 Ident@3..8 "empty"
                 LParen@8..9 "("
-                ParamDecl@9..18
-                  Ident@9..14 "first"
-                  Colon@14..15 ":"
-                  TyI32@15..18 "i32"
-                Whitespace@18..19 " "
-                ParamDecl@19..30
-                  Ident@19..25 "second"
-                  Colon@25..26 ":"
-                  TyChar@26..30 "char"
-                Whitespace@30..31 " "
-                ParamDecl@31..47
-                  Ident@31..36 "third"
-                  Colon@36..37 ":"
-                  Whitespace@37..38 " "
-                  StructAsType@38..47 "Structure"
-                RParen@47..48 ")"
-                Whitespace@48..49 " "
-                Block@49..51
-                  LBrace@49..50 "{"
-                  RBrace@50..51 "}""#]],
+                ParamDecl@9..19
+                  TypeHint@9..18
+                    VarRef@9..14
+                      Ident@9..14 "first"
+                    Colon@14..15 ":"
+                    TyI32@15..18 "i32"
+                  Comma@18..19 ","
+                Whitespace@19..20 " "
+                ParamDecl@20..32
+                  TypeHint@20..31
+                    VarRef@20..26
+                      Ident@20..26 "second"
+                    Colon@26..27 ":"
+                    TyChar@27..31 "char"
+                  Comma@31..32 ","
+                Whitespace@32..33 " "
+                ParamDecl@33..49
+                  TypeHint@33..49
+                    VarRef@33..38
+                      Ident@33..38 "third"
+                    Colon@38..39 ":"
+                    Whitespace@39..40 " "
+                    StructAsType@40..49 "Structure"
+                RParen@49..50 ")"
+                Whitespace@50..51 " "
+                Block@51..53
+                  LBrace@51..52 "{"
+                  RBrace@52..53 "}""#]],
+    ),
+    function_def_with_tuple_parameter: ("fn empty(first:(i32, char, Structure), third: Structure) {}",
+        expect![[r#"
+            Root@0..59
+              FnDef@0..59
+                KwFn@0..2 "fn"
+                Whitespace@2..3 " "
+                Ident@3..8 "empty"
+                LParen@8..9 "("
+                ParamDecl@9..38
+                  TypeHint@9..37
+                    VarRef@9..14
+                      Ident@9..14 "first"
+                    Colon@14..15 ":"
+                    Tuple@15..37
+                      LParen@15..16 "("
+                      TyI32@16..19 "i32"
+                      Comma@19..20 ","
+                      Whitespace@20..21 " "
+                      TyChar@21..25 "char"
+                      Comma@25..26 ","
+                      Whitespace@26..27 " "
+                      StructAsType@27..36 "Structure"
+                      RParen@36..37 ")"
+                  Comma@37..38 ","
+                Whitespace@38..39 " "
+                ParamDecl@39..55
+                  TypeHint@39..55
+                    VarRef@39..44
+                      Ident@39..44 "third"
+                    Colon@44..45 ":"
+                    Whitespace@45..46 " "
+                    StructAsType@46..55 "Structure"
+                RParen@55..56 ")"
+                Whitespace@56..57 " "
+                Block@57..59
+                  LBrace@57..58 "{"
+                  RBrace@58..59 "}""#]],
+    ),
+    function_def_with_multiple_parameters_returning_a_tuple: ("fn empty(first:i32, second:char, third: Structure) -> (i32, char, Structure) {}",
+        expect![[r#"
+            Root@0..79
+              FnDef@0..79
+                KwFn@0..2 "fn"
+                Whitespace@2..3 " "
+                Ident@3..8 "empty"
+                LParen@8..9 "("
+                ParamDecl@9..19
+                  TypeHint@9..18
+                    VarRef@9..14
+                      Ident@9..14 "first"
+                    Colon@14..15 ":"
+                    TyI32@15..18 "i32"
+                  Comma@18..19 ","
+                Whitespace@19..20 " "
+                ParamDecl@20..32
+                  TypeHint@20..31
+                    VarRef@20..26
+                      Ident@20..26 "second"
+                    Colon@26..27 ":"
+                    TyChar@27..31 "char"
+                  Comma@31..32 ","
+                Whitespace@32..33 " "
+                ParamDecl@33..49
+                  TypeHint@33..49
+                    VarRef@33..38
+                      Ident@33..38 "third"
+                    Colon@38..39 ":"
+                    Whitespace@39..40 " "
+                    StructAsType@40..49 "Structure"
+                RParen@49..50 ")"
+                Whitespace@50..51 " "
+                RetType@51..77
+                  RArrow@51..53 "->"
+                  Whitespace@53..54 " "
+                  Tuple@54..76
+                    LParen@54..55 "("
+                    TyI32@55..58 "i32"
+                    Comma@58..59 ","
+                    Whitespace@59..60 " "
+                    TyChar@60..64 "char"
+                    Comma@64..65 ","
+                    Whitespace@65..66 " "
+                    StructAsType@66..75 "Structure"
+                    RParen@75..76 ")"
+                  Whitespace@76..77 " "
+                Block@77..79
+                  LBrace@77..78 "{"
+                  RBrace@78..79 "}""#]],
     ),
     lambda_with_multiple_type_hinted_parameters: ("let tri = |first:i32, second:char, third: Structure| { third.juggle(first, second) }",
         expect![[r#"
-            Root@0..82
-              VarDef@0..82
+            Root@0..84
+              LetBinding@0..84
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
-                InfixBinOp@4..82
+                InfixBinOp@4..84
                   VarRef@4..8
                     Ident@4..7 "tri"
                     Whitespace@7..8 " "
                   Eq@8..9 "="
                   Whitespace@9..10 " "
-                  Literal@10..82
-                    Lambda@10..82
+                  Literal@10..84
+                    Lambda@10..84
                       Or@10..11 "|"
-                      ParamDecl@11..20
-                        Ident@11..16 "first"
-                        Colon@16..17 ":"
-                        TyI32@17..20 "i32"
-                      Whitespace@20..21 " "
-                      ParamDecl@21..32
-                        Ident@21..27 "second"
-                        Colon@27..28 ":"
-                        TyChar@28..32 "char"
-                      Whitespace@32..33 " "
-                      ParamDecl@33..49
-                        Ident@33..38 "third"
-                        Colon@38..39 ":"
-                        Whitespace@39..40 " "
-                        StructAsType@40..49 "Structure"
-                      Or@49..50 "|"
-                      Whitespace@50..51 " "
-                      Block@51..82
-                        LBrace@51..52 "{"
-                        Whitespace@52..53 " "
-                        InfixBinOp@53..81
-                          VarRef@53..58
-                            Ident@53..58 "third"
-                          Dot@58..59 "."
-                          Call@59..80
-                            Ident@59..65 "juggle"
-                            LParen@65..66 "("
-                            FnArg@66..72
-                              VarRef@66..71
-                                Ident@66..71 "first"
-                              Comma@71..72 ","
-                            Whitespace@72..73 " "
-                            FnArg@73..79
-                              VarRef@73..79
-                                Ident@73..79 "second"
-                            RParen@79..80 ")"
-                          Whitespace@80..81 " "
-                        RBrace@81..82 "}""#]],
+                      ParamDecl@11..21
+                        TypeHint@11..20
+                          VarRef@11..16
+                            Ident@11..16 "first"
+                          Colon@16..17 ":"
+                          TyI32@17..20 "i32"
+                        Comma@20..21 ","
+                      Whitespace@21..22 " "
+                      ParamDecl@22..34
+                        TypeHint@22..33
+                          VarRef@22..28
+                            Ident@22..28 "second"
+                          Colon@28..29 ":"
+                          TyChar@29..33 "char"
+                        Comma@33..34 ","
+                      Whitespace@34..35 " "
+                      ParamDecl@35..51
+                        TypeHint@35..51
+                          VarRef@35..40
+                            Ident@35..40 "third"
+                          Colon@40..41 ":"
+                          Whitespace@41..42 " "
+                          StructAsType@42..51 "Structure"
+                      Or@51..52 "|"
+                      Whitespace@52..53 " "
+                      Block@53..84
+                        LBrace@53..54 "{"
+                        Whitespace@54..55 " "
+                        InfixBinOp@55..83
+                          VarRef@55..60
+                            Ident@55..60 "third"
+                          Dot@60..61 "."
+                          Call@61..82
+                            Ident@61..67 "juggle"
+                            LParen@67..68 "("
+                            FnArg@68..74
+                              VarRef@68..73
+                                Ident@68..73 "first"
+                              Comma@73..74 ","
+                            Whitespace@74..75 " "
+                            FnArg@75..81
+                              VarRef@75..81
+                                Ident@75..81 "second"
+                            RParen@81..82 ")"
+                          Whitespace@82..83 " "
+                        RBrace@83..84 "}""#]],
+    ),
+
+    lambda_with_multiple_type_hinted_parameters_returning_a_tuple: ("let tri = |first:i32, second:char, third: Structure| -> (i32, char, Structure) { third.juggle(first, second) }",
+        expect![[r#"
+            Root@0..110
+              LetBinding@0..110
+                KwLet@0..3 "let"
+                Whitespace@3..4 " "
+                InfixBinOp@4..110
+                  VarRef@4..8
+                    Ident@4..7 "tri"
+                    Whitespace@7..8 " "
+                  Eq@8..9 "="
+                  Whitespace@9..10 " "
+                  Literal@10..110
+                    Lambda@10..110
+                      Or@10..11 "|"
+                      ParamDecl@11..21
+                        TypeHint@11..20
+                          VarRef@11..16
+                            Ident@11..16 "first"
+                          Colon@16..17 ":"
+                          TyI32@17..20 "i32"
+                        Comma@20..21 ","
+                      Whitespace@21..22 " "
+                      ParamDecl@22..34
+                        TypeHint@22..33
+                          VarRef@22..28
+                            Ident@22..28 "second"
+                          Colon@28..29 ":"
+                          TyChar@29..33 "char"
+                        Comma@33..34 ","
+                      Whitespace@34..35 " "
+                      ParamDecl@35..51
+                        TypeHint@35..51
+                          VarRef@35..40
+                            Ident@35..40 "third"
+                          Colon@40..41 ":"
+                          Whitespace@41..42 " "
+                          StructAsType@42..51 "Structure"
+                      Or@51..52 "|"
+                      Whitespace@52..53 " "
+                      RetType@53..79
+                        RArrow@53..55 "->"
+                        Whitespace@55..56 " "
+                        Tuple@56..78
+                          LParen@56..57 "("
+                          TyI32@57..60 "i32"
+                          Comma@60..61 ","
+                          Whitespace@61..62 " "
+                          TyChar@62..66 "char"
+                          Comma@66..67 ","
+                          Whitespace@67..68 " "
+                          StructAsType@68..77 "Structure"
+                          RParen@77..78 ")"
+                        Whitespace@78..79 " "
+                      Block@79..110
+                        LBrace@79..80 "{"
+                        Whitespace@80..81 " "
+                        InfixBinOp@81..109
+                          VarRef@81..86
+                            Ident@81..86 "third"
+                          Dot@86..87 "."
+                          Call@87..108
+                            Ident@87..93 "juggle"
+                            LParen@93..94 "("
+                            FnArg@94..100
+                              VarRef@94..99
+                                Ident@94..99 "first"
+                              Comma@99..100 ","
+                            Whitespace@100..101 " "
+                            FnArg@101..107
+                              VarRef@101..107
+                                Ident@101..107 "second"
+                            RParen@107..108 ")"
+                          Whitespace@108..109 " "
+                        RBrace@109..110 "}""#]],
     ),
 
     lambda_with_mixed_parameters: ("let tri = |typeless, primitive:char, structure: Structure, another_typles| { structure.juggle(typeless, primitive,another_typles) }",
         expect![[r#"
-            Root@0..128
-              VarDef@0..128
+            Root@0..131
+              LetBinding@0..131
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
-                InfixBinOp@4..128
+                InfixBinOp@4..131
                   VarRef@4..8
                     Ident@4..7 "tri"
                     Whitespace@7..8 " "
                   Eq@8..9 "="
                   Whitespace@9..10 " "
-                  Literal@10..128
-                    Lambda@10..128
+                  Literal@10..131
+                    Lambda@10..131
                       Or@10..11 "|"
-                      ParamDecl@11..19
-                        Ident@11..19 "typeless"
-                      Whitespace@19..20 " "
-                      ParamDecl@20..34
-                        Ident@20..29 "primitive"
-                        Colon@29..30 ":"
-                        TyChar@30..34 "char"
-                      Whitespace@34..35 " "
-                      ParamDecl@35..55
-                        Ident@35..44 "structure"
-                        Colon@44..45 ":"
-                        Whitespace@45..46 " "
-                        StructAsType@46..55 "Structure"
-                      Whitespace@55..56 " "
-                      ParamDecl@56..70
-                        Ident@56..70 "another_typles"
-                      Or@70..71 "|"
-                      Whitespace@71..72 " "
-                      Block@72..128
-                        LBrace@72..73 "{"
-                        Whitespace@73..74 " "
-                        InfixBinOp@74..127
-                          VarRef@74..83
-                            Ident@74..83 "structure"
-                          Dot@83..84 "."
-                          Call@84..126
-                            Ident@84..90 "juggle"
-                            LParen@90..91 "("
-                            FnArg@91..100
-                              VarRef@91..99
-                                Ident@91..99 "typeless"
-                              Comma@99..100 ","
-                            Whitespace@100..101 " "
-                            FnArg@101..111
-                              VarRef@101..110
-                                Ident@101..110 "primitive"
-                              Comma@110..111 ","
-                            FnArg@111..125
-                              VarRef@111..125
-                                Ident@111..125 "another_typles"
-                            RParen@125..126 ")"
-                          Whitespace@126..127 " "
-                        RBrace@127..128 "}""#]],
+                      ParamDecl@11..20
+                        VarRef@11..19
+                          Ident@11..19 "typeless"
+                        Comma@19..20 ","
+                      Whitespace@20..21 " "
+                      ParamDecl@21..36
+                        TypeHint@21..35
+                          VarRef@21..30
+                            Ident@21..30 "primitive"
+                          Colon@30..31 ":"
+                          TyChar@31..35 "char"
+                        Comma@35..36 ","
+                      Whitespace@36..37 " "
+                      ParamDecl@37..58
+                        TypeHint@37..57
+                          VarRef@37..46
+                            Ident@37..46 "structure"
+                          Colon@46..47 ":"
+                          Whitespace@47..48 " "
+                          StructAsType@48..57 "Structure"
+                        Comma@57..58 ","
+                      Whitespace@58..59 " "
+                      ParamDecl@59..73
+                        VarRef@59..73
+                          Ident@59..73 "another_typles"
+                      Or@73..74 "|"
+                      Whitespace@74..75 " "
+                      Block@75..131
+                        LBrace@75..76 "{"
+                        Whitespace@76..77 " "
+                        InfixBinOp@77..130
+                          VarRef@77..86
+                            Ident@77..86 "structure"
+                          Dot@86..87 "."
+                          Call@87..129
+                            Ident@87..93 "juggle"
+                            LParen@93..94 "("
+                            FnArg@94..103
+                              VarRef@94..102
+                                Ident@94..102 "typeless"
+                              Comma@102..103 ","
+                            Whitespace@103..104 " "
+                            FnArg@104..114
+                              VarRef@104..113
+                                Ident@104..113 "primitive"
+                              Comma@113..114 ","
+                            FnArg@114..128
+                              VarRef@114..128
+                                Ident@114..128 "another_typles"
+                            RParen@128..129 ")"
+                          Whitespace@129..130 " "
+                        RBrace@130..131 "}""#]],
     ),
 
     lambda_returnin_another_lambda: ("let inception = |typeless| { |t| {t.steal_type(typeless)} }",
         expect![[r#"
             Root@0..59
-              VarDef@0..59
+              LetBinding@0..59
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..59
@@ -661,7 +782,8 @@ mod tests {
                     Lambda@16..59
                       Or@16..17 "|"
                       ParamDecl@17..25
-                        Ident@17..25 "typeless"
+                        VarRef@17..25
+                          Ident@17..25 "typeless"
                       Or@25..26 "|"
                       Whitespace@26..27 " "
                       Block@27..59
@@ -671,7 +793,8 @@ mod tests {
                           Lambda@29..57
                             Or@29..30 "|"
                             ParamDecl@30..31
-                              Ident@30..31 "t"
+                              VarRef@30..31
+                                Ident@30..31 "t"
                             Or@31..32 "|"
                             Whitespace@32..33 " "
                             Block@33..57
@@ -694,124 +817,134 @@ mod tests {
 
     function_def_with_multiple_parameters_with_actual_body: ("fn empty(first:i32, second:char) -> bool {let sum_1 = first + second; let sum_2 = second+first; first == check}",
               expect![[r#"
-                  Root@0..110
-                    FnDef@0..110
+                  Root@0..111
+                    FnDef@0..111
                       KwFn@0..2 "fn"
                       Whitespace@2..3 " "
                       Ident@3..8 "empty"
                       LParen@8..9 "("
-                      ParamDecl@9..18
-                        Ident@9..14 "first"
-                        Colon@14..15 ":"
-                        TyI32@15..18 "i32"
-                      Whitespace@18..19 " "
-                      ParamDecl@19..30
-                        Ident@19..25 "second"
-                        Colon@25..26 ":"
-                        TyChar@26..30 "char"
-                      RParen@30..31 ")"
-                      Whitespace@31..32 " "
-                      RetType@32..39
-                        RArrow@32..34 "->"
-                        Whitespace@34..35 " "
-                        TyBool@35..39 "bool"
-                      Block@39..110
-                        Whitespace@39..40 " "
-                        LBrace@40..41 "{"
-                        VarDef@41..68
-                          KwLet@41..44 "let"
-                          Whitespace@44..45 " "
-                          InfixBinOp@45..67
-                            VarRef@45..51
-                              Ident@45..50 "sum_1"
-                              Whitespace@50..51 " "
-                            Eq@51..52 "="
-                            Whitespace@52..53 " "
-                            InfixBinOp@53..67
-                              VarRef@53..59
-                                Ident@53..58 "first"
-                                Whitespace@58..59 " "
-                              Plus@59..60 "+"
-                              Whitespace@60..61 " "
-                              VarRef@61..67
-                                Ident@61..67 "second"
-                          Semi@67..68 ";"
-                        Whitespace@68..69 " "
-                        VarDef@69..94
-                          KwLet@69..72 "let"
-                          Whitespace@72..73 " "
-                          InfixBinOp@73..93
-                            VarRef@73..79
-                              Ident@73..78 "sum_2"
-                              Whitespace@78..79 " "
-                            Eq@79..80 "="
-                            Whitespace@80..81 " "
-                            InfixBinOp@81..93
-                              VarRef@81..87
-                                Ident@81..87 "second"
-                              Plus@87..88 "+"
-                              VarRef@88..93
-                                Ident@88..93 "first"
-                          Semi@93..94 ";"
-                        Whitespace@94..95 " "
-                        InfixBinOp@95..109
-                          VarRef@95..101
-                            Ident@95..100 "first"
-                            Whitespace@100..101 " "
-                          EqEq@101..103 "=="
-                          Whitespace@103..104 " "
-                          VarRef@104..109
-                            Ident@104..109 "check"
-                        RBrace@109..110 "}""#]],
+                      ParamDecl@9..19
+                        TypeHint@9..18
+                          VarRef@9..14
+                            Ident@9..14 "first"
+                          Colon@14..15 ":"
+                          TyI32@15..18 "i32"
+                        Comma@18..19 ","
+                      Whitespace@19..20 " "
+                      ParamDecl@20..31
+                        TypeHint@20..31
+                          VarRef@20..26
+                            Ident@20..26 "second"
+                          Colon@26..27 ":"
+                          TyChar@27..31 "char"
+                      RParen@31..32 ")"
+                      Whitespace@32..33 " "
+                      RetType@33..40
+                        RArrow@33..35 "->"
+                        Whitespace@35..36 " "
+                        TyBool@36..40 "bool"
+                      Block@40..111
+                        Whitespace@40..41 " "
+                        LBrace@41..42 "{"
+                        LetBinding@42..69
+                          KwLet@42..45 "let"
+                          Whitespace@45..46 " "
+                          InfixBinOp@46..68
+                            VarRef@46..52
+                              Ident@46..51 "sum_1"
+                              Whitespace@51..52 " "
+                            Eq@52..53 "="
+                            Whitespace@53..54 " "
+                            InfixBinOp@54..68
+                              VarRef@54..60
+                                Ident@54..59 "first"
+                                Whitespace@59..60 " "
+                              Plus@60..61 "+"
+                              Whitespace@61..62 " "
+                              VarRef@62..68
+                                Ident@62..68 "second"
+                          Semi@68..69 ";"
+                        Whitespace@69..70 " "
+                        LetBinding@70..95
+                          KwLet@70..73 "let"
+                          Whitespace@73..74 " "
+                          InfixBinOp@74..94
+                            VarRef@74..80
+                              Ident@74..79 "sum_2"
+                              Whitespace@79..80 " "
+                            Eq@80..81 "="
+                            Whitespace@81..82 " "
+                            InfixBinOp@82..94
+                              VarRef@82..88
+                                Ident@82..88 "second"
+                              Plus@88..89 "+"
+                              VarRef@89..94
+                                Ident@89..94 "first"
+                          Semi@94..95 ";"
+                        Whitespace@95..96 " "
+                        InfixBinOp@96..110
+                          VarRef@96..102
+                            Ident@96..101 "first"
+                            Whitespace@101..102 " "
+                          EqEq@102..104 "=="
+                          Whitespace@104..105 " "
+                          VarRef@105..110
+                            Ident@105..110 "check"
+                        RBrace@110..111 "}""#]],
     ),
 
     fn_with_return: ("fn sum(a:tensor, b:tensor) -> tensor{ return a+b; }",
               expect![[r#"
-                  Root@0..50
-                    FnDef@0..50
+                  Root@0..51
+                    FnDef@0..51
                       KwFn@0..2 "fn"
                       Whitespace@2..3 " "
                       Ident@3..6 "sum"
                       LParen@6..7 "("
-                      ParamDecl@7..15
-                        Ident@7..8 "a"
-                        Colon@8..9 ":"
-                        TyTensor@9..15
-                          KwTensor@9..15 "tensor"
-                      Whitespace@15..16 " "
-                      ParamDecl@16..24
-                        Ident@16..17 "b"
-                        Colon@17..18 ":"
-                        TyTensor@18..24
-                          KwTensor@18..24 "tensor"
-                      RParen@24..25 ")"
-                      Whitespace@25..26 " "
-                      RetType@26..35
-                        RArrow@26..28 "->"
-                        Whitespace@28..29 " "
-                        TyTensor@29..35
-                          KwTensor@29..35 "tensor"
-                      Block@35..50
-                        LBrace@35..36 "{"
-                        Whitespace@36..37 " "
-                        Return@37..48
-                          KwReturn@37..43 "return"
-                          Whitespace@43..44 " "
-                          InfixBinOp@44..47
-                            VarRef@44..45
-                              Ident@44..45 "a"
-                            Plus@45..46 "+"
-                            VarRef@46..47
-                              Ident@46..47 "b"
-                          Semi@47..48 ";"
-                        Whitespace@48..49 " "
-                        RBrace@49..50 "}""#]],
+                      ParamDecl@7..16
+                        TypeHint@7..15
+                          VarRef@7..8
+                            Ident@7..8 "a"
+                          Colon@8..9 ":"
+                          TyTensor@9..15
+                            KwTensor@9..15 "tensor"
+                        Comma@15..16 ","
+                      Whitespace@16..17 " "
+                      ParamDecl@17..25
+                        TypeHint@17..25
+                          VarRef@17..18
+                            Ident@17..18 "b"
+                          Colon@18..19 ":"
+                          TyTensor@19..25
+                            KwTensor@19..25 "tensor"
+                      RParen@25..26 ")"
+                      Whitespace@26..27 " "
+                      RetType@27..36
+                        RArrow@27..29 "->"
+                        Whitespace@29..30 " "
+                        TyTensor@30..36
+                          KwTensor@30..36 "tensor"
+                      Block@36..51
+                        LBrace@36..37 "{"
+                        Whitespace@37..38 " "
+                        Return@38..49
+                          KwReturn@38..44 "return"
+                          Whitespace@44..45 " "
+                          InfixBinOp@45..48
+                            VarRef@45..46
+                              Ident@45..46 "a"
+                            Plus@46..47 "+"
+                            VarRef@47..48
+                              Ident@47..48 "b"
+                          Semi@48..49 ";"
+                        Whitespace@49..50 " "
+                        RBrace@50..51 "}""#]],
     ),
 
-    fn_with_ref_mut_self: ("fn translate(&mut self, by: Point) { self.x += by.x; self.y += by.y;}",
+    fn_with_ref_mut_self: ("fn translate(&mut self, mut by: Point) { self.x += by.x; self.y += by.y;}",
             expect![[r#"
-                Root@0..68
-                  FnDef@0..68
+                Root@0..73
+                  FnDef@0..73
                     KwFn@0..2 "fn"
                     Whitespace@2..3 " "
                     Ident@3..12 "translate"
@@ -824,61 +957,67 @@ mod tests {
                           Whitespace@17..18 " "
                           SelfRef@18..22
                             Kwself@18..22 "self"
-                    Whitespace@22..23 " "
-                    ParamDecl@23..32
-                      Ident@23..25 "by"
-                      Colon@25..26 ":"
-                      Whitespace@26..27 " "
-                      StructAsType@27..32 "Point"
-                    RParen@32..33 ")"
-                    Whitespace@33..34 " "
-                    Block@34..68
-                      LBrace@34..35 "{"
-                      Whitespace@35..36 " "
-                      Semi@36..51
-                        InfixBinOp@36..50
-                          InfixBinOp@36..43
-                            SelfRef@36..40
-                              Kwself@36..40 "self"
-                            Dot@40..41 "."
-                            VarRef@41..43
-                              Ident@41..42 "x"
-                              Whitespace@42..43 " "
-                          PlusEq@43..45 "+="
-                          Whitespace@45..46 " "
-                          InfixBinOp@46..50
+                    Comma@22..23 ","
+                    Whitespace@23..24 " "
+                    ParamDecl@24..37
+                      TypeHint@24..37
+                        Mut@24..30
+                          KwMut@24..27 "mut"
+                          Whitespace@27..28 " "
+                          VarRef@28..30
+                            Ident@28..30 "by"
+                        Colon@30..31 ":"
+                        Whitespace@31..32 " "
+                        StructAsType@32..37 "Point"
+                    RParen@37..38 ")"
+                    Whitespace@38..39 " "
+                    Block@39..73
+                      LBrace@39..40 "{"
+                      Whitespace@40..41 " "
+                      Semi@41..56
+                        InfixBinOp@41..55
+                          InfixBinOp@41..48
+                            SelfRef@41..45
+                              Kwself@41..45 "self"
+                            Dot@45..46 "."
                             VarRef@46..48
-                              Ident@46..48 "by"
-                            Dot@48..49 "."
-                            VarRef@49..50
-                              Ident@49..50 "x"
-                        Semi@50..51 ";"
-                      Whitespace@51..52 " "
-                      Semi@52..67
-                        InfixBinOp@52..66
-                          InfixBinOp@52..59
-                            SelfRef@52..56
-                              Kwself@52..56 "self"
-                            Dot@56..57 "."
-                            VarRef@57..59
-                              Ident@57..58 "y"
-                              Whitespace@58..59 " "
-                          PlusEq@59..61 "+="
-                          Whitespace@61..62 " "
-                          InfixBinOp@62..66
+                              Ident@46..47 "x"
+                              Whitespace@47..48 " "
+                          PlusEq@48..50 "+="
+                          Whitespace@50..51 " "
+                          InfixBinOp@51..55
+                            VarRef@51..53
+                              Ident@51..53 "by"
+                            Dot@53..54 "."
+                            VarRef@54..55
+                              Ident@54..55 "x"
+                        Semi@55..56 ";"
+                      Whitespace@56..57 " "
+                      Semi@57..72
+                        InfixBinOp@57..71
+                          InfixBinOp@57..64
+                            SelfRef@57..61
+                              Kwself@57..61 "self"
+                            Dot@61..62 "."
                             VarRef@62..64
-                              Ident@62..64 "by"
-                            Dot@64..65 "."
-                            VarRef@65..66
-                              Ident@65..66 "y"
-                        Semi@66..67 ";"
-                      RBrace@67..68 "}""#]],
+                              Ident@62..63 "y"
+                              Whitespace@63..64 " "
+                          PlusEq@64..66 "+="
+                          Whitespace@66..67 " "
+                          InfixBinOp@67..71
+                            VarRef@67..69
+                              Ident@67..69 "by"
+                            Dot@69..70 "."
+                            VarRef@70..71
+                              Ident@70..71 "y"
+                        Semi@71..72 ";"
+                      RBrace@72..73 "}""#]],
     ),
 
     lambda_with_ref_mut_parameter: ("let like_a_method = |s:&mut Structure| {s.mutate()};",
         expect![[r#"
             Root@0..52
-              VarDef@0..52
+              LetBinding@0..52
                 KwLet@0..3 "let"
                 Whitespace@3..4 " "
                 InfixBinOp@4..51
@@ -891,14 +1030,16 @@ mod tests {
                     Lambda@20..51
                       Or@20..21 "|"
                       ParamDecl@21..37
-                        Ident@21..22 "s"
-                        Colon@22..23 ":"
-                        PrefixUnaryOp@23..37
-                          And@23..24 "&"
-                          Mut@24..37
-                            KwMut@24..27 "mut"
-                            Whitespace@27..28 " "
-                            StructAsType@28..37 "Structure"
+                        TypeHint@21..37
+                          VarRef@21..22
+                            Ident@21..22 "s"
+                          Colon@22..23 ":"
+                          PrefixUnaryOp@23..37
+                            And@23..24 "&"
+                            Mut@24..37
+                              KwMut@24..27 "mut"
+                              Whitespace@27..28 " "
+                              StructAsType@28..37 "Structure"
                       Or@37..38 "|"
                       Whitespace@38..39 " "
                       Block@39..51
@@ -917,8 +1058,8 @@ mod tests {
 
     fn_with_ref_mut_param: ("fn translate(&mut self, by: &mut Point) { }",
             expect![[r#"
-                Root@0..42
-                  FnDef@0..42
+                Root@0..43
+                  FnDef@0..43
                     KwFn@0..2 "fn"
                     Whitespace@2..3 " "
                     Ident@3..12 "translate"
@@ -931,23 +1072,26 @@ mod tests {
                           Whitespace@17..18 " "
                           SelfRef@18..22
                             Kwself@18..22 "self"
-                    Whitespace@22..23 " "
-                    ParamDecl@23..37
-                      Ident@23..25 "by"
-                      Colon@25..26 ":"
-                      Whitespace@26..27 " "
-                      PrefixUnaryOp@27..37
-                        And@27..28 "&"
-                        Mut@28..37
-                          KwMut@28..31 "mut"
-                          Whitespace@31..32 " "
-                          StructAsType@32..37 "Point"
-                    RParen@37..38 ")"
-                    Whitespace@38..39 " "
-                    Block@39..42
-                      LBrace@39..40 "{"
-                      Whitespace@40..41 " "
-                      RBrace@41..42 "}""#]],
+                    Comma@22..23 ","
+                    Whitespace@23..24 " "
+                    ParamDecl@24..38
+                      TypeHint@24..38
+                        VarRef@24..26
+                          Ident@24..26 "by"
+                        Colon@26..27 ":"
+                        Whitespace@27..28 " "
+                        PrefixUnaryOp@28..38
+                          And@28..29 "&"
+                          Mut@29..38
+                            KwMut@29..32 "mut"
+                            Whitespace@32..33 " "
+                            StructAsType@33..38 "Point"
+                    RParen@38..39 ")"
+                    Whitespace@39..40 " "
+                    Block@40..43
+                      LBrace@40..41 "{"
+                      Whitespace@41..42 " "
+                      RBrace@42..43 "}""#]],
     ),
 
     function_call_with_single_parameter: ("empty(single)",
@@ -971,15 +1115,15 @@ mod tests {
                 FnArg@6..18
                   PrefixUnaryOp@6..18
                     And@6..7 "&"
-                    Mut@7..18
-                      KwMut@7..10 "mut"
-                      Whitespace@10..11 " "
-                      InfixBinOp@11..18
+                    InfixBinOp@7..18
+                      Mut@7..13
+                        KwMut@7..10 "mut"
+                        Whitespace@10..11 " "
                         VarRef@11..13
                           Ident@11..13 "me"
-                        Dot@13..14 "."
-                        VarRef@14..18
-                          Ident@14..18 "mine"
+                      Dot@13..14 "."
+                      VarRef@14..18
+                        Ident@14..18 "mine"
                 RParen@18..19 ")""#]],
     ),
 

@@ -4,9 +4,10 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     climbing::climb,
-    container_ref::ContainerRef,
-    delimited::{Block, Indexing, Paren},
+    delimited::{Block, Paren, Tuple},
     function::{Call, MayNeedResolution},
+    indexing::Indexing,
+    let_binding::{LetBinding, VarRef},
     literal::Literal,
     mutable::Mut,
     operation::{BinaryInfix, Unary},
@@ -16,13 +17,11 @@ use crate::{
     structure::StructRef,
     typing::hindley_milner::types::Type,
     unwrap_or_err,
-    variable::VarRef,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Expr {
     Block(Block),
-    ContainerRef(Reference<ContainerRef>),
     FnCall(Reference<Call>),
     LitCall(Call),
     Indexing(Indexing),
@@ -33,8 +32,10 @@ pub enum Expr {
     Paren(Paren),
     SelfRef(SelfRef),
     StructRef(Reference<StructRef>),
+    Tuple(Tuple),
     Unary(Unary),
-    VarRef(Reference<VarRef>),
+    Unit,
+    VarRef(Reference<LetBinding>),
 }
 
 pub const MISSING: u32 = 0;
@@ -87,11 +88,6 @@ impl HIRBuilder {
     pub fn lower_expr_as_idx(&mut self, from: &ASTExpr) -> HIRResult<ExprIdx> {
         let expr = match from {
             ASTExpr::Block(block) => Expr::Block(self.lower_block(block)?),
-            ASTExpr::ContainerRef(container_ref) => {
-                let unresolved = self.lower_container_ref(container_ref)?;
-                let idx = self.allocate_for_resolution(unresolved);
-                Expr::ContainerRef(Reference::Unresolved(idx))
-            }
             ASTExpr::Call(fn_call) => match self.lower_call(fn_call)? {
                 MayNeedResolution::Yes(unresolved) => {
                     let idx = self.allocate_for_resolution(unresolved);
@@ -105,6 +101,8 @@ impl HIRBuilder {
             ASTExpr::Mut(mutable) => Expr::Mut(self.lower_mut(mutable)?),
             ASTExpr::Paren(paren) => Expr::Paren(self.lower_paren(paren)?),
             ASTExpr::SelfRef(self_ref) => Expr::SelfRef(self.lower_self_ref(self_ref)?),
+            ASTExpr::Tuple(tuple) => Expr::Tuple(self.lower_tuple(tuple)?),
+            ASTExpr::Unit => Expr::Unit,
             ASTExpr::Unary(unary) => Expr::Unary(self.lower_unary_operation(unary)?),
             ASTExpr::VarRef(var_ref) => {
                 let unresolved = self.lower_var_ref(var_ref)?;

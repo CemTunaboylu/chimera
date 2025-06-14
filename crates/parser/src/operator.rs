@@ -76,7 +76,8 @@ pub enum Precedence {
     // unary operators : *(deref), &(ref), -, !(not)
     Prefix,
     // coupling operators that couple its operands:
-    // .(member) , :(typing), ::(namespace), ?(unwrap)
+    // .(member) , :(typing), ::(namespace)
+    // and postfix operators: ?(unwrap) [ ] (indexing)
     Coupling,
 }
 
@@ -114,18 +115,18 @@ impl Op for AssocBinOp {
         use AssocBinOp::*;
         use Precedence::*;
         match self {
-            Assgmt | AssgmtWith(_) => Assignment,
-            Range => Ranging,
-            BoolOr => BooleanOr,
-            BoolAnd => BooleanAnd,
-            EqEq | Gt | Ge | Lt | Le | NotEq => Comparison,
-            BitOr => BitwiseOr,
-            Xor => BitwiseXor,
-            BitAnd => BitwiseAnd,
-            LShift | RShift => Shift,
             Add | Sub => Additive,
-            Mul | Div | Mod => Multiplicative,
+            Assgmt | AssgmtWith(_) => Assignment,
+            BitAnd => BitwiseAnd,
+            BitOr => BitwiseOr,
+            BoolAnd => BooleanAnd,
+            BoolOr => BooleanOr,
             Dot | TypeHint | Namespaced => Coupling,
+            EqEq | Gt | Ge | Lt | Le | NotEq => Comparison,
+            LShift | RShift => Shift,
+            Mul | Div | Mod => Multiplicative,
+            Range => Ranging,
+            Xor => BitwiseXor,
         }
     }
 
@@ -192,7 +193,11 @@ impl Op for AssocBinOp {
 #[allow(clippy::from_over_into)]
 impl Into<SyntaxKind> for AssocBinOp {
     fn into(self) -> SyntaxKind {
-        SyntaxKind::InfixBinOp
+        if self == AssocBinOp::TypeHint {
+            SyntaxKind::TypeHint
+        } else {
+            SyntaxKind::InfixBinOp
+        }
     }
 }
 
@@ -205,12 +210,19 @@ pub enum AssocUnOp {
     Not,
     // Postfix
     QMark,
+    Indexing, // <indexable> [ <expression> ]
+}
+
+impl AssocUnOp {
+    fn is_postfix(&self) -> bool {
+        matches!(self, Self::QMark | Self::Indexing)
+    }
 }
 
 impl Op for AssocUnOp {
     // in ascending order
     fn precedence(&self) -> Precedence {
-        if matches!(self, AssocUnOp::QMark) {
+        if self.is_postfix() {
             Precedence::Coupling
         } else {
             Precedence::Prefix
@@ -237,6 +249,7 @@ impl Op for AssocUnOp {
         let op = match kind {
             And => Self::Ref,
             Excl => Self::Not,
+            LBrack => Self::Indexing,
             Minus => Self::Neg,
             QMark => Self::QMark,
             Star => Self::Deref,
@@ -252,6 +265,7 @@ impl Into<SyntaxKind> for AssocUnOp {
         use AssocUnOp::*;
         match self {
             QMark => SyntaxKind::PostfixUnaryOp,
+            Indexing => SyntaxKind::Indexing,
             Not | Neg | Deref | Ref => SyntaxKind::PrefixUnaryOp,
         }
     }

@@ -50,7 +50,7 @@ impl From<&ASTValue> for Value {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Literal(pub Value);
 
 impl HIRBuilder {

@@ -8,8 +8,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        children_with_tokens_without_unwanted, error_for_node, filtered_children_with_tokens,
-        first_child_of_kind, get_children_in, get_first_child_in, get_token_of_errs,
+        error_for_node, filter_irrelevant_out, filtered_children_with_tokens, first_child_of_kind,
+        get_children_in, get_first_child_in, get_kind_on_node_or_token, get_token_of_errs,
     },
     literal::Literal,
     parameter::Param,
@@ -21,11 +21,8 @@ pub struct RetType(SyntaxNode);
 
 impl RetType {
     pub fn return_type(&self) -> Option<Type> {
-        if let Some(c) = children_with_tokens_without_unwanted(
-            &self.0,
-            [SyntaxKind::Whitespace, SyntaxKind::RArrow].as_slice(),
-        )
-        .last()
+        if let Some(c) =
+            filter_irrelevant_out(self.0.children_with_tokens(), get_kind_on_node_or_token).last()
         {
             Type::try_from(c).ok()
         } else {
@@ -64,8 +61,8 @@ impl Callable {
     pub fn body(&self) -> &ASTBlock {
         &self.body
     }
-    pub fn parameters(&self) -> &ThinVec<Param> {
-        &self.parameters
+    pub fn parameters(&self) -> &[Param] {
+        self.parameters.as_slice()
     }
     pub fn return_type(&self) -> Option<&RetType> {
         self.return_type.as_ref()
@@ -80,7 +77,6 @@ impl TryFrom<&SyntaxNode> for Callable {
         for param in Param::get_params_nodes_from(fn_def_or_lambda) {
             parameters.push(Param::try_from(&param)?);
         }
-
         let return_type = RetType::get_return_type_from(fn_def_or_lambda);
         let body = get_block_from(fn_def_or_lambda)?;
 
@@ -206,7 +202,7 @@ mod tests {
         function::Lambda,
         literal::{Literal, Value},
         operation::Binary,
-        parameter::{By, ParamType},
+        semi::Semi,
         statement::Stmt,
     };
     use parameterized_test::create;
@@ -232,6 +228,14 @@ mod tests {
          "fn f() -> i32 {return 0;}",
          "f", RETURNS, 0,
         ),
+        unit_returning_function_def: (
+         "fn f() -> () {}",
+         "f", RETURNS, 0,
+        ),
+        tuple_returning_function_def: (
+         "fn f() -> (i32, i32) {return (0, 1);}",
+         "f", RETURNS, 0,
+        ),
         returning_method_def: (
          "fn f(&mut self) -> Self {return 0;}",
          "f", RETURNS, 1,
@@ -240,9 +244,17 @@ mod tests {
          "fn f(&mut self) -> Self {0}",
          "f", RETURNS, 1,
         ),
+        mut_self_without_return: (
+         "fn f(mut self) {0}",
+         "f", DOES_NOT_RETURN, 1,
+        ),
         non_returning_function_def: (
          "fn f(a: &mut i32, b: i32) { a += b;}",
          "f", DOES_NOT_RETURN, 2,
+        ),
+         non_returning_function_def_with_tuple_parameters: (
+         "fn f(a_and_b: (&mut i32, i32)) { a_and_b.0 += a_and_b.1; }",
+         "f", DOES_NOT_RETURN, 1,
         ),
         non_returning_method_def: (
          "fn f(&mut self) { self.called += 1;}",
@@ -250,6 +262,10 @@ mod tests {
         ),
         returning_structure_as_param: (
         "fn foo(i: &Structure) -> bool { i.can_foo() }",
+         "foo", RETURNS, 1,
+        ),
+        returning_structured_tuple_as_param: (
+        "fn foo(i: (&Structure, i32)) -> bool { i.can_foo_times(i.1) }",
          "foo", RETURNS, 1,
         ),
     }
@@ -278,6 +294,10 @@ mod tests {
          "|| { a += b; }",
          DOES_NOT_RETURN, 0,
         ),
+        tuple_returning_no_parameter_lambda: (
+         "|| -> (i32, i32,i32) { (0, 1, 2) }",
+         RETURNS, 0,
+        ),
     }
 
     create! {
@@ -293,7 +313,9 @@ mod tests {
 
     happy_path_func_call_test! {
         fn_call_with_bin_expr: ("foo(3+2)", "foo", 1),
+        fn_call_with_unit: ("foo(())", "foo", 1),
         fn_call_with_complex_expr: ("am_i_happy(me.expectation().as_tensor() - reality.variable_tensor)", "am_i_happy", 1),
+        fn_call_with_complex_expr_tuple: ("am_i_happy((me.expectation().as_tensor(), reality.variable_tensor))", "am_i_happy", 1),
         fn_call_with_no_args: ("solitude()", "solitude", 0),
         fn_call_with_ref_mut: ("mutating(&mut matrix)", "mutating", 1),
     }
@@ -324,7 +346,7 @@ mod tests {
 
     #[test]
     fn detailed_testing_of_lambda_returning_lambda() {
-        let program = "|a: &mut i32, b: i32| { |f| {a += b*f} }";
+        let program = "|mut a: &mut i32, b: i32| { |f| {a += b*f;} }";
         let ast_root = ast_root_from(program);
         let literal_node = ast_root.get_root().first_child().unwrap();
         let lambda_node = literal_node.first_child().unwrap();
@@ -332,29 +354,39 @@ mod tests {
         assert_eq!(
             lambda.0.parameters,
             ThinVec::from([
-                Param::Named("a".into(), ParamType(By::RefMut, Type::Integer32)),
-                Param::Named("b".into(), ParamType(By::Value, Type::Integer32)),
+                Param::new_named(
+                    true,
+                    "a".into(),
+                    Some(Type::Pointer {
+                        is_mut: true,
+                        ty: Box::new(Type::Integer32)
+                    }),
+                    1..16
+                ),
+                Param::new_named(false, "b".into(), Some(Type::Integer32), 18..24),
             ]),
         );
         assert!(lambda.0.return_type.is_none());
-        assert!(matches!(lambda.0.body, Block::Returning(_)));
-        if let Block::Returning(stmts) = lambda.0.body {
-            assert!(matches!(stmts.as_slice(), &[Stmt::Expr(_)]));
-            if let [Stmt::Expr(Expr::Literal(Literal(Value::Lambda(l))))] = stmts.as_ref() {
-                assert_eq!(l.0.parameters, thin_vec![Param::Generic("f".into())]);
-                assert!(l.0.return_type.is_none());
-                assert!(matches!(l.0.body, Block::Returning(_)));
-                if let Block::Returning(stmts) = &l.0.body {
-                    assert!(matches!(
-                        stmts.as_slice(),
-                        &[Stmt::Expr(Expr::Infix(Binary::Infix(_),))]
-                    ));
-                } else {
-                    unreachable!()
-                }
+        let stmts = match lambda.0.body {
+            Block::Returning(stmts) => {
+                assert_eq!(stmts.len(), 1);
+                assert!(matches!(stmts.as_slice(), &[Stmt::Expr(_)]));
+                stmts
+            }
+            _ => unreachable!(),
+        };
+        if let [Stmt::Expr(Expr::Literal(Literal(Value::Lambda(l))))] = stmts.as_ref() {
+            assert_eq!(
+                l.0.parameters,
+                thin_vec![Param::new_generic("f".into(), false, 29..30)]
+            );
+            assert!(l.0.return_type.is_none());
+            assert!(matches!(l.0.body, Block::Semi(_)));
+            if let Block::Semi(stmts) = &l.0.body {
+                assert!(matches!(stmts.as_slice(), &[Stmt::Semi(Semi(_))]));
             } else {
                 unreachable!()
-            };
+            }
         } else {
             unreachable!()
         };
@@ -364,8 +396,8 @@ mod tests {
     fn detailed_testing_of_direct_call_on_lambda_literal() {
         let program = "let two = |a| {2*a}(1);";
         let ast_root = ast_root_from(program);
-        let var_def_node = ast_root.get_root().first_child().unwrap();
-        let eq_infix_node = var_def_node.first_child().unwrap();
+        let let_binding_node = ast_root.get_root().first_child().unwrap();
+        let eq_infix_node = let_binding_node.first_child().unwrap();
         let call_node = eq_infix_node.last_child().unwrap();
         let call: Call = cast_node_into_type::<Call>(&call_node);
         assert_eq!(

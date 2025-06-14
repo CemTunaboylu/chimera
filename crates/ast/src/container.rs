@@ -8,8 +8,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        children_with_tokens_without_unwanted, err_if_empty, get_children_in, get_token_of_errs,
-        unwrap_first_child_or_err,
+        err_if_empty, filter_irrelevant_out, get_children_in, get_kind_on_node_or_token,
+        get_token_of_errs, unwrap_first_child_or_err,
     },
     literal::{Literal, Value, parse_into},
 };
@@ -114,8 +114,10 @@ impl ContainerInitializer {
 }
 impl Shape {
     fn from_int_buffer(dim_hints_node: &SyntaxNode) -> ASTResult<Self> {
-        let hints =
-            children_with_tokens_without_unwanted(dim_hints_node, [Comma, Whitespace].as_ref());
+        let hints = filter_irrelevant_out(
+            dim_hints_node.children_with_tokens(),
+            get_kind_on_node_or_token,
+        );
         let mut shape = ThinVec::new();
         for h in hints {
             if h.kind() == Int {
@@ -132,8 +134,10 @@ impl Shape {
         Ok(Self::Known(shape))
     }
     fn from_expr_buffer(dim_hints_node: &SyntaxNode) -> ASTResult<Self> {
-        let hints =
-            children_with_tokens_without_unwanted(dim_hints_node, [Comma, Whitespace].as_ref());
+        let hints = filter_irrelevant_out(
+            dim_hints_node.children_with_tokens(),
+            get_kind_on_node_or_token,
+        );
         let mut shape = ThinVec::new();
         for h in hints {
             if h.kind() == Under {
@@ -206,10 +210,9 @@ impl TryFrom<&SyntaxNode> for ContainerInitializer {
     fn try_from(init_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let container_type = get_token_of_errs(init_node, [KwBuffer, KwTensor].as_ref())?.kind();
         let span: Range<usize> = init_node.text_range().into();
-        let nodes = children_with_tokens_without_unwanted(
-            init_node,
-            [KwBuffer, KwTensor, LBrack, RBrack, Whitespace].as_ref(),
-        );
+
+        let nodes =
+            filter_irrelevant_out(init_node.children_with_tokens(), get_kind_on_node_or_token);
         err_if_empty(
             &nodes,
             span.clone(),
@@ -252,7 +255,7 @@ mod tests {
     use crate::{
         ast_root_from, cast_node_into_type,
         function::{Call, On},
-        variable::VarRef,
+        let_binding::VarRef,
     };
 
     fn literal_from(program: &str) -> Literal {
@@ -272,7 +275,6 @@ mod tests {
                 shape: Shape::MaybeUnknown(thin_vec![Some(Expr::VarRef(VarRef {
                     name: SmolStr::from("dynamic"),
                     span: 12..19,
-                    type_hint: None
                 }))]),
             })))
         );
@@ -292,7 +294,6 @@ mod tests {
                 shape: Shape::MaybeUnknown(thin_vec![Some(Expr::VarRef(VarRef {
                     name: SmolStr::from("dynamic"),
                     span: 22..29,
-                    type_hint: None
                 }))]),
             })))
         );
@@ -324,7 +325,6 @@ mod tests {
                 value: Box::new(Expr::VarRef(VarRef {
                     name: SmolStr::from("value"),
                     span: 7..12,
-                    type_hint: None,
                 })),
                 shape: Shape::MaybeUnknown(thin_vec![
                     Some(Expr::Literal(Literal(Value::Int(3)))),

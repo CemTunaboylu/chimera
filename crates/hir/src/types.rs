@@ -1,6 +1,7 @@
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    mut_clone_with_err,
     self_ref::SelfRef,
     typing::hindley_milner::{
         store::placeholder_type_var_id,
@@ -53,6 +54,13 @@ impl HIRBuilder {
                 }
             }
             ASTType::Integer32 => Type::I32,
+            ASTType::Pointer { ty, is_mut } => {
+                let lowered_pointer_type = self.lower_type(ty)?;
+                Type::Ptr {
+                    of: Box::new(lowered_pointer_type),
+                    is_mut: *is_mut,
+                }
+            }
             ASTType::String => Type::Str,
             ASTType::SelfRef(self_ref) => {
                 let lowered_self_ref = self.lower_self_ref(self_ref)?;
@@ -94,6 +102,12 @@ impl HIRBuilder {
                 // }
                 todo!()
             }
+            ASTType::Tuple(types) => {
+                let to_hm = |ast_type: &ASTType, hir: &mut HIRBuilder| hir.lower_type(ast_type);
+                let types = mut_clone_with_err(types, self, to_hm)?;
+                Type::Tuple(types)
+            }
+            ASTType::Unit => Type::Unit,
             _ => {
                 unreachable!()
             }

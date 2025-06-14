@@ -1,5 +1,5 @@
 use hir::builder::lower;
-use miette::{Context, IntoDiagnostic, Report, Result as MietteResult};
+use miette::{Context, IntoDiagnostic, Result as MietteResult};
 use parser::{cst::ConcreteSyntaxTree, parser::Parser as ChimeraParser};
 
 use ast::{ast::Root, statement::Stmt as AstStmt};
@@ -20,7 +20,6 @@ struct Args {
     command: Commands,
 }
 #[derive(Subcommand, Debug)]
-// TODO: add options for parser behavior
 enum Commands {
     Tokenize { filename: PathBuf },
     Parse { filename: PathBuf },
@@ -74,10 +73,10 @@ fn display_as_cst(cst: &ConcreteSyntaxTree) {
 
 fn display_as_ast(cst: &ConcreteSyntaxTree) {
     let ast = Root::try_from(cst).unwrap();
-    dbg!(ast.statements().for_each(|stmt| match stmt {
-        AstStmt::VarDef(var_def) => println!("VarDef: {:?}", var_def),
+    ast.statements().for_each(|stmt| match stmt {
+        AstStmt::LetBinding(let_binding) => println!("Let Binding: {:?}", let_binding),
         AstStmt::Expr(_) => {}
-        AstStmt::FnDef(_) => {}
+        AstStmt::FnDef(fn_def) => println!("FnDef: {:?}", fn_def),
         AstStmt::Jump(_) => {}
         AstStmt::Semi(_) => todo!(),
         AstStmt::ControlFlow(_) => todo!(),
@@ -85,7 +84,7 @@ fn display_as_ast(cst: &ConcreteSyntaxTree) {
         AstStmt::Return(_) => todo!(),
         AstStmt::Impl(_) => todo!(),
         AstStmt::StructDef(_) => todo!(),
-    }));
+    });
 }
 
 fn display_as_hir(cst: &ConcreteSyntaxTree) {
@@ -93,12 +92,10 @@ fn display_as_hir(cst: &ConcreteSyntaxTree) {
     let ast_root = Root::try_from(cst).unwrap();
     println!("ast_root {:?}", ast_root);
     let mut expr_arena = lower(ast_root);
-    // dbg!("begin: {expr_arena :?}", &expr_arena);
 
     for elm in &mut expr_arena {
         println!("{:?}", elm);
     }
-    // dbg!("fin: {expr_arena :?}", &expr_arena);
 }
 
 fn get_file_contents(file_name: PathBuf) -> MietteResult<String> {

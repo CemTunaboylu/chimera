@@ -7,7 +7,9 @@ edition = "2024"
 syntax = { path = "../syntax" }
 parser = { path = "../parser" }
 
+lazy_static = "1.5.0"
 miette = { version = "7.5.0", features = ["fancy"] }
+num-traits = "0.2.19"
 smallvec = "1.14.0"
 smol_str = "0.3.2"
 thin-vec = "0.2.13"

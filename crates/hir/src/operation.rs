@@ -12,10 +12,10 @@ use ast::{
     operation::{Binary as ASTBinary, Unary as ASTUnary},
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Operand(pub ExprIdx);
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum BinaryOp {
     Add,
     Assign,
@@ -104,7 +104,7 @@ impl BinaryOp {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum UnaryOp {
     /// star
     Deref,
@@ -147,7 +147,7 @@ impl Into<UsageContext> for &UnaryOp {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct BinaryInfix {
     op: BinaryOp,
     lhs: Operand,
@@ -172,13 +172,13 @@ impl BinaryInfix {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct UnaryOperation {
     op: UnaryOp,
     operand: Operand,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Unary {
     Prefix(UnaryOperation),
     Postfix(UnaryOperation),

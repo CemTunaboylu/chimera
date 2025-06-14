@@ -6,10 +6,7 @@ use std::collections::HashSet;
 use la_arena::Idx;
 use thin_vec::{ThinVec, thin_vec};
 
-use crate::{
-    literal::Value,
-    resolution::{Reference, Unresolved},
-};
+use crate::{literal::Value, resolution::Unresolved};
 
 use super::{inference::TypeKey, store::TypeVarId};
 
@@ -45,7 +42,7 @@ pub enum Type {
         return_type: Box<Type>, // if it does not return anything, it will return unit ()
     },
     I32,
-    Ref {
+    Ptr {
         of: Box<Type>,
         is_mut: bool,
     },
@@ -62,6 +59,7 @@ pub enum Type {
         data_type: Maybe<Type>,
     },
     Tuple(ThinVec<Type>),
+    Unit,
     Var(TypeVarId), // type variable
 }
 
@@ -86,7 +84,7 @@ impl From<&Value> for Type {
                 shape,
                 data_type,
             } => Type::Buffer {
-                shape: shape.get().expect("a valid hspae for buffer value").clone(),
+                shape: shape.get().expect("a valid hspae for buffer value").into(),
                 data_type: data_type.clone(),
             },
             Value::Lambda(callable) => todo!(),
@@ -104,7 +102,7 @@ impl From<&Value> for Type {
 // For function parameters (ByRef, ByRefMut, etc.)
 pub fn type_of_param(base: Type, is_ref: bool, is_mut: bool) -> Type {
     if is_ref {
-        Type::Ref {
+        Type::Ptr {
             of: Box::new(base),
             is_mut,
         }

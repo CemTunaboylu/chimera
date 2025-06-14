@@ -1,20 +1,83 @@
+use lazy_static::lazy_static;
+use num_traits::{FromPrimitive, ToPrimitive};
+use smol_str::{SmolStr, ToSmolStr};
+use std::{fmt::Debug, ops::Range};
+use thin_vec::{ThinVec, thin_vec};
+
+use crate::{ast::ASTResult, errors::ASTError, expression::Expr};
+use SyntaxKind::*;
 use syntax::{
     bitset::SyntaxKindBitSet,
     language::{NodeOrToken, SyntaxElement, SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
-use thin_vec::ThinVec;
 
-use crate::{ast::ASTResult, errors::ASTError, expression::Expr};
-
-use std::{fmt::Debug, ops::Range};
-
-use SyntaxKind::*;
 const EXPR_CANDIDATES: &[SyntaxKind; 10] = &[
     Literal, Block, Call, Ident, InfixBinOp, KwSelf, Kwself, KwFalse, KwTrue, ParenExpr,
 ];
 
-pub fn err_if_empty<T>(a: &ThinVec<T>, span: Range<usize>, exp: &str) -> ASTResult<()> {
+pub fn get_text(not: &NodeOrToken) -> SmolStr {
+    match not {
+        NodeOrToken::Node(node) => node.text().to_smolstr(),
+        NodeOrToken::Token(token) => token.text().to_smolstr(),
+    }
+}
+
+lazy_static! {
+    pub static ref UNNECESSARY: SyntaxKindBitSet = {
+        use SyntaxKind::*;
+        let ranges = [(KwBreak, Kwself), (LBrace, LParen), (RArrow, RParen)];
+        let mut set = SyntaxKindBitSet::empty();
+        for (start, end) in ranges {
+            for kind in start.to_u16().unwrap()..=end.to_u16().unwrap() {
+                let kind: SyntaxKind = SyntaxKind::from_u16(kind).unwrap();
+                set += kind.into();
+            }
+        }
+        set += [
+            And, Comma, Colon, LBrack, NullTerm, RBrack, RetType, Whitespace,
+        ]
+        .as_ref()
+        .into();
+        set
+    };
+}
+
+pub fn get_kind_on_node_or_token(not: &NodeOrToken) -> SyntaxKind {
+    not.kind()
+}
+
+pub fn get_kind_on_node(n: &SyntaxNode) -> SyntaxKind {
+    n.kind()
+}
+
+pub fn filter_irrelevant_out<K>(
+    iterable: impl Iterator<Item = K>,
+    get_kind: fn(&K) -> SyntaxKind,
+) -> ThinVec<K> {
+    iterable
+        .filter(|elm_with_kind| !UNNECESSARY.contains(get_kind(elm_with_kind)))
+        .collect::<ThinVec<_>>()
+}
+
+pub fn vector_of_children_and_tokens_as<T>(
+    node: &SyntaxNode,
+    remove: impl Into<SyntaxKindBitSet>,
+    f: fn(&NodeOrToken) -> ASTResult<T>,
+) -> ASTResult<ThinVec<T>> {
+    let mut types: ThinVec<T> = thin_vec![];
+    let set: SyntaxKindBitSet = remove.into();
+    for ch in node
+        .children_with_tokens()
+        .filter(|not| !set.contains(not.kind()))
+    {
+        let t = f(&ch).map_err(|e| ASTError::new(ch.text_range().into(), e, ch.kind()))?;
+        types.push(t);
+    }
+    Ok(types)
+}
+
+pub fn err_if_empty<T>(a: &[T], span: Range<usize>, exp: &str) -> ASTResult<()> {
     if a.is_empty() {
         return Err(ASTError::with_err_msg(span, exp.to_string()));
     }
@@ -120,17 +183,10 @@ pub fn filtered_children_with_tokens(
         .collect::<ThinVec<_>>()
 }
 
-pub fn children_with_tokens_without_unwanted(
-    node: &SyntaxNode,
-    unwanted: impl Into<SyntaxKindBitSet>,
-) -> ThinVec<NodeOrToken> {
-    let set = unwanted.into();
-    node.children_with_tokens()
-        .filter(|node_or_token| !set.contains(node_or_token.kind()))
-        .collect::<ThinVec<_>>()
-}
+pub const CAN_BE_EMPTY: bool = false;
+pub const ERR_IF_EMPTY: bool = true;
 
-pub fn get_children_as<T>(node: &SyntaxNode) -> ASTResult<ThinVec<T>>
+pub fn get_children_as<T>(node: &SyntaxNode, err_if_empty: bool) -> ASTResult<ThinVec<T>>
 where
     T: TryFrom<SyntaxNode> + Debug,
     <T as TryFrom<SyntaxNode>>::Error: Debug,
@@ -140,8 +196,11 @@ where
         .filter_map(|node| T::try_from(node).ok())
         .collect::<ThinVec<_>>();
 
-    if results.is_empty() {
-        Err(error_for_node(node, "non empty"))
+    if err_if_empty && results.is_empty() {
+        Err(error_for_node(
+            node,
+            "children are expected to be non empty",
+        ))
     } else {
         Ok(results)
     }
@@ -221,15 +280,6 @@ pub fn get_tokens_in_errs(
     } else {
         Ok(tokens)
     }
-}
-
-pub fn get_children_with_tokens_in_f(
-    node: &SyntaxNode,
-    f: fn(SyntaxKind) -> bool,
-) -> ThinVec<NodeOrToken> {
-    node.children_with_tokens()
-        .filter(|node_or_token| f(node_or_token.kind()))
-        .collect::<ThinVec<_>>()
 }
 
 pub fn get_token_with(

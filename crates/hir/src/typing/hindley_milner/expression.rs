@@ -1,19 +1,20 @@
-use thin_vec::{ThinVec, thin_vec};
-
 use std::fmt::Debug;
+use std::hash::Hash;
 
 use crate::{
     HIRResult,
     builder::HIRBuilder,
     clone_with_err,
-    delimited::{Block, Indexing},
+    delimited::Block,
     errors::HIRError,
     expect_non_baggage,
     expression::Expr,
     function::FnArg,
+    indexing::Indexing,
     literal::Value,
     operation::{BinaryOp, UnaryOp},
     resolution::{Baggage, Reference},
+    scope::ExprIdx,
     self_ref::SelfRef,
 };
 
@@ -22,6 +23,8 @@ use super::{
     statement::HMStmt,
     types::{Maybe, Type},
 };
+
+use thin_vec::{ThinVec, thin_vec};
 
 #[derive(Debug, Clone)]
 pub struct Conditional {
@@ -78,11 +81,15 @@ pub enum HMExpr {
         shape: ThinVec<Option<usize>>,
     },
     Tuple(ThinVec<HMExpr>),
+    Unit,
     Unary(UnaryOp, Box<HMExpr>),
     Var(TypeKey),
 }
 
-fn get_resolved_materials<Any: Debug>(reference: &Reference<Any>) -> HIRResult<(TypeKey, Baggage)> {
+fn get_resolved_materials<R: Debug>(reference: &Reference<R>) -> HIRResult<(TypeKey, Baggage)>
+where
+    R: Eq + Hash + PartialEq + PartialOrd,
+{
     match reference {
         Reference::Unresolved(_) => {
             Err(HIRError::with_msg(format!("{:?} is not resolved", reference)).into())
@@ -111,22 +118,6 @@ impl HIRBuilder {
     pub fn try_into_hm_expr(&self, expr: &Expr) -> HIRResult<HMExpr> {
         match expr {
             Expr::Block(block) => self.try_into_hm_block(block),
-            Expr::ContainerRef(reference) => {
-                let (type_key, baggage) = get_resolved_materials(reference)?;
-                let arr_indexing = match baggage {
-                    Baggage::Index(thin_vec) => thin_vec.clone(),
-                    _ => thin_vec![],
-                };
-                let to_hm = |ix: &Indexing, hir: &HIRBuilder| {
-                    let expr = hir.get_expr(ix.0);
-                    hir.try_into_hm_expr(expr)
-                };
-                let indexing = clone_with_err(arr_indexing.as_slice(), self, to_hm)?;
-                Ok(HMExpr::ContainerRef {
-                    reference: type_key,
-                    indexing,
-                })
-            }
             Expr::FnCall(reference) => {
                 let (type_key, baggage) = get_resolved_materials(reference)?;
                 let baggages = match baggage {
@@ -145,8 +136,9 @@ impl HIRBuilder {
                 })
             }
             Expr::Indexing(indexing) => {
-                let expr = self.get_expr(indexing.0);
-                self.try_into_hm_expr(expr)
+                // let expr = self.get_expr(indexing.0);
+                // self.try_into_hm_expr(expr)
+                unimplemented!()
             }
             Expr::Infix(binary_infix) => {
                 let lhs_operand = binary_infix.lhs();
@@ -174,6 +166,15 @@ impl HIRBuilder {
                 expect_non_baggage(&baggage, type_key)?;
                 Ok(HMExpr::StructAsType(type_key))
             }
+            Expr::Tuple(tuple) => {
+                let to_hm = |idx: &ExprIdx, hir: &HIRBuilder| {
+                    let expr = hir.get_expr(*idx);
+                    hir.try_into_hm_expr(expr)
+                };
+                let types = clone_with_err(tuple.0.as_slice(), self, to_hm)?;
+                Ok(HMExpr::Tuple(types))
+            }
+            Expr::Unit => Ok(HMExpr::Unit),
             // TODO: will be modified as a literal, delete this after its finished
             // Expr::StructInit(struct_init) => todo!(),
             Expr::Unary(unary) => {
@@ -206,10 +207,7 @@ impl TryFrom<&Value> for HMExpr {
                 data_type,
             } => Ok(HMExpr::Buffer {
                 data_type: data_type.clone(),
-                shape: shape
-                    .get()
-                    .expect("a valid shape from Buffer value")
-                    .clone(),
+                shape: shape.get().expect("a valid shape from Buffer value").into(),
             }),
             Value::Tensor {
                 idx: _,

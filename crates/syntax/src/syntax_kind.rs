@@ -1,8 +1,12 @@
+use std::ops::Sub;
+
+use lazy_static::lazy_static;
 use lexer::token_kind::TokenKind;
 use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
 use thin_vec::{ThinVec, thin_vec};
 
-use crate::{RestrictionType, bitset::SyntaxKindBitSet, non_assigning_operators};
+use crate::{RestrictionType, bitset::SyntaxKindBitSet};
 
 #[derive(Copy, Clone, Debug, FromPrimitive, Eq, Hash, Ord, PartialEq, PartialOrd, ToPrimitive)]
 pub enum SyntaxKind {
@@ -16,34 +20,35 @@ pub enum SyntaxKind {
     PostfixUnaryOp,
     // token-tree roots for expressions/sub-expressions
     BufferLit,
+    Call,
     CharLit,
     DimHints,
     DimValue,
-    Call,
-    In,
     ImplBlock,
+    In,
     Jump,
     Literal,
     Mut,
-    ParenExpr,
     ParamDecl,
+    ParenExpr,
     RetType,
     Return,
     SelfRef,
     Semi,
     StrLit,
+    StructAsType,
     StructField,
     StructLit,
     StructRef,
-    StructAsType,
-    TypeHint,
     TensorLit,
+    Tuple,
+    Unit,
+    TypeHint,
     VarRef,
     // token-tree roots for statements
     Block,
     Condition,
     Conditional,
-    ContainerRef,
     ControlFlow,
     FnArg,
     FnDef,
@@ -53,7 +58,7 @@ pub enum SyntaxKind {
     Generic,
     Indexing,
     StructDef,
-    VarDef,
+    LetBinding,
     WhileLoop,
     // mirrored
     And,
@@ -147,133 +152,193 @@ pub fn from_token_kinds(token_kinds: ThinVec<TokenKind>) -> ThinVec<SyntaxKind> 
         .map(|token_kind| SyntaxKind::from(*token_kind))
         .collect::<ThinVec<_>>()
 }
+
+use SyntaxKind::*;
+
+pub static CAN_BE_PARAMETERS: &[SyntaxKind] = &[
+    Ident,
+    KwBuffer, // allows parsing buffer<dim><type> as a type
+    KwFn,     // allows parsing function declaration as a type
+    KwTensor, // allows parsing tensor<dim><type> as a type
+    SelfRef,
+    StructAsType,
+    Tuple,
+    TyBool,
+    TyBuffer,
+    TyChar,
+    TyF32,
+    TyFn,
+    TyI32,
+    TyStr,
+    TyTensor,
+];
+
+pub static ASSIGNMENTS: &[SyntaxKind] = &[
+    AndEq, Eq, LShiftEq, MinusEq, NotEq, OrEq, PercentEq, PlusEq, RShiftEq, SlashEq, StarEq,
+];
+pub static CLOSING_DELIMITERS: &[SyntaxKind] = &[RBrace, RParen];
+pub static OPENING_DELIMITERS: &[SyntaxKind] = &[LBrace, LParen];
+pub static OPERATORS: &[SyntaxKind] = &[
+    And, AndAnd, AndEq, Colon, ColonColon, Dot, Eq, EqEq, Excl, Gt, Ge, LBrack, LShift, LShiftEq,
+    Lt, Le, Minus, MinusEq, NotEq, Or, OrEq, OrOr, Percent, PercentEq, Plus, PlusEq, QMark, RArrow,
+    RShift, RShiftEq, Slash, SlashEq, Star, StarEq, Under, Xor,
+];
+pub static PREFIX_OPERATORS: &[SyntaxKind] = &[And, Excl, Minus, Star];
+pub static TYPES: &[SyntaxKind] = &[
+    KwBuffer, // allows parsing buffer<dim><type> as a type
+    KwFn,     // allows parsing function declaration as a type
+    KwTensor, // allows parsing tensor<dim><type> as a type
+    StructAsType,
+    Tuple,
+    TyBool,
+    TyBuffer,
+    TyChar,
+    TyF32,
+    TyFn,
+    TyI32,
+    TyStr,
+    TyTensor,
+    Unit,
+];
+
+lazy_static! {
+    static ref ASSIGNMENTS_SET: SyntaxKindBitSet = SyntaxKind::assignments().as_ref().into();
+    static ref BINARY_OPERATORS_SET: SyntaxKindBitSet = {
+        use SyntaxKind::*;
+        let ranges = [
+            (And, ColonColon),
+            (Dot, Excl),
+            (Lt, NotEq),
+            (Or, QMark),
+            (Slash, StarEq),
+        ];
+        let mut set = SyntaxKindBitSet::empty();
+        for (start, end) in ranges {
+            for kind in start.to_u16().unwrap()..=end.to_u16().unwrap() {
+                let kind: SyntaxKind = SyntaxKind::from_u16(kind).unwrap();
+                set += kind.into();
+            }
+        }
+
+        set += [Gt, Ge, LShift, LShiftEq, RShift, RShiftEq, Under, Xor]
+            .as_ref()
+            .into();
+        set
+    };
+    static ref CAN_BE_PARAMETERS_SET: SyntaxKindBitSet = CAN_BE_PARAMETERS.into();
+    static ref CLOSING_DELIMITERS_SET: SyntaxKindBitSet = CLOSING_DELIMITERS.as_ref().into();
+    static ref DELIMITERS: SyntaxKindBitSet = [LBrace, LParen, RBrace, RParen].as_ref().into();
+    static ref LITERALS: SyntaxKindBitSet = [
+        BufferLit, CharLit, Float, Int, KwFalse, KwTrue, StrLit, Unit
+    ]
+    .as_ref()
+    .into();
+    static ref NON_ASSIGNING_OPERATORS: SyntaxKindBitSet = {
+        let a: SyntaxKindBitSet = SyntaxKind::assignments().as_ref().into();
+        let o: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+        o - a
+    };
+    static ref OPENING_DELIMITERS_SET: SyntaxKindBitSet = OPENING_DELIMITERS.as_ref().into();
+    static ref OPERATORS_SET: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+    static ref TYPES_SET: SyntaxKindBitSet = TYPES.into();
+    static ref TRIVIA_SET: SyntaxKindBitSet = [Whitespace, Comment, NullTerm].as_ref().into();
+    static ref UNARY_PREFIX_OPERATORS_SET: SyntaxKindBitSet =
+        [And, Minus, Excl, Star].as_ref().into();
+    static ref UNARY_POSTFIX_OPERATORS_SET: SyntaxKindBitSet = [QMark, LBrack].as_ref().into();
+}
+
 impl SyntaxKind {
-    pub fn is_delimiter(&self) -> bool {
-        use SyntaxKind::*;
-        matches!(self, LBrace | LParen | LBrack | RBrace | RParen | RBrack)
+    #[inline]
+    pub fn can_be_a_parameter(self) -> bool {
+        CAN_BE_PARAMETERS_SET.contains(self)
     }
-
-    pub fn opening_delimiters() -> ThinVec<SyntaxKind> {
-        use SyntaxKind::*;
-        thin_vec![LBrace, LParen, LBrack]
+    #[inline]
+    pub fn is_binary_operator(self) -> bool {
+        BINARY_OPERATORS_SET.contains(self)
     }
-
-    pub fn closing_delimiters() -> ThinVec<SyntaxKind> {
-        use SyntaxKind::*;
-        thin_vec![RBrace, RParen, RBrack]
+    #[inline]
+    pub fn is_assignment(self) -> bool {
+        ASSIGNMENTS_SET.contains(self)
     }
-    pub fn is_opening_delimiter(&self) -> bool {
-        use SyntaxKind::*;
-        matches!(self, LBrace | LParen | LBrack)
+    #[inline]
+    pub fn is_operator(self) -> bool {
+        OPERATORS_SET.contains(self)
     }
-    pub fn is_closing_delimiter(&self) -> bool {
-        use SyntaxKind::*;
-        matches!(self, RBrace | RParen | RBrack)
+    #[inline]
+    pub fn is_type(self) -> bool {
+        TYPES_SET.contains(self)
+    }
+    #[inline]
+    pub fn is_closing_delimiter(self) -> bool {
+        CLOSING_DELIMITERS_SET.contains(self)
+    }
+    #[inline]
+    pub fn is_delimiter(self) -> bool {
+        DELIMITERS.contains(self)
+    }
+    #[inline]
+    pub fn is_keyword(self) -> bool {
+        KwBreak <= self && self <= Kwself
     }
     // TODO: a closure is a literal value?
-    pub fn is_literal_value(&self) -> bool {
-        use SyntaxKind::*;
-        matches!(
-            self,
-            BufferLit | CharLit | Float | Int | KwFalse | KwTrue | StrLit
-        )
+    #[inline]
+    pub fn is_literal_value(self) -> bool {
+        LITERALS.contains(self)
     }
-
-    pub fn types() -> ThinVec<SyntaxKind> {
-        use SyntaxKind::*;
-        thin_vec![
-            KwBuffer, // allows parsing buffer<dim><type> as a type
-            KwFn,     // allows parsing function declaration as a type
-            KwTensor, // allows parsing tensor<dim><type> as a type
-            StructAsType,
-            TyBool,
-            TyBuffer,
-            TyChar,
-            TyF32,
-            TyFn,
-            TyI32,
-            TyStr,
-            TyTensor,
-        ]
+    #[inline]
+    pub fn is_opening_delimiter(self) -> bool {
+        OPENING_DELIMITERS_SET.contains(self)
     }
-
-    pub fn can_be_parameter() -> ThinVec<SyntaxKind> {
-        use SyntaxKind::*;
-        thin_vec![
-            Ident,
-            KwBuffer, // allows parsing buffer<dim><type> as a type
-            KwFn,     // allows parsing function declaration as a type
-            KwTensor, // allows parsing tensor<dim><type> as a type
-            SelfRef,
-            StructAsType,
-            TyBool,
-            TyBuffer,
-            TyChar,
-            TyF32,
-            TyFn,
-            TyI32,
-            TyStr,
-            TyTensor,
-        ]
+    #[inline]
+    pub fn is_unary_operator(self) -> bool {
+        UNARY_PREFIX_OPERATORS_SET.contains(self) || UNARY_POSTFIX_OPERATORS_SET.contains(self)
     }
-
-    pub fn is_keyword(&self) -> bool {
-        use SyntaxKind::*;
-        &KwBreak <= self && self <= &Kwself
+    #[inline]
+    pub fn is_prefix_unary_operator(self) -> bool {
+        UNARY_PREFIX_OPERATORS_SET.contains(self)
     }
-
-    pub fn is_binary_operator(&self) -> bool {
-        use SyntaxKind::*;
-        (self >= &And && self <= &ColonColon)
-            || (self >= &Dot && self <= &Excl)
-            || (self >= &Lt && self <= &NotEq)
-            || (self >= &Or && self <= &QMark)
-            || (self >= &Slash && self <= &StarEq)
-            || matches!(
-                self,
-                Gt | Ge | LShift | LShiftEq | RShift | RShiftEq | Under | Xor
-            )
+    #[inline]
+    pub fn is_posfix_unary_operator(self) -> bool {
+        UNARY_POSTFIX_OPERATORS_SET.contains(self)
     }
-
-    pub fn is_unary_operator(&self) -> bool {
-        use SyntaxKind::*;
-        matches!(self, And | Minus | Excl | Star | QMark)
-    }
-
-    pub fn is_prefix_unary_operator(&self) -> bool {
-        use SyntaxKind::*;
-        matches!(self, And | Minus | Excl | Star)
-    }
-
-    pub fn is_posfix_unary_operator(&self) -> bool {
-        use SyntaxKind::*;
-        matches!(self, QMark)
-    }
-
-    pub fn operators() -> ThinVec<Self> {
-        use SyntaxKind::*;
-        thin_vec![
-            And, AndAnd, AndEq, Colon, ColonColon, Dot, Eq, EqEq, Excl, Gt, Ge, LShift, LShiftEq,
-            Lt, Le, Minus, MinusEq, NotEq, Or, OrEq, OrOr, Percent, PercentEq, Plus, PlusEq, QMark,
-            RArrow, RShift, RShiftEq, Slash, SlashEq, Star, StarEq, Under, Xor,
-        ]
-    }
-
-    pub fn prefix_unary_operators() -> ThinVec<Self> {
-        use SyntaxKind::*;
-        thin_vec![And, Minus, Excl, Star]
-    }
-    pub fn assignments() -> ThinVec<Self> {
-        use SyntaxKind::*;
-        thin_vec![
-            AndEq, Eq, LShiftEq, MinusEq, NotEq, OrEq, PercentEq, PlusEq, RShiftEq, SlashEq,
-            StarEq,
-        ]
-    }
-
+    #[inline]
     pub fn is_trivia(self) -> bool {
-        use SyntaxKind::*;
-        matches!(self, Whitespace | Comment | NullTerm)
+        TRIVIA_SET.contains(self)
+    }
+
+    #[inline]
+    pub fn assignments() -> &'static [Self] {
+        ASSIGNMENTS
+    }
+    #[inline]
+    pub fn can_be_parameter() -> &'static [Self] {
+        CAN_BE_PARAMETERS
+    }
+    #[inline]
+    pub fn closing_delimiters() -> &'static [Self] {
+        CLOSING_DELIMITERS
+    }
+    #[inline]
+    pub fn opening_delimiters() -> &'static [Self] {
+        OPENING_DELIMITERS
+    }
+    #[inline]
+    pub fn operators() -> &'static [Self] {
+        OPERATORS
+    }
+    #[inline]
+    pub fn non_assigning_operators() -> SyntaxKindBitSet {
+        let a: SyntaxKindBitSet = SyntaxKind::assignments().as_ref().into();
+        let o: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+        o - a
+    }
+    #[inline]
+    pub fn prefix_unary_operators() -> &'static [Self] {
+        PREFIX_OPERATORS
+    }
+    #[inline]
+    pub fn types() -> &'static [Self] {
+        TYPES
     }
 
     pub fn imposed_restrictions(&self) -> [RestrictionType; 4] {
@@ -289,18 +354,35 @@ impl SyntaxKind {
                 context_update[2] = RestrictionType::Sub([RBrack].as_ref().into());
             }
             Call => {
-                let operators: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+                let operators: SyntaxKindBitSet = SyntaxKind::operators().into();
                 context_update[2] = RestrictionType::Add(operators);
+            }
+            Colon => {
+                context_update[0] = RestrictionType::Add([StructAsType, TypeHint].as_ref().into());
+                let can_be_parameter: SyntaxKindBitSet = SyntaxKind::can_be_parameter().into();
+                let allowed: SyntaxKindBitSet = [And, LParen, KwMut].as_ref().into();
+                context_update[2] = RestrictionType::Override(can_be_parameter + allowed);
             }
             Condition => {
                 context_update[1] = RestrictionType::Add([LBrace, KwElif, KwElse].as_ref().into());
-                let operators: SyntaxKindBitSet = SyntaxKind::operators().as_ref().into();
+                let operators: SyntaxKindBitSet = SyntaxKind::operators().into();
                 let booleans_and_paren: SyntaxKindBitSet =
                     [KwTrue, KwFalse, LParen].as_ref().into();
                 context_update[2] = RestrictionType::Override(operators + booleans_and_paren);
             }
+            DimHints => {
+                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
+                context_update[2] = RestrictionType::Override(SyntaxKindBitSet::empty());
+            }
+            ForLoop => {
+                context_update[1] = RestrictionType::Add([KwIn, LBrace].as_ref().into());
+            }
             FnArg => {
                 context_update[2] = RestrictionType::Add([RParen, StructAsType].as_ref().into());
+            }
+            Gt => {
+                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
+                context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
             }
             Ident => {
                 context_update[1] = RestrictionType::Add([LParen, LBrace, LBrack].as_ref().into());
@@ -309,21 +391,12 @@ impl SyntaxKind {
             // Note: Prevents for i in arr{} to be parsed as ..., StructLit (arr{})
             In => context_update[2] = RestrictionType::Sub(StructLit.into()),
             Indexing => {
-                let non_assigning_operators: SyntaxKindBitSet = non_assigning_operators();
+                let non_assigning_operators = Self::non_assigning_operators();
+                context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
                 context_update[2] = RestrictionType::Add(non_assigning_operators);
             }
             Jump | Return => {
                 context_update[0] = RestrictionType::Add(Semi.into());
-            }
-            ParamDecl => {
-                let misc: SyntaxKindBitSet =
-                    [And, Colon, Comma, Ident, KwMut, RParen].as_ref().into();
-                let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-                context_update[2] = RestrictionType::Override(misc + types);
-            }
-            PrefixUnaryOp => {
-                context_update[2] =
-                    RestrictionType::Add(SyntaxKind::prefix_unary_operators().as_ref().into());
             }
             Lambda => {
                 context_update[1] = RestrictionType::Add([LBrace, RBrace].as_ref().into());
@@ -334,42 +407,55 @@ impl SyntaxKind {
             LBrack => {
                 context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
             }
+            Mut => {
+                // * Note: can_be_parameter also includes Ident as a parameter (to allow for StructAsType)
+                let can_be_parameter: SyntaxKindBitSet = SyntaxKind::can_be_parameter().into();
+                context_update[2] = RestrictionType::Override(can_be_parameter + LParen.into());
+            }
+            ParenExpr => {
+                context_update[1] = RestrictionType::Add([Comma, RBrace].as_ref().into());
+                context_update[2] = RestrictionType::Sub([Comma].as_ref().into());
+            }
+            ParamDecl => {
+                let misc: SyntaxKindBitSet = [And, Colon, Comma, Ident, KwMut, LParen, RParen]
+                    .as_ref()
+                    .into();
+                let can_be_parameter: SyntaxKindBitSet = SyntaxKind::can_be_parameter().into();
+                context_update[2] = RestrictionType::Override(misc + can_be_parameter);
+            }
+            PrefixUnaryOp => {
+                context_update[2] =
+                    RestrictionType::Add(SyntaxKind::prefix_unary_operators().into());
+            }
             RBrack => {
                 context_update[1] = RestrictionType::Add([LBrack, RBrack].as_ref().into());
             }
             RetType => {
                 context_update[0] = RestrictionType::Add([StructAsType].as_ref().into());
-                let types: SyntaxKindBitSet = SyntaxKind::types().as_ref().into();
-                let ref_mut_struct_as_type: SyntaxKindBitSet =
-                    [And, Mut, StructAsType].as_ref().into();
-                context_update[2] = RestrictionType::Add(types + ref_mut_struct_as_type);
+                let types: SyntaxKindBitSet = SyntaxKind::types().into();
+                context_update[1] = RestrictionType::Add([LBrace].as_ref().into());
+                let ref_struct_as_type: SyntaxKindBitSet =
+                    [And, StructAsType, LParen].as_ref().into();
+                context_update[2] = RestrictionType::Override(types + ref_struct_as_type);
             }
             RParen => {
                 context_update[1] = RestrictionType::Add([LParen, RParen].as_ref().into());
             }
-            Gt => {
-                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
-                context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
-            }
             TypeHint => {
+                context_update[0] = RestrictionType::Add([StructAsType].as_ref().into());
                 context_update[1] = RestrictionType::Add([Gt].as_ref().into());
                 context_update[2] = RestrictionType::Sub([Gt].as_ref().into());
             }
-            DimHints => {
-                context_update[1] = RestrictionType::Add([Gt].as_ref().into());
-                context_update[2] = RestrictionType::Override([].as_ref().into());
-            }
-            VarDef => {
+            LetBinding => {
                 // ! FIXME: this is a hack, I need to find a better way to expect things IN ORDER
-                context_update[0] = RestrictionType::Add([Eq, Ident, Semi].as_slice().into());
-                let non_assignments: SyntaxKindBitSet = non_assigning_operators();
-                let can_be_parameter: SyntaxKindBitSet =
-                    SyntaxKind::can_be_parameter().as_ref().into();
-                let opening_delimiters: SyntaxKindBitSet =
-                    SyntaxKind::opening_delimiters().as_ref().into();
-                let exceptionals: SyntaxKindBitSet = [Eq, Ident, Semi, VarRef, SelfRef, StructLit]
-                    .as_ref()
-                    .into();
+                context_update[0] = RestrictionType::Add([Eq, Ident, Semi].as_ref().into());
+                let non_assignments: SyntaxKindBitSet = Self::non_assigning_operators();
+                let can_be_parameter: SyntaxKindBitSet = SyntaxKind::can_be_parameter().into();
+                let opening_delimiters: SyntaxKindBitSet = SyntaxKind::opening_delimiters().into();
+                let exceptionals: SyntaxKindBitSet =
+                    [Eq, Ident, KwMut, SelfRef, Semi, StructLit, VarRef]
+                        .as_ref()
+                        .into();
                 context_update[2] = RestrictionType::Override(
                     non_assignments + can_be_parameter + opening_delimiters + exceptionals,
                 );

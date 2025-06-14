@@ -86,9 +86,15 @@ impl<'input> Parser<'input> {
         anchor
     }
 
-    pub fn forbid_all(&self) -> RollingBackAnchor {
+    pub fn by_forbidding_all(&self) -> RollingBackAnchor {
         let anchor = self.roll_back_context_after_drop();
         self.context.borrow().forbid_all();
+        anchor
+    }
+
+    pub fn by_expecting(&self, e: impl Into<SyntaxKindBitSet>) -> RollingBackAnchor {
+        let anchor = self.roll_back_context_after_drop();
+        self.context.borrow().expect(e);
         anchor
     }
 
@@ -123,10 +129,7 @@ impl<'input> Parser<'input> {
         self.rollback_anchor_with_new_restrictions(context_updates)
     }
 
-    pub fn impose_restrictions_of_currently_parsing_on_context(
-        &self,
-        kind: SyntaxKind,
-    ) -> RollingBackAnchor {
+    pub fn impose_context_for_parsing(&self, kind: SyntaxKind) -> RollingBackAnchor {
         let context_updates = kind.imposed_restrictions();
         let rollback_anchor = self.rollback_anchor_with_new_restrictions(context_updates);
         self.context.borrow().set_in_the_middle_of(kind);
@@ -365,8 +368,18 @@ impl<'input> Parser<'input> {
         }
         Some(())
     }
-    pub fn bump_if(&self, kind: SyntaxKind) {
+    pub fn bump_if(&self, kind: SyntaxKind) -> bool {
         if self.is_next(kind) {
+            self.bump();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn bump_until(&self, kinds: impl Into<SyntaxKindBitSet>) {
+        let set: SyntaxKindBitSet = kinds.into();
+        while IsNext::No == self.is_next_in_strict(set) {
             self.bump();
         }
     }

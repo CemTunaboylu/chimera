@@ -119,7 +119,7 @@ fn instantiate_type(ty: &Type, subst: &HashMap<TypeVarId, Type>) -> Type {
                 data_type: dt,
             }
         }
-        Type::Ref { of, is_mut } => Type::Ref {
+        Type::Ptr { of, is_mut } => Type::Ptr {
             of: Box::new(instantiate_type(of, subst)),
             is_mut: *is_mut,
         },

@@ -1,6 +1,6 @@
 use crate::{
     operator::starting_precedence,
-    parse::{Finished, Element},
+    parse::{Element, Finished},
     parser::Parser,
 };
 
@@ -42,6 +42,7 @@ impl Parser<'_> {
     #[allow(unused_variables)]
     pub fn parse_fields(&self) {
         use Element::*;
+        let rollback_when_dropped = self.by_expecting(StructAsType);
         let idents = thin_vec![
             Kind(Ident),
             Kind(Colon),
@@ -129,10 +130,48 @@ mod tests {
                       Whitespace@41..42 " "
                     RBrace@42..43 "}""#]],
         ),
+        basic_struct_with_tuple_field: ("struct Point { x: i32, y: i32, item: (Item, Item) }",
+            expect![[r#"
+                Root@0..51
+                  StructDef@0..51
+                    KwStruct@0..6 "struct"
+                    Whitespace@6..7 " "
+                    Ident@7..12 "Point"
+                    Whitespace@12..13 " "
+                    LBrace@13..14 "{"
+                    Whitespace@14..15 " "
+                    StructField@15..22
+                      Ident@15..16 "x"
+                      Colon@16..17 ":"
+                      Whitespace@17..18 " "
+                      TyI32@18..21 "i32"
+                      Comma@21..22 ","
+                    Whitespace@22..23 " "
+                    StructField@23..30
+                      Ident@23..24 "y"
+                      Colon@24..25 ":"
+                      Whitespace@25..26 " "
+                      TyI32@26..29 "i32"
+                      Comma@29..30 ","
+                    Whitespace@30..31 " "
+                    StructField@31..50
+                      Ident@31..35 "item"
+                      Colon@35..36 ":"
+                      Whitespace@36..37 " "
+                      Tuple@37..49
+                        LParen@37..38 "("
+                        StructAsType@38..42 "Item"
+                        Comma@42..43 ","
+                        Whitespace@43..44 " "
+                        StructAsType@44..48 "Item"
+                        RParen@48..49 ")"
+                      Whitespace@49..50 " "
+                    RBrace@50..51 "}""#]],
+        ),
         struct_init: ("let origin = Point{ x: 0, y: 0, item: origin_item };",
             expect![[r#"
                 Root@0..52
-                  VarDef@0..52
+                  LetBinding@0..52
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..51
@@ -170,6 +209,55 @@ mod tests {
                             Whitespace@49..50 " "
                         RBrace@50..51 "}"
                     Semi@51..52 ";""#]],
+        ),
+        struct_init_with_tuple_field: ("let origin = Point{ x: 0, y: 0, item: (item_a, item_b) };",
+            expect![[r#"
+                Root@0..57
+                  LetBinding@0..57
+                    KwLet@0..3 "let"
+                    Whitespace@3..4 " "
+                    InfixBinOp@4..56
+                      VarRef@4..11
+                        Ident@4..10 "origin"
+                        Whitespace@10..11 " "
+                      Eq@11..12 "="
+                      Whitespace@12..13 " "
+                      StructLit@13..56
+                        Ident@13..18 "Point"
+                        LBrace@18..19 "{"
+                        Whitespace@19..20 " "
+                        StructField@20..25
+                          Ident@20..21 "x"
+                          Colon@21..22 ":"
+                          Whitespace@22..23 " "
+                          Literal@23..24
+                            Int@23..24 "0"
+                          Comma@24..25 ","
+                        Whitespace@25..26 " "
+                        StructField@26..31
+                          Ident@26..27 "y"
+                          Colon@27..28 ":"
+                          Whitespace@28..29 " "
+                          Literal@29..30
+                            Int@29..30 "0"
+                          Comma@30..31 ","
+                        Whitespace@31..32 " "
+                        StructField@32..55
+                          Ident@32..36 "item"
+                          Colon@36..37 ":"
+                          Whitespace@37..38 " "
+                          Tuple@38..54
+                            LParen@38..39 "("
+                            VarRef@39..45
+                              Ident@39..45 "item_a"
+                            Comma@45..46 ","
+                            Whitespace@46..47 " "
+                            VarRef@47..53
+                              Ident@47..53 "item_b"
+                            RParen@53..54 ")"
+                          Whitespace@54..55 " "
+                        RBrace@55..56 "}"
+                    Semi@56..57 ";""#]],
         ),
     }
 }

@@ -13,7 +13,7 @@ impl Parser<'_> {
         let cond_marker = self.start();
         self.expect_and_bump(KwIf);
         {
-            let anchor = self.impose_restrictions_of_currently_parsing_on_context(Condition);
+            let anchor = self.impose_context_for_parsing(Condition);
             if self.parse_condition().is_none() {
                 self.recover_with_msg("if expects a condition", "");
             }
@@ -26,7 +26,7 @@ impl Parser<'_> {
             let cond_marker = self.start();
             self.expect_and_bump(KwElif);
             {
-                let anchor = self.impose_restrictions_of_currently_parsing_on_context(Condition);
+                let anchor = self.impose_context_for_parsing(Condition);
                 if self.parse_condition().is_none() {
                     self.recover_with_msg("elif expects a condition", "");
                 }
@@ -116,7 +116,7 @@ mod tests {
                 conditionals_if_else_semi: ("let can_pass = if human.age >= 18 { true } else { false };",
             expect![[r#"
                 Root@0..58
-                  VarDef@0..58
+                  LetBinding@0..58
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..57

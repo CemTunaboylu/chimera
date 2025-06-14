@@ -235,7 +235,7 @@ fn infer_unary_expr(
     // note: a mutable expression has its type reduced to its inner type
     let operand_type = infer_expr(operand, ctx, store)?;
     let result_ty = match op {
-        UnaryOp::Ref => Type::Ref {
+        UnaryOp::Ref => Type::Ptr {
             of: Box::new(operand_type),
             is_mut,
         },
@@ -244,7 +244,7 @@ fn infer_unary_expr(
             store
                 .unify(
                     &operand_type,
-                    &Type::Ref {
+                    &Type::Ptr {
                         of: Box::new(result_ty.clone()),
                         is_mut: false, // Note: conservative for now, only can deref if immutable reference
                     },

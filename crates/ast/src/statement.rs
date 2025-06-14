@@ -1,7 +1,7 @@
 use crate::{
     control_flow::ControlFlow as ASTControlFlow, errors::ASTError, expression::Expr,
-    function::FnDef, impl_block::Impl, jump::Jump, loops::Loop, return_stmt::Return, semi::Semi,
-    structure::StructDef, variable::VarDef,
+    function::FnDef, impl_block::Impl, jump::Jump, let_binding::LetBinding, loops::Loop,
+    return_stmt::Return, semi::Semi, structure::StructDef,
 };
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 
@@ -16,7 +16,7 @@ pub enum Stmt {
     Loop(Loop),
     Semi(Semi),
     StructDef(StructDef),
-    VarDef(VarDef),
+    LetBinding(LetBinding),
 }
 
 impl TryFrom<&SyntaxNode> for Stmt {
@@ -56,8 +56,8 @@ impl TryFrom<&SyntaxNode> for Stmt {
                 Ok(struct_def) => Ok(Self::StructDef(struct_def)),
                 Err(err) => Err(err),
             },
-            SyntaxKind::VarDef => match VarDef::try_from(node) {
-                Ok(var_def) => Ok(Self::VarDef(var_def)),
+            SyntaxKind::LetBinding => match LetBinding::try_from(node) {
+                Ok(let_binding) => Ok(Self::LetBinding(let_binding)),
                 Err(err) => Err(err),
             },
             _ => match Expr::try_from(node) {
@@ -103,15 +103,15 @@ mod tests {
         loop_: "while is_ok { server.listen(); }",
         semi: "cannot_return();",
         struct_def: "struct S {field: Field}",
-        var_def: "let unit = [[1,0,0],[0,1,0],[0,0,1]];",
+        let_binding: "let unit = [[1,0,0],[0,1,0],[0,0,1]];",
         impl_block: "impl Point { fn translate(&mut self, by: Point) { self.x += by.x; self.y += by.y; } fn rotate(&mut self, by: Point) { self.rotate_around(&by);} \n}",
     }
 
     #[test]
-    fn var_def() {
+    fn let_binding() {
         let program = "let diff_norm = (point_1.locus() - point_2.locus()).normalize();";
         let ast_root = ast_root_from(program);
-        let var_def_node = ast_root.get_root().first_child().unwrap();
-        cast_node_into_type::<Stmt>(&var_def_node);
+        let let_binding_node = ast_root.get_root().first_child().unwrap();
+        cast_node_into_type::<Stmt>(&let_binding_node);
     }
 }

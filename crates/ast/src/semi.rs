@@ -3,7 +3,7 @@ use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use crate::{errors::ASTError, expression::Expr, lang_elems::error_for_node};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Semi(SyntaxNode);
+pub struct Semi(pub SyntaxNode);
 
 impl Semi {
     pub fn expr(&self) -> Option<Expr> {

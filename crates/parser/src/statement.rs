@@ -14,7 +14,7 @@ impl Parser<'_> {
             Ok(syntax) if syntax.is_of_kind(KwFor) => self.parse_for_loop(),
             Ok(syntax) if syntax.is_of_kind(KwIf) => self.parse_conditionals(),
             Ok(syntax) if syntax.is_of_kind(KwImpl) => self.parse_impl_block(),
-            Ok(syntax) if syntax.is_of_kind(KwLet) => self.parse_variable_def(),
+            Ok(syntax) if syntax.is_of_kind(KwLet) => self.parse_let_binding(),
             Ok(syntax) if syntax.is_of_kind(KwReturn) => self.parse_return(),
             Ok(syntax) if syntax.is_of_kind(KwStruct) => self.parse_struct_definition(),
             Ok(syntax) if syntax.is_of_kind(KwWhile) => self.parse_while_loop(),
@@ -69,7 +69,7 @@ mod tests {
             "let a = 1;\na",
             expect![[r#"
                 Root@0..12
-                  VarDef@0..10
+                  LetBinding@0..10
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..9
@@ -89,7 +89,7 @@ mod tests {
             "let a = 0; a",
             expect![[r#"
                 Root@0..12
-                  VarDef@0..10
+                  LetBinding@0..10
                     KwLet@0..3 "let"
                     Whitespace@3..4 " "
                     InfixBinOp@4..9

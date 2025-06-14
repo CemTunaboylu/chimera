@@ -1,5 +1,4 @@
 use syntax::{
-    is_a_binary_operator,
     language::{SyntaxNode, SyntaxToken},
     syntax_kind::SyntaxKind,
 };
@@ -9,7 +8,7 @@ use crate::{
     ast::ASTResult,
     errors::ASTError,
     expression::Expr,
-    lang_elems::{get_children_as, get_token_with},
+    lang_elems::{ERR_IF_EMPTY, get_children_as, get_token_with},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -26,9 +25,6 @@ impl PreComputed {
     fn get_nth_expr(&self, n: usize) -> Option<&Expr> {
         self.exprs.get(n)
     }
-    pub(crate) fn get_node(&self) -> &SyntaxNode {
-        &self.node
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -38,7 +34,7 @@ pub enum Binary {
 
 impl Binary {
     pub fn new(infix_bin_op_node: &SyntaxNode) -> ASTResult<Self> {
-        let exprs = get_children_as::<Expr>(infix_bin_op_node)?;
+        let exprs = get_children_as::<Expr>(infix_bin_op_node, ERR_IF_EMPTY)?;
         if exprs.len() != 2 {
             return Err(ASTError::new(
                 infix_bin_op_node.text_range().into(),
@@ -47,7 +43,7 @@ impl Binary {
             ));
         }
         let op = get_token_with(infix_bin_op_node, |token: &SyntaxToken| {
-            is_a_binary_operator(token.kind())
+            token.kind().is_binary_operator()
         })
         .map(|t| t.kind());
         Ok(Self::Infix(PreComputed {
@@ -82,7 +78,7 @@ pub enum Unary {
 }
 
 fn prepare_pre_computed(node: &SyntaxNode, variant: fn(PreComputed) -> Unary) -> ASTResult<Unary> {
-    let exprs = get_children_as::<Expr>(node)?;
+    let exprs = get_children_as::<Expr>(node, ERR_IF_EMPTY)?;
     let op = get_token_with(node, |token: &SyntaxToken| token.kind().is_unary_operator())
         .map(|t| t.kind());
     let p = PreComputed {
@@ -126,9 +122,9 @@ pub(crate) mod test {
         ast::Root,
         ast_root_from,
         function::On,
+        let_binding::VarRef,
         literal::{Literal, Value},
         types::Type,
-        variable::VarRef,
     };
 
     fn assert_expr_literal_value_eq(expr: &Expr, exp: &Value) {
