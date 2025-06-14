@@ -95,15 +95,29 @@ impl TryFrom<&SyntaxNode> for Identifier {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
     Ident(Identifier),
-    Tuple(ThinVec<Pattern>),
+    Tuple((ThinVec<Pattern>, Range<usize>)),
 }
 
 impl Pattern {
-    pub fn name(&self) -> Option<&SmolStr> {
+    pub fn as_ident(&self) -> Option<&Identifier> {
         match self {
-            Pattern::Ident(identifier) => Some(identifier.name()),
+            Pattern::Ident(identifier) => Some(identifier),
             Pattern::Tuple(_) => None,
         }
+    }
+
+    pub fn as_reversed_tuple_pattern(&self) -> Option<ThinVec<Pattern>> {
+        match self {
+            Pattern::Ident(_) => None,
+            Pattern::Tuple((patterns, _)) => {
+                let mut clone = patterns.clone();
+                clone.reverse();
+                Some(clone)
+            }
+        }
+    }
+    fn lhs_kinds() -> [SyntaxKind; 4] {
+        [Mut, Tuple, TypeHint, VarRefKind]
     }
     pub fn is_mut(&self) -> Option<bool> {
         match self {
@@ -111,20 +125,23 @@ impl Pattern {
             Pattern::Tuple(_) => None,
         }
     }
+    pub fn name(&self) -> Option<&SmolStr> {
+        match self {
+            Pattern::Ident(identifier) => Some(identifier.name()),
+            Pattern::Tuple(_) => None,
+        }
+    }
+    pub fn span(&self) -> Range<usize> {
+        match self {
+            Pattern::Ident(identifier) => identifier.span(),
+            Pattern::Tuple((_, span)) => span.clone(),
+        }
+    }
     pub fn type_hint(&self) -> Option<&Type> {
         match self {
             Pattern::Ident(identifier) => identifier.type_hint(),
             Pattern::Tuple(_) => None,
         }
-    }
-    pub fn as_ident(&self) -> Option<&Identifier> {
-        match self {
-            Pattern::Ident(identifier) => Some(identifier),
-            Pattern::Tuple(_) => None,
-        }
-    }
-    fn lhs_kinds() -> [SyntaxKind; 4] {
-        [Mut, Tuple, TypeHint, VarRefKind]
     }
 }
 
@@ -142,7 +159,7 @@ impl TryFrom<&SyntaxNode> for Pattern {
                 };
                 patterns.push(pattern);
             }
-            return Ok(Pattern::Tuple(patterns));
+            return Ok(Pattern::Tuple((patterns, node.text_range().into())));
         }
         let identifier = Identifier::try_from(node)?;
         Ok(Pattern::Ident(identifier))
@@ -157,6 +174,9 @@ pub struct LetBinding {
 }
 
 impl LetBinding {
+    pub fn pattern_span(&self) -> Range<usize> {
+        self.pattern.span()
+    }
     pub fn pattern(&self) -> &Pattern {
         &self.pattern
     }
@@ -248,7 +268,7 @@ mod tests {
 
     fn get_identifiers_from_tuple_pattern(pattern: &Pattern) -> ThinVec<Identifier> {
         match pattern {
-            Pattern::Tuple(identifiers) => identifiers
+            Pattern::Tuple((identifiers, _)) => identifiers
                 .iter()
                 .map(|id| id.as_ident().unwrap().clone())
                 .collect(),
@@ -345,7 +365,7 @@ mod tests {
         let ast_root = ast_root_from(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
         let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
-        let nested_tuple_pattern = match let_binding.pattern() {
+        let (nested_tuple_pattern, _) = match let_binding.pattern() {
             Pattern::Tuple(patterns) => patterns,
             _ => panic!("should be a tuple pattern"),
         };
