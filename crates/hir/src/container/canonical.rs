@@ -162,7 +162,10 @@ impl HIRBuilder {
         let ten_meta = TenMeta::with(container_examination, shape_former.form());
         Ok((ten_meta, flattened))
     }
-    pub fn get_canonical_tensor_with(&self, idx: CanonicalLiteralIdx) -> Option<&CanonicalBuffer> {
+    pub fn get_canonical_container_with(
+        &self,
+        idx: CanonicalLiteralIdx,
+    ) -> Option<&CanonicalBuffer> {
         let climber = climb(self.current_scope_cursor, &self.scopes);
         let mut t: Option<&CanonicalBuffer> = None;
         for (_, scope) in climber {
