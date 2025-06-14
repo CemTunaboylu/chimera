@@ -3,7 +3,7 @@ use crate::{HIRResult, builder::HIRBuilder, context::UsageContext};
 use ast::self_ref::SelfRef as ASTSelfRef;
 use hir_macro::with_context;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum SelfRef {
     Instance,
     Struct,

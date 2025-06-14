@@ -1,7 +1,3 @@
-use la_arena::{Arena, Idx, RawIdx};
-use patricia_tree::PatriciaMap;
-use smol_str::SmolStr;
-
 use crate::{
     HIRResult,
     container::canonical::CanonicalBuffer,
@@ -13,6 +9,9 @@ use crate::{
     resolution::Unresolved,
     structure::StructDef,
 };
+use la_arena::{Arena, Idx, RawIdx};
+use patricia_tree::PatriciaMap;
+use smol_str::SmolStr;
 
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
 
@@ -26,10 +25,16 @@ pub type LetBindingIdx = Idx<LetBinding>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Default, Eq, Hash, PartialEq)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
+}
+
+impl Debug for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}..{}", self.start, self.end))
+    }
 }
 
 impl PartialOrd for Span {
@@ -209,6 +214,8 @@ impl Scope {
     {
         let allocator = S::select_alloc(self);
 
+        // * Note: to avoid code duplication , we 'mess' with the internals of allocators
+        // * rather than having them implement the same thing themselves
         allocator.name_to_idx_trie.get(key).map(|idx| {
             let d = &allocator.definitions[*idx];
             let name_idx = d.get_name_index();

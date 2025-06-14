@@ -17,7 +17,7 @@ use crate::{
     statement::Stmt,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Paren(pub ExprIdx);
 
 // TODO: needs metadata as well

@@ -34,7 +34,7 @@ pub struct Callable {
     pub return_type: Option<RetType>,
     pub body: Block,
 }
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, PartialOrd)]
 // TODO: add metadata
 pub struct FnDef {
     pub name_index: StrIdx,
@@ -64,13 +64,13 @@ impl Default for FnDef {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct FnArg(pub ExprIdx);
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum On {
     Binding(FnDefIdx),
     Literal(Literal),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Call {
     pub on: On,
     pub arguments: ThinVec<FnArg>,

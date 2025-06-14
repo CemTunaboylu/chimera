@@ -103,7 +103,7 @@ pub fn resolve<'caller, E, S: Selector<E>>(
     unresolved_ref: &Reference<E>,
 ) -> ResolutionResult<Reference<E>>
 where
-    E: Clone + Debug + PartialEq + NameIndexed,
+    E: Clone + Debug + Eq + Hash + PartialEq + PartialOrd + NameIndexed,
 {
     let current_scope = scopes.next();
     let (key, resolution_type, baggage) = {
@@ -166,7 +166,10 @@ impl Unresolved {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub enum Reference<R> {
+pub enum Reference<R>
+where
+    R: Eq + Hash + PartialEq + PartialOrd,
+{
     Unresolved(Idx<Unresolved>),
     Resolved {
         at: ScopeIdx,
@@ -176,13 +179,19 @@ pub enum Reference<R> {
     },
 }
 
-impl<D: Default> Default for Reference<D> {
+impl<D: Default> Default for Reference<D>
+where
+    D: Eq + Hash + PartialEq + PartialOrd,
+{
     fn default() -> Self {
         Self::Unresolved(placeholder_idx())
     }
 }
 
-impl<R: Debug> Reference<R> {
+impl<R: Debug> Reference<R>
+where
+    R: Eq + Hash + PartialEq + PartialOrd,
+{
     pub fn get_unresolved_index(&self) -> ResolutionResult<Idx<Unresolved>> {
         match self {
             Reference::Resolved { .. } => Err(ResolutionError::already_resolved(self).into()),

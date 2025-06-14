@@ -96,7 +96,7 @@ impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> InternalStructure<TorV
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct StructDef {
     pub internal_with_field_types: InternalStructure<Type>,
     pub name_index: StrIdx,

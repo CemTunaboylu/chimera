@@ -19,7 +19,7 @@ use crate::{
     unwrap_or_err,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Expr {
     Block(Block),
     ContainerRef(Reference<ContainerRef>),
@@ -36,7 +36,7 @@ pub enum Expr {
     Tuple(Tuple),
     Unary(Unary),
     Unit,
-    VarRef(Reference<VarRef>),
+    VarRef(Reference<LetBinding>),
 }
 
 pub const MISSING: u32 = 0;
