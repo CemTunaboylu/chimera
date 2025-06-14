@@ -282,21 +282,15 @@ impl HIRBuilder {
             }
             // at this point we are sure that pattern is Pattern:Ident
             let pattern_as_ident = pattern.as_ident().unwrap();
-            let is_mut = pattern_as_ident.is_mut();
-            let type_hint = if let Some(ast_type_hint) = pattern_as_ident.type_hint() {
-                Some(self.lower_type(ast_type_hint)?)
-            } else {
-                None
-            };
 
             let ith_indexing_expr_idx =
                 self.form_indexing_for(&mut current, rhs_span, pattern_as_ident.span());
 
-            // TODO: create a NamedIdentifier with the method
-            let name_of_the_binding = pattern_as_ident.name();
+            let NamedIdentifier {
+                name: name_of_the_binding,
+                identifier,
+            } = self.lower_into_named_identifier(pattern_as_ident)?;
 
-            let identifier =
-                Identifier::new(is_mut, type_hint, Spanned::spanned(pattern_as_ident.span()));
             let binding = LetBinding {
                 identifier,
                 spanned_expr_idx: Spanned::new(ith_indexing_expr_idx, current.span),
