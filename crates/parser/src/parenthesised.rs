@@ -93,6 +93,7 @@ impl Parser<'_> {
         let rollback_when_dropped = self.impose_tuple_pattern_context();
         let (kind, finished) = self.parse_parenthesised_or_tuple_pattern();
         if kind != Tuple {
+            // ! FIXME: msg does not convey any helpful info.
             self.emit_error_event("expected tuple pattern");
         }
         finished

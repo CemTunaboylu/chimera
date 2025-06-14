@@ -1,4 +1,4 @@
-use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
+use syntax::language::SyntaxNode;
 
 use crate::{
     errors::ASTError,
@@ -21,7 +21,6 @@ impl TryFrom<&SyntaxNode> for Mut {
     type Error = ASTError;
 
     fn try_from(mut_node: &SyntaxNode) -> Result<Self, Self::Error> {
-        use SyntaxKind::{KwMut, Whitespace};
         if let Some(child) =
             filter_irrelevant_out(mut_node.children_with_tokens(), get_kind_on_node_or_token)
                 .first()
