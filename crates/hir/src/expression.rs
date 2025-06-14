@@ -4,10 +4,10 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     climbing::climb,
-    container_ref::ContainerRef,
-    delimited::{Block, Indexing, Paren, Tuple},
+    delimited::{Block, Paren, Tuple},
     function::{Call, MayNeedResolution},
-    let_binding::VarRef,
+    indexing::Indexing,
+    let_binding::{LetBinding, VarRef},
     literal::Literal,
     mutable::Mut,
     operation::{BinaryInfix, Unary},
@@ -22,7 +22,6 @@ use crate::{
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Expr {
     Block(Block),
-    ContainerRef(Reference<ContainerRef>),
     FnCall(Reference<Call>),
     LitCall(Call),
     Indexing(Indexing),
@@ -89,11 +88,6 @@ impl HIRBuilder {
     pub fn lower_expr_as_idx(&mut self, from: &ASTExpr) -> HIRResult<ExprIdx> {
         let expr = match from {
             ASTExpr::Block(block) => Expr::Block(self.lower_block(block)?),
-            ASTExpr::ContainerRef(container_ref) => {
-                let unresolved = self.lower_container_ref(container_ref)?;
-                let idx = self.allocate_for_resolution(unresolved);
-                Expr::ContainerRef(Reference::Unresolved(idx))
-            }
             ASTExpr::Call(fn_call) => match self.lower_call(fn_call)? {
                 MayNeedResolution::Yes(unresolved) => {
                     let idx = self.allocate_for_resolution(unresolved);

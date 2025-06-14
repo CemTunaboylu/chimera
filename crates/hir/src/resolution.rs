@@ -1,6 +1,6 @@
 use crate::{
     climbing::EnumeratedScope,
-    delimited::Indexing,
+    indexing::Indexing,
     scope::{NameIndexed, Selector, Span, placeholder_idx},
     unwrap_or_err,
 };

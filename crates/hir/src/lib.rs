@@ -1,7 +1,6 @@
 pub mod builder;
 pub mod climbing;
 pub mod container;
-pub mod container_ref;
 pub mod context;
 pub mod control_flow;
 pub mod delimited;
@@ -10,6 +9,7 @@ pub mod expression;
 pub mod function;
 pub mod hir;
 pub mod impl_block;
+pub mod indexing;
 pub mod jump;
 pub mod let_binding;
 pub mod literal;
@@ -30,11 +30,44 @@ pub mod typing;
 
 use builder::HIRBuilder;
 use errors::HIRError;
+use la_arena::Idx;
 use resolution::Baggage;
 use thin_vec::ThinVec;
 
 use miette::Report;
 use typing::hindley_milner::inference::TypeKey;
+
+use crate::scope::{Span, placeholder_idx};
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub struct Spanned<I> {
+    pub index: I,
+    pub span: Span,
+}
+
+impl<I> Default for Spanned<Idx<I>> {
+    fn default() -> Self {
+        Self {
+            index: placeholder_idx(),
+            span: Span { start: 0, end: 0 },
+        }
+    }
+}
+
+impl<I> Spanned<Idx<I>> {
+    fn new(index: Idx<I>, span: impl Into<Span>) -> Self {
+        Self {
+            span: span.into(),
+            index,
+        }
+    }
+    fn spanned(span: impl Into<Span>) -> Self {
+        Self {
+            span: span.into(),
+            ..Default::default()
+        }
+    }
+}
 
 pub type HIRResult<T> = Result<T, Report>;
 

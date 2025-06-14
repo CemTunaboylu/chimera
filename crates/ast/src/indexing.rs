@@ -11,9 +11,9 @@ use crate::{
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Indexing {
-    indexed: SyntaxNode,
-    index: SyntaxNode,
-    span: Range<usize>,
+    pub indexed: SyntaxNode,
+    pub index: SyntaxNode,
+    pub span: Range<usize>,
 }
 
 impl Indexing {

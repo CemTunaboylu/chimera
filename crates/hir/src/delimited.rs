@@ -1,15 +1,14 @@
 use ast::{
-    delimited::{Block as ASTBlock, Indexing as ASTIndexing, Paren as ASTParen, Tuple as ASTTuple},
+    delimited::{Block as ASTBlock, Paren as ASTParen, Tuple as ASTTuple},
     expression::Expr as ASTExpr,
 };
-use hir_macro::{scoped, with_context};
+use hir_macro::scoped;
 
 use thin_vec::ThinVec;
 
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    context::UsageContext,
     errors::HIRError,
     expression::Expr,
     mut_clone_with_err,
@@ -37,10 +36,6 @@ impl Default for Block {
         }
     }
 }
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Indexing(pub(crate) ExprIdx);
-
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Tuple(pub(crate) ThinVec<ExprIdx>);
 
@@ -68,11 +63,6 @@ impl HIRBuilder {
             returns,
             statements: lowered_statements,
         })
-    }
-    #[with_context(UsageContext::Read)]
-    pub fn lower_indexing(&mut self, indexing: &ASTIndexing) -> HIRResult<Indexing> {
-        let index = self.lower_expr_as_idx(&indexing.index().map_err(HIRError::from_err)?)?;
-        Ok(Indexing(index))
     }
     pub fn lower_paren(&mut self, paren: &ASTParen) -> HIRResult<Paren> {
         let index = self.lower_expr_as_idx(&paren.expr().map_err(HIRError::from_err)?)?;
