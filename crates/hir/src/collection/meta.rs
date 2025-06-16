@@ -21,7 +21,7 @@ use crate::{
 
 use super::{Shape, layout::Layout, op::TensorOp};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct TenMeta {
     // pub data_type: Maybe<Type>,
     pub layout: Layout,

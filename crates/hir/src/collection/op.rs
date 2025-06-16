@@ -2,7 +2,7 @@ use thin_vec::ThinVec;
 
 use crate::literal::Value;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum TensorOp {
     Transpose,
     Reshape(ThinVec<usize>),

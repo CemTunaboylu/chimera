@@ -83,7 +83,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        collection::Shape,
+        collection::{Shape, canonical::Storage},
         expression::Expr,
         literal::{Literal, Value},
         resolution::{Reference, Unresolved},
@@ -169,7 +169,7 @@ mod tests {
                 .expect("should have a canonical container at that index");
             assert_eq!(
                 canonical_container.data,
-                thin_vec![into_idx(3), into_idx(4), into_idx(5)] // first the indices will be inserted, thus values are of later indices
+                Storage::Indexed(thin_vec![into_idx(3), into_idx(4), into_idx(5)]) // first the indices will be inserted, thus values are of later indices
             );
             assert_eq!(canonical_container.shape, expected_shape);
         } else {

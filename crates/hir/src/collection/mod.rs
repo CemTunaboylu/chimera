@@ -21,7 +21,7 @@ pub mod uninit;
 
 pub type CanonicalLiteralIdx = Idx<CanonicalBuffer>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Strides(pub ThinVec<usize>);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]

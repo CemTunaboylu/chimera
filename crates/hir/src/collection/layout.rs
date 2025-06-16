@@ -2,7 +2,7 @@ use thin_vec::{ThinVec, thin_vec};
 
 use super::{Shape, Strides};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Layout {
     RowMajor(Strides),
     ColumnMajor(Strides),

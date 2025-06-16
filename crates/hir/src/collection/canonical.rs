@@ -10,6 +10,7 @@ use crate::{
     builder::HIRBuilder,
     climbing::climb,
     clone_from_iter_with_err,
+    literal::Value,
     scope::ExprIdx,
     typing::hindley_milner::types::{Maybe, Type},
 };
@@ -20,7 +21,13 @@ use super::{
     meta::{CollectionExamination, TenMeta},
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub enum Storage {
+    Direct(ThinVec<Value>),
+    Indexed(ThinVec<ExprIdx>),
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Canonical {
     pub idx: CanonicalLiteralIdx,
     pub data_type: Type,
@@ -33,8 +40,7 @@ pub struct Canonical {
 pub struct CanonicalBuffer {
     // data: Cow<'arena, [PrimitiveValue]>,
     // TODO: put metadata in an arena and have the idx here
-    // pub data: ThinVec<Value>,
-    pub data: ThinVec<ExprIdx>,
+    pub data: Storage,
     pub data_type: Maybe<Type>,
     pub layout: Layout,
     pub metadata: TenMeta,
@@ -42,12 +48,7 @@ pub struct CanonicalBuffer {
 }
 
 impl CanonicalBuffer {
-    pub fn new(
-        // flattened: ThinVec<Value>,
-        flattened: ThinVec<ExprIdx>,
-        layout_f: fn(&Shape) -> Layout,
-        metadata: &TenMeta,
-    ) -> Self {
+    pub fn new(flattened: Storage, layout_f: fn(&Shape) -> Layout, metadata: &TenMeta) -> Self {
         let shape = metadata.shape.clone();
         // let data_type = metadata.data_type.clone();
         let data_type = Maybe::Checked(Box::new(Type::I32)); // TODO: FIX ME: for now a dyummy default value to make tests pass
@@ -109,7 +110,7 @@ impl HIRBuilder {
     pub fn flatten_buffer_tree(
         &mut self,
         tensor_tree: &ASTBufferTree,
-    ) -> HIRResult<(TenMeta, ThinVec<ExprIdx>)> {
+    ) -> HIRResult<(TenMeta, Storage)> {
         let mut flattened: ThinVec<ExprIdx> = thin_vec![];
         let to_stack = tensor_tree
             .sub_tree()
@@ -160,8 +161,9 @@ impl HIRBuilder {
         }
 
         let ten_meta = TenMeta::with(container_examination, shape_former.form());
-        Ok((ten_meta, flattened))
+        Ok((ten_meta, Storage::Indexed(flattened)))
     }
+
     pub fn get_canonical_container_with(
         &self,
         idx: CanonicalLiteralIdx,
