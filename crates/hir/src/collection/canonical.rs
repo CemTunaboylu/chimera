@@ -116,12 +116,12 @@ impl HIRBuilder {
             .sub_tree()
             .or(tensor_tree.values())
             .expect("should have been ok");
-        let enumerate = |e: Expr| Ok((1, e));
         let len = to_stack.len();
         let mut shape_former = ShapeFormer::new(len);
-        let mut stack = clone_from_iter_with_err(to_stack.into_iter().rev(), len, enumerate)?;
+        let mut stack =
+            clone_from_iter_with_err(to_stack.into_iter().rev(), len, |e: Expr| Ok((1, e)))?;
 
-        let mut container_examination = CollectionExamination::new();
+        let mut collection_examination = CollectionExamination::new();
 
         'outer: while !stack.is_empty() {
             let mut ast_expr = {
@@ -130,41 +130,38 @@ impl HIRBuilder {
                 ae
             };
             while let Some(tree) = buffer_tree_from(&ast_expr) {
-                let mut sub_tree = if let Some(st) = tree.sub_tree() {
-                    shape_former.get_dim_for_shape(st.len());
-                    st
+                if let Some(mut sub_tree) = tree.sub_tree() {
+                    shape_former.get_dim_for_shape(sub_tree.len());
+                    sub_tree.reverse();
+                    ast_expr = sub_tree.pop().expect("expected a buffer tree");
+                    shape_former.deepen();
+                    stack.reserve(sub_tree.len());
+                    let depth = shape_former.get_depth();
+                    for s in sub_tree {
+                        stack.push((depth, s));
+                    }
                 } else if let Some(values) = tree.values() {
                     shape_former.get_dim_for_shape(values.len());
                     for v in values {
                         let idx_for_value = self.lower_expr_as_idx(&v)?;
                         let expr = self.get_expr(idx_for_value);
-                        container_examination.add(expr, idx_for_value)?;
+                        collection_examination.add(expr, idx_for_value)?;
                         flattened.push(idx_for_value);
                     }
                     continue 'outer;
-                } else {
-                    unreachable!()
-                };
-
-                sub_tree.reverse();
-                ast_expr = sub_tree.pop().expect("expected a buffer tree");
-                shape_former.deepen();
-                stack.reserve(sub_tree.len());
-                for s in sub_tree {
-                    stack.push((shape_former.get_depth(), s));
                 }
             }
             let idx_for_value = self.lower_expr_as_idx(&ast_expr)?;
             let expr = self.get_expr(idx_for_value);
-            container_examination.add(expr, idx_for_value)?;
+            collection_examination.add(expr, idx_for_value)?;
             flattened.push(idx_for_value);
         }
 
-        let ten_meta = TenMeta::with(container_examination, shape_former.form());
+        let ten_meta = TenMeta::with(collection_examination, shape_former.form());
         Ok((ten_meta, Storage::Indexed(flattened)))
     }
 
-    pub fn get_canonical_container_with(
+    pub fn get_canonical_collection_with(
         &self,
         idx: CanonicalLiteralIdx,
     ) -> Option<&CanonicalBuffer> {
@@ -182,6 +179,8 @@ impl HIRBuilder {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Range;
+
     use parameterized_test::create;
     use thin_vec::ThinVec;
 
@@ -268,7 +267,13 @@ mod tests {
                 ([2, 2, 2], 26),
             ], /* column-major */
         ];
-        // TODO: uncomment
+        let indexed = |range: Range<usize>| {
+            let mut data = ThinVec::with_capacity(range.end - range.start);
+            for i in range {
+                data.push(into_idx(i as u32));
+            }
+            Storage::Indexed(data)
+        };
         // note: at the end we will be using the same expressions, i.e. won't insert the same expression twice into the arena
         // thus, same expressions will result with the same expression index
         // let data = thin_vec![
@@ -300,7 +305,8 @@ mod tests {
         //     into_idx(2),
         //     into_idx(3)
         // ];
-        // assert_eq!(data, tensor_literal.data);
+        let indexed_data = indexed(1..28);
+        assert_eq!(indexed_data, tensor_literal.data);
 
         let layouts = [
             |shape: &Shape| Layout::row_major(shape),
@@ -334,7 +340,6 @@ mod tests {
             ([1, 1, 1], 7),
             ([1, 2, 3], 29),
         ];
-        // TODO: uncomment
         // note: at the end we will be using the same expressions, i.e. won't insert the same expression twice into the arena
         // thus, same expressions will result with the same expression index
         // let data = thin_vec![
@@ -371,7 +376,16 @@ mod tests {
         //     into_idx(4),
         //     into_idx(4),
         // ];
+        let indexed = |range: Range<usize>| {
+            let mut data = ThinVec::with_capacity(range.end - range.start);
+            for i in range {
+                data.push(into_idx(i as u32));
+            }
+            Storage::Indexed(data)
+        };
         // assert_eq!(data, tensor_literal.data);
+        let indexed_data = indexed(1..33);
+        assert_eq!(indexed_data, tensor_literal.data);
 
         fn blocked(shape: &Shape) -> Layout {
             Layout::blocked(2, shape)
