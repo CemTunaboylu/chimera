@@ -1,6 +1,6 @@
 use crate::{
     HIRResult,
-    container::canonical::CanonicalBuffer,
+    collection::canonical::CanonicalBuffer,
     errors::HIRError,
     expression::Expr,
     function::FnDef,

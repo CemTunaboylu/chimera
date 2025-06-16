@@ -2,7 +2,7 @@ use crate::{HIRResult, builder::HIRBuilder, unwrap_or_err};
 
 use super::{canonical::Canonical, uninit::Uninitialized};
 
-use ast::{container::BufferTree, errors::ASTError, literal::Value as ASTValue};
+use ast::{collection::BufferTree, errors::ASTError, literal::Value as ASTValue};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tensor {

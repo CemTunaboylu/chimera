@@ -17,7 +17,7 @@ use crate::{
 use SyntaxKind::*;
 
 // container_literal_node is either a BufferLit or a TensorLit node
-pub fn try_container_tree_from(container_literal_node: &SyntaxNode) -> ASTResult<BufferTree> {
+pub fn try_collection_tree_from(container_literal_node: &SyntaxNode) -> ASTResult<BufferTree> {
     let child = if let Some(c) = container_literal_node.first_child() {
         c
     } else {

@@ -1,7 +1,7 @@
 use thin_vec::{ThinVec, thin_vec};
 
 use ast::{
-    container::{BufferTree as ASTBufferTree, buffer_tree_from},
+    collection::{BufferTree as ASTBufferTree, buffer_tree_from},
     expression::Expr,
 };
 
@@ -17,7 +17,7 @@ use crate::{
 use super::{
     CanonicalLiteralIdx, Shape,
     layout::Layout,
-    meta::{ContainerExamination, TenMeta},
+    meta::{CollectionExamination, TenMeta},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -120,7 +120,7 @@ impl HIRBuilder {
         let mut shape_former = ShapeFormer::new(len);
         let mut stack = clone_from_iter_with_err(to_stack.into_iter().rev(), len, enumerate)?;
 
-        let mut container_examination = ContainerExamination::new();
+        let mut container_examination = CollectionExamination::new();
 
         'outer: while !stack.is_empty() {
             let mut ast_expr = {
@@ -186,7 +186,7 @@ mod tests {
     use super::*;
     use ast::{ast_root_from, cast_node_into_type, literal::Literal as ASTLiteral};
 
-    use crate::{container::Shape, typing::hindley_milner::types::Maybe};
+    use crate::{collection::Shape, typing::hindley_milner::types::Maybe};
     use crate::{literal::Value, scope::into_idx};
 
     fn get_tensor_literal_for(program: &str) -> CanonicalBuffer {

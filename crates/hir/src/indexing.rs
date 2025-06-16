@@ -83,7 +83,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        container::Shape,
+        collection::Shape,
         expression::Expr,
         literal::{Literal, Value},
         resolution::{Reference, Unresolved},

@@ -5,7 +5,7 @@ use syntax::language::{SyntaxNode, SyntaxToken};
 use std::fmt::Debug;
 
 pub mod ast;
-pub mod container;
+pub mod collection;
 pub mod control_flow;
 pub mod delimited;
 pub mod errors;

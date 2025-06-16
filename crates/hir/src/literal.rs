@@ -6,7 +6,7 @@ use thin_vec::ThinVec;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    container::{Shape, canonical::CanonicalBuffer, layout::Layout},
+    collection::{Shape, canonical::CanonicalBuffer, layout::Layout},
     function::Callable,
     scope::{ContainerLiteralIdx, StrIdx},
     structure::StructLiteral,

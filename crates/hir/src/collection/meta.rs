@@ -42,17 +42,17 @@ pub struct TenMeta {
 }
 
 impl TenMeta {
-    pub fn with(container_examination: ContainerExamination, shape: Shape) -> Self {
+    pub fn with(collection_examination: CollectionExamination, shape: Shape) -> Self {
         // let MinMax { max, min } = min_max;
         Self {
             // max: max,
             // min: min,
             max: None,
             min: None,
-            sparse: container_examination.sparsity.is_sparse(),
+            sparse: collection_examination.sparsity.is_sparse(),
             num_refs: 0,
             op_log: ThinVec::new(),
-            // data_type: container_examination.unchecked_types(),
+            // data_type: collection_examination.unchecked_types(),
             shape: shape.clone(),
             layout: Layout::row_major(&shape),
             group_id: 0,        // TODO: fix
@@ -61,18 +61,18 @@ impl TenMeta {
     }
 }
 
-pub struct ContainerExamination {
+pub struct CollectionExamination {
     sparsity: Sparsity<ExprIdx>,
     // min_max: MinMax,
     // types: Types,
 }
-impl Default for ContainerExamination {
+impl Default for CollectionExamination {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ContainerExamination {
+impl CollectionExamination {
     pub fn new() -> Self {
         Self {
             sparsity: Sparsity::new(),

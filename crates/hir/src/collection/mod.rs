@@ -9,7 +9,7 @@ use crate::{
     literal::{Literal, Value},
     scope::ExprIdx,
 };
-use ast::container::Shape as ASTShape;
+use ast::collection::Shape as ASTShape;
 
 pub mod block;
 pub mod canonical;

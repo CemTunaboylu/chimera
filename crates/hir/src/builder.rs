@@ -9,7 +9,7 @@ use ast::{ast::Root as ASTRoot, statement::Stmt as ASTStmt};
 
 use crate::{
     HIRResult,
-    container::canonical::CanonicalBuffer,
+    collection::canonical::CanonicalBuffer,
     context::{LoweringContext, UsageContext},
     scope::{
         ContainerLiteralIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span, StrIdx,

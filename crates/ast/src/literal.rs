@@ -8,7 +8,7 @@ use syntax::{
 
 use crate::{
     ast::ASTResult,
-    container::{BufferTree, try_container_tree_from},
+    collection::{BufferTree, try_collection_tree_from},
     errors::ASTError,
     function::Lambda,
     structure::StructLiteral,
@@ -140,11 +140,11 @@ impl TryFrom<&SyntaxNode> for Literal {
         if let Some(child) = literal_node.first_child() {
             let literal = match child.kind() {
                 SyntaxKind::BufferLit => {
-                    let buffer_tree = try_container_tree_from(&child)?;
+                    let buffer_tree = try_collection_tree_from(&child)?;
                     Self(Value::Buffer(buffer_tree))
                 }
                 SyntaxKind::TensorLit => {
-                    let tensor_tree = try_container_tree_from(&child)?;
+                    let tensor_tree = try_collection_tree_from(&child)?;
                     Self(Value::Tensor(tensor_tree))
                 }
                 SyntaxKind::Lambda => {

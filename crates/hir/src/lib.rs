@@ -1,6 +1,6 @@
 pub mod builder;
 pub mod climbing;
-pub mod container;
+pub mod collection;
 pub mod context;
 pub mod control_flow;
 pub mod delimited;
