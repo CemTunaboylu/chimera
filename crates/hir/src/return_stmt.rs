@@ -4,13 +4,7 @@ use hir_macro::with_context;
 use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ExprIdx};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Return(ExprIdx);
-
-impl Return {
-    pub fn expr(&self) -> ExprIdx {
-        self.0
-    }
-}
+pub struct Return(pub ExprIdx);
 
 impl HIRBuilder {
     #[with_context(UsageContext::Return)]

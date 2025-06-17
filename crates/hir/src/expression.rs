@@ -5,14 +5,15 @@ use crate::{
     builder::HIRBuilder,
     climbing::climb,
     delimited::{Block, Paren, Tuple},
-    function::{Call, MayNeedResolution},
+    function::{Call, MayNeedResolution, On},
     indexing::Indexing,
     let_binding::{LetBinding, VarRef},
-    literal::Literal,
+    literal::{Literal, Value},
     mutable::Mut,
     operation::{BinaryInfix, Unary},
+    parameter::Param,
     resolution::Reference,
-    scope::{ExprIdx, into_idx},
+    scope::{ExprIdx, FnSelector, Selector, into_idx},
     self_ref::SelfRef,
     structure::StructRef,
     typing::hindley_milner::types::Type,
@@ -86,32 +87,81 @@ impl HIRBuilder {
             .unwrap_or(Ok(into_idx(MISSING)))
     }
     pub fn lower_expr_as_idx(&mut self, from: &ASTExpr) -> HIRResult<ExprIdx> {
+        let is_pure: bool;
         let expr = match from {
-            ASTExpr::Block(block) => Expr::Block(self.lower_block(block)?),
+            ASTExpr::Block(block) => {
+                let block = self.lower_block(block)?;
+                is_pure = self.is_block_pure(&block);
+                Expr::Block(block)
+            }
             ASTExpr::Call(fn_call) => match self.lower_call(fn_call)? {
                 MayNeedResolution::Yes(unresolved) => {
+                    is_pure = false;
                     let idx = self.allocate_for_resolution(unresolved);
                     Expr::FnCall(Reference::Unresolved(idx))
                 }
-                MayNeedResolution::No(call) => Expr::LitCall(call),
+                MayNeedResolution::No(call) => {
+                    is_pure = self.is_call_pure(&call);
+                    Expr::LitCall(call)
+                }
             },
-            ASTExpr::Indexing(indexing) => Expr::Indexing(self.lower_indexing(indexing)?),
-            ASTExpr::Infix(infix) => Expr::Infix(self.lower_binary_operation(infix)?),
-            ASTExpr::Literal(literal) => Expr::Literal(self.lower_literal(literal)?),
-            ASTExpr::Mut(mutable) => Expr::Mut(self.lower_mut(mutable)?),
-            ASTExpr::Paren(paren) => Expr::Paren(self.lower_paren(paren)?),
-            ASTExpr::SelfRef(self_ref) => Expr::SelfRef(self.lower_self_ref(self_ref)?),
-            ASTExpr::Tuple(tuple) => Expr::Tuple(self.lower_tuple(tuple)?),
-            ASTExpr::Unit => Expr::Unit,
-            ASTExpr::Unary(unary) => Expr::Unary(self.lower_unary_operation(unary)?),
+            ASTExpr::Indexing(indexing) => {
+                let lowered_indexing = self.lower_indexing(indexing)?;
+                is_pure = self.is_indexing_pure(&lowered_indexing);
+                Expr::Indexing(lowered_indexing)
+            }
+            ASTExpr::Infix(infix) => {
+                let lowered_infix = self.lower_binary_operation(infix)?;
+                is_pure = self.is_binary_infix_pure(&lowered_infix);
+                Expr::Infix(lowered_infix)
+            }
+            ASTExpr::Literal(literal) => {
+                let lowered_literal = self.lower_literal(literal)?;
+                is_pure = self.is_value_pure(&lowered_literal.0);
+                Expr::Literal(lowered_literal)
+            }
+            ASTExpr::Mut(mutable) => {
+                let lowered_mutabble = self.lower_mut(mutable)?;
+                is_pure = false;
+                Expr::Mut(lowered_mutabble)
+            }
+            ASTExpr::Paren(paren) => {
+                let lowered_paren = self.lower_paren(paren)?;
+                is_pure = self.is_pure(lowered_paren.0);
+                Expr::Paren(lowered_paren)
+            }
+            ASTExpr::SelfRef(self_ref) => {
+                is_pure = true;
+                Expr::SelfRef(self.lower_self_ref(self_ref)?)
+            }
+            ASTExpr::Tuple(tuple) => {
+                let lowered_tuple = self.lower_tuple(tuple)?;
+                is_pure = self.is_expr_slice_pure(lowered_tuple.0.as_slice());
+                Expr::Tuple(lowered_tuple)
+            }
+            ASTExpr::Unit => {
+                is_pure = true;
+                Expr::Unit
+            }
+            ASTExpr::Unary(unary) => {
+                let lowered_unary = self.lower_unary_operation(unary)?;
+                is_pure = self.is_unary_op_pure(&lowered_unary);
+                Expr::Unary(self.lower_unary_operation(unary)?)
+            }
             ASTExpr::VarRef(var_ref) => {
+                // * Note: since we did't resolve it yet, we let user of the ref to assign
+                is_pure = true;
                 let unresolved = self.lower_var_ref(var_ref)?;
                 let idx = self.allocate_for_resolution(unresolved);
                 Expr::VarRef(Reference::Unresolved(idx))
             }
             _ => todo!(),
         };
-        Ok(self.as_expr_idx(expr))
+        let idx = self.as_expr_idx(expr);
+        if is_pure {
+            self.set_as_pure(idx);
+        }
+        Ok(idx)
     }
 
     pub fn as_expr_idx(&mut self, exp: Expr) -> ExprIdx {

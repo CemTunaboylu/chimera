@@ -164,14 +164,14 @@ mod tests {
             assert_eq!(*shape, expected_shape);
             assert_eq!(*data_type, Maybe::Checked(Box::new(Type::I32)));
 
-            let canonical_container = hir
-                .get_canonical_container_with(*idx)
-                .expect("should have a canonical container at that index");
+            let canonical_collection = hir
+                .get_canonical_collection_with(*idx)
+                .expect("should have a canonical collection at that index");
             assert_eq!(
-                canonical_container.data,
+                canonical_collection.data,
                 Storage::Indexed(thin_vec![into_idx(3), into_idx(4), into_idx(5)]) // first the indices will be inserted, thus values are of later indices
             );
-            assert_eq!(canonical_container.shape, expected_shape);
+            assert_eq!(canonical_collection.shape, expected_shape);
         } else {
             panic!("should have been buffer literal")
         }

@@ -11,6 +11,8 @@ use crate::{
     climbing::climb,
     clone_from_iter_with_err,
     literal::Value,
+    metadata::Common,
+    purity::Purity,
     scope::ExprIdx,
     typing::hindley_milner::types::{Maybe, Type},
 };
@@ -18,7 +20,7 @@ use crate::{
 use super::{
     CanonicalLiteralIdx, Shape,
     layout::Layout,
-    meta::{CollectionExamination, TenMeta},
+    meta::{CollectionExamination, CollectionMeta},
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
@@ -32,7 +34,7 @@ pub struct Canonical {
     pub idx: CanonicalLiteralIdx,
     pub data_type: Type,
     pub layout: Layout,
-    pub metadata: TenMeta,
+    pub metadata: CollectionMeta,
     pub shape: Shape,
 }
 
@@ -43,12 +45,16 @@ pub struct CanonicalBuffer {
     pub data: Storage,
     pub data_type: Maybe<Type>,
     pub layout: Layout,
-    pub metadata: TenMeta,
+    pub metadata: CollectionMeta,
     pub shape: Shape,
 }
 
 impl CanonicalBuffer {
-    pub fn new(flattened: Storage, layout_f: fn(&Shape) -> Layout, metadata: &TenMeta) -> Self {
+    pub fn new(
+        flattened: Storage,
+        layout_f: fn(&Shape) -> Layout,
+        metadata: &CollectionMeta,
+    ) -> Self {
         let shape = metadata.shape.clone();
         // let data_type = metadata.data_type.clone();
         let data_type = Maybe::Checked(Box::new(Type::I32)); // TODO: FIX ME: for now a dyummy default value to make tests pass
@@ -110,7 +116,7 @@ impl HIRBuilder {
     pub fn flatten_buffer_tree(
         &mut self,
         tensor_tree: &ASTBufferTree,
-    ) -> HIRResult<(TenMeta, Storage)> {
+    ) -> HIRResult<(CollectionMeta, Storage)> {
         let mut flattened: ThinVec<ExprIdx> = thin_vec![];
         let to_stack = tensor_tree
             .sub_tree()
@@ -157,7 +163,11 @@ impl HIRBuilder {
             flattened.push(idx_for_value);
         }
 
-        let ten_meta = TenMeta::with(collection_examination, shape_former.form());
+        let common = Common {
+            purity: Purity::Pure,
+            refs_as_stmt_indices: thin_vec![],
+        };
+        let ten_meta = CollectionMeta::with(common, collection_examination, shape_former.form());
         Ok((ten_meta, Storage::Indexed(flattened)))
     }
 
@@ -187,19 +197,17 @@ mod tests {
     use super::*;
     use ast::{ast_root_from, cast_node_into_type, literal::Literal as ASTLiteral};
 
-    use crate::{collection::Shape, typing::hindley_milner::types::Maybe};
+    use crate::{collection::Shape, metadata::Common, typing::hindley_milner::types::Maybe};
     use crate::{literal::Value, scope::into_idx};
 
     fn get_tensor_literal_for(program: &str) -> CanonicalBuffer {
         let ast_root = ast_root_from(program);
         let literal_node = ast_root.get_root().first_child().unwrap();
         let ast_literal = cast_node_into_type::<ASTLiteral>(&literal_node);
-        println!("ast_literal: {:?}", ast_literal);
         let mut hir_builder = HIRBuilder::new(ast_root);
-        let literal = hir_builder
+        _ = hir_builder
             .lower_literal(&ast_literal)
             .expect("should have been ok");
-        println!("literal: {:?}", literal);
         let idx = into_idx::<CanonicalBuffer>(0);
         hir_builder.get_current_scope().tensor_literals[idx].clone()
     }
@@ -214,10 +222,14 @@ mod tests {
         }
     }
 
-    fn test_metadata(max: Value, is_sparse: bool) -> TenMeta {
+    fn test_metadata(max: Value, is_sparse: bool) -> CollectionMeta {
         let dtype: Type = Type::from(&max);
         let shape = Shape::Buffer(thin_vec![3, 3, 3]);
-        TenMeta {
+        CollectionMeta {
+            common: Common {
+                purity: Purity::Pure,
+                refs_as_stmt_indices: thin_vec![],
+            },
             max: Some(max),
             min: Some(Value::Int(0)),
             sparse: is_sparse,

@@ -18,6 +18,7 @@ pub mod metadata;
 pub mod mutable;
 pub mod operation;
 pub mod parameter;
+pub mod purity;
 pub mod resolution;
 pub mod return_stmt;
 pub mod scope;

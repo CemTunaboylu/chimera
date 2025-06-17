@@ -12,6 +12,7 @@ use crate::{
 use ast::collection::Shape as ASTShape;
 
 pub mod block;
+pub mod buffer;
 pub mod canonical;
 pub mod layout;
 pub mod meta;
@@ -21,13 +22,14 @@ pub mod uninit;
 
 pub type CanonicalLiteralIdx = Idx<CanonicalBuffer>;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Strides(pub ThinVec<usize>);
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Dim {
     Static(usize),
     Dynamic(ExprIdx),
+    #[default]
     Unknown,
 }
 
@@ -36,6 +38,11 @@ pub enum Shape {
     Buffer(ThinVec<usize>),
     Tensor(ThinVec<Dim>),
 }
+impl Default for Shape {
+    fn default() -> Self {
+        Self::Tensor(Default::default())
+    }
+}
 impl Shape {
     pub fn get(&self) -> Option<&[usize]> {
         match self {
@@ -43,8 +50,6 @@ impl Shape {
             Shape::Tensor(_) => None,
         }
     }
-}
-impl Shape {
     pub fn dimensionality(&self) -> usize {
         match self {
             Shape::Buffer(shape) => shape.len(),

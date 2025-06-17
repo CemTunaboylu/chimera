@@ -9,6 +9,7 @@ syntax = { path = "../syntax" }
 hir_macro = { path = "../hir_macro" }  # adjust path as needed
 
 la-arena = "0.3.1"
+rustc-hash = "2.1.1"
 miette = { version = "7.5.0", features = ["fancy"] }
 patricia_tree = "0.9.0"
 rust_decimal = "1.37"

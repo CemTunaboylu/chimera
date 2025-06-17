@@ -22,14 +22,16 @@ pub struct Paren(pub ExprIdx);
 // TODO: needs metadata as well
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Block {
+    pub is_pure: bool,
     pub scope_idx: ScopeIdx,
-    pub returns: ThinVec<usize>,
     pub statements: ThinVec<Stmt>,
+    pub returns: ThinVec<usize>,
 }
 
 impl Default for Block {
     fn default() -> Self {
         Self {
+            is_pure: Default::default(),
             scope_idx: placeholder_idx(),
             returns: Default::default(),
             statements: Default::default(),
@@ -45,8 +47,12 @@ impl HIRBuilder {
         let statements = block.statements();
         let mut lowered_statements = ThinVec::with_capacity(statements.len());
         let mut returns = ThinVec::new();
+
+        let mut is_pure = false;
+
         for stmt in statements {
             let low_stmt = self.lower_statement(stmt)?;
+            is_pure |= self.is_stmt_pure(&low_stmt);
             match low_stmt {
                 Stmt::Return(_) => {
                     returns.push(lowered_statements.len());
@@ -59,9 +65,10 @@ impl HIRBuilder {
             lowered_statements.push(low_stmt);
         }
         Ok(Block {
+            is_pure,
             scope_idx: self.current_scope_cursor,
-            returns,
             statements: lowered_statements,
+            returns,
         })
     }
     pub fn lower_paren(&mut self, paren: &ASTParen) -> HIRResult<Paren> {

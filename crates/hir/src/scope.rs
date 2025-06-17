@@ -1,6 +1,6 @@
 use crate::{
     HIRResult,
-    collection::canonical::CanonicalBuffer,
+    collection::{canonical::CanonicalBuffer, meta::CollectionMeta},
     errors::HIRError,
     expression::Expr,
     function::FnDef,
@@ -12,15 +12,21 @@ use crate::{
 use la_arena::{Arena, Idx, RawIdx};
 use patricia_tree::PatriciaMap;
 use smol_str::SmolStr;
+use thin_vec::ThinVec;
 
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    ops::Range,
+};
 
 pub type ExprIdx = Idx<Expr>;
 pub type FnDefIdx = Idx<FnDef>;
 pub type ScopeIdx = Idx<Scope>;
 pub type StrIdx = Idx<SmolStr>;
 pub type StructDefIdx = Idx<StructDef>;
-pub type ContainerLiteralIdx = Idx<CanonicalBuffer>;
+pub type CollectionLiteralIdx = Idx<CanonicalBuffer>;
 pub type LetBindingIdx = Idx<LetBinding>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
@@ -120,6 +126,7 @@ pub struct MetadataStore {
     pub vars: MetaHolder<LetBinding, VarMeta>,
     pub fns: MetaHolder<FnDef, FnMeta>,
     pub structs: MetaHolder<StructDef, StructMeta>,
+    pub buffers: MetaHolder<CanonicalBuffer, CollectionMeta>,
 }
 pub trait Selector<E: Clone + Debug + PartialEq + NameIndexed> {
     fn select_alloc(scope: &Scope) -> &DefAllocator<E>;
@@ -229,7 +236,6 @@ impl Scope {
         let allocator = S::select_alloc_mut(self);
         allocator.alloc(name, elm)
     }
-
     pub fn allocate_expr(&mut self, expr: Expr) -> ExprIdx {
         self.exprs.alloc(expr)
     }
@@ -242,7 +248,7 @@ impl Scope {
     pub fn allocate_tensor_literal(
         &mut self,
         tensor_literal: CanonicalBuffer,
-    ) -> ContainerLiteralIdx {
+    ) -> CollectionLiteralIdx {
         self.tensor_literals.alloc(tensor_literal)
     }
 }

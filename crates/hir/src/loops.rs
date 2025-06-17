@@ -14,7 +14,7 @@ use ast::loops::{In as ASTIn, Loop as ASTLoop};
 pub struct Identifiers(pub ThinVec<SmolStr>);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct In(ExprIdx);
+pub struct In(pub ExprIdx);
 
 // TODO: lower loops into a single structure
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]

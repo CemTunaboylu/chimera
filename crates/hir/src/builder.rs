@@ -1,4 +1,6 @@
-use std::fmt::Debug;
+use std::{collections::HashSet, fmt::Debug};
+
+use rustc_hash::{FxBuildHasher, FxHashSet};
 
 use la_arena::{Arena, Idx};
 use miette::Report;
@@ -12,8 +14,8 @@ use crate::{
     collection::canonical::CanonicalBuffer,
     context::{LoweringContext, UsageContext},
     scope::{
-        ContainerLiteralIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span, StrIdx,
-        into_idx,
+        CollectionLiteralIdx, ExprIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span,
+        StrIdx, into_idx,
     },
     statement::Stmt,
 };
@@ -27,6 +29,7 @@ pub struct HIRBuilder {
     pub(crate) errors: ThinVec<Report>,
     pub(crate) lowered: ThinVec<Stmt>,
     pub(crate) scopes: Arena<Scope>,
+    pub(crate) expr_purity: HashSet<(ScopeIdx, ExprIdx), FxBuildHasher>,
     stmts: ThinVec<ASTStmt>,
 }
 
@@ -47,10 +50,13 @@ impl HIRBuilder {
         let mut stmts = ast_root.statements().collect::<ThinVec<_>>();
         stmts.reverse();
 
+        let expr_purity = FxHashSet::default();
+
         Self {
             ast_root,
             contexts,
             current_scope_cursor,
+            expr_purity,
             errors,
             lowered,
             scopes,
@@ -100,7 +106,7 @@ impl HIRBuilder {
     pub fn allocate_tensor_literal(
         &mut self,
         tensor_literal: CanonicalBuffer,
-    ) -> ContainerLiteralIdx {
+    ) -> CollectionLiteralIdx {
         let current_scope = self.get_current_scope_mut();
         current_scope.allocate_tensor_literal(tensor_literal)
     }

@@ -8,7 +8,7 @@ use crate::{
     builder::HIRBuilder,
     collection::{Shape, canonical::CanonicalBuffer, layout::Layout},
     function::Callable,
-    scope::{ContainerLiteralIdx, StrIdx},
+    scope::{CollectionLiteralIdx, StrIdx},
     structure::StructLiteral,
     typing::hindley_milner::types::{Maybe, Type},
 };
@@ -17,7 +17,7 @@ use crate::{
 pub enum Value {
     Bool(bool),
     Buffer {
-        idx: ContainerLiteralIdx,
+        idx: CollectionLiteralIdx,
         shape: Shape,
         data_type: Maybe<Type>,
     },
@@ -28,7 +28,7 @@ pub enum Value {
     Str(StrIdx),
     Struct(StructLiteral),
     Tensor {
-        idx: ContainerLiteralIdx,
+        idx: CollectionLiteralIdx,
         shape: ThinVec<Option<usize>>,
         data_type: Maybe<Type>,
     },

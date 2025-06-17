@@ -12,6 +12,7 @@ use crate::{
     errors::HIRError,
     expression::Expr,
     literal::Value,
+    metadata::Common,
     scope::ExprIdx,
     typing::hindley_milner::{
         expression::HMExpr,
@@ -21,9 +22,10 @@ use crate::{
 
 use super::{Shape, layout::Layout, op::TensorOp};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct TenMeta {
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
+pub struct CollectionMeta {
     // pub data_type: Maybe<Type>,
+    pub common: Common,
     pub layout: Layout,
     pub shape: Shape,
     // can be used for quantization,
@@ -41,10 +43,15 @@ pub struct TenMeta {
     pub is_allocated: bool,
 }
 
-impl TenMeta {
-    pub fn with(collection_examination: CollectionExamination, shape: Shape) -> Self {
+impl CollectionMeta {
+    pub fn with(
+        common: Common,
+        collection_examination: CollectionExamination,
+        shape: Shape,
+    ) -> Self {
         // let MinMax { max, min } = min_max;
         Self {
+            common: Common::default(),
             // max: max,
             // min: min,
             max: None,

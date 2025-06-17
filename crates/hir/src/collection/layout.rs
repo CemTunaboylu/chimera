@@ -15,6 +15,12 @@ pub enum Layout {
     }, // for tiled access
 }
 
+impl Default for Layout {
+    fn default() -> Self {
+        Self::RowMajor(Default::default())
+    }
+}
+
 impl Layout {
     pub fn row_major(shape: &Shape) -> Self {
         let length = shape.dimensionality();
