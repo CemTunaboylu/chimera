@@ -172,7 +172,7 @@ impl HIRBuilder {
             spanned_expr_idx,
             span,
         };
-        let tmp_idx = self.allocate::<LetBinding, VarSelector>(tmp_name, tmp_binding)?;
+        let tmp_idx = self.allocate::<LetBinding, VarSelector>(&tmp_name, tmp_binding)?;
         let tmp_binding_name_idx =
             self.get_current_scope().variable_allocator.definitions[tmp_idx].get_name_index();
         let tmp_expr = Expr::VarRef(Reference::Resolved {
@@ -230,7 +230,8 @@ impl HIRBuilder {
                 spanned_expr_idx,
                 span,
             };
-            let idx = self.allocate::<LetBinding, VarSelector>(name.clone(), let_binding)?;
+            self.allocate_span(&name, span);
+            let idx = self.allocate::<LetBinding, VarSelector>(&name, let_binding)?;
             return Ok(thin_vec![idx]);
         }
         // * Note: if we are binding multiple identifiers (say n), we destructure the binding into n+1 separate bindings
@@ -291,13 +292,16 @@ impl HIRBuilder {
                 identifier,
             } = self.lower_into_named_identifier(pattern_as_ident)?;
 
+            // * Note: span checks are important for resolution, thus we make sure it is correct and inclusive
+            self.allocate_span(&name_of_the_binding, span);
+
             let binding = LetBinding {
                 identifier,
                 spanned_expr_idx: Spanned::new(ith_indexing_expr_idx, current.span),
                 span: current.span,
             };
             let binding_idx =
-                self.allocate::<LetBinding, VarSelector>(name_of_the_binding.clone(), binding)?;
+                self.allocate::<LetBinding, VarSelector>(&name_of_the_binding, binding)?;
 
             binding_indices.push(binding_idx);
         }
@@ -310,7 +314,7 @@ impl HIRBuilder {
         Ok(low_var_ref)
     }
     pub fn resolve_var_ref(
-        &mut self,
+        &self,
         unresolved: &Reference<LetBinding>,
     ) -> HIRResult<Reference<LetBinding>> {
         let scope_climbing_iter = climb(self.current_scope_cursor, &self.scopes);

@@ -174,7 +174,7 @@ impl HIRBuilder {
             internal_with_field_types: internal,
         };
 
-        self.allocate::<StructDef, StructSelector>(name, struct_def)
+        self.allocate::<StructDef, StructSelector>(&name, struct_def)
     }
     pub fn lower_struct_ref(&mut self, struct_as_type: &ASTType) -> HIRResult<Unresolved> {
         if let ASTType::Struct(name) = struct_as_type {

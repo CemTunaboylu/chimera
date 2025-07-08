@@ -95,9 +95,9 @@ impl HIRBuilder {
     pub fn get_current_scope(&self) -> &Scope {
         &self.scopes[self.current_scope_cursor]
     }
-    pub fn allocate_span(&mut self, name: &SmolStr, span: Span) {
+    pub fn allocate_span(&mut self, name: &SmolStr, span: impl Into<Span>) {
         let current_scope = self.get_current_scope_mut();
-        current_scope.allocate_span(name, span);
+        current_scope.allocate_span(name, span.into());
     }
     pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
         let current_scope = self.get_current_scope_mut();
@@ -111,7 +111,7 @@ impl HIRBuilder {
         current_scope.allocate_tensor_literal(tensor_literal)
     }
     // TODO: use context for metadata population
-    pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, elm: E) -> HIRResult<Idx<E>>
+    pub fn allocate<E, S: Selector<E>>(&mut self, name: &SmolStr, elm: E) -> HIRResult<Idx<E>>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
     {

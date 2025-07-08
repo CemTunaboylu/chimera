@@ -12,14 +12,8 @@ use crate::{
 use la_arena::{Arena, Idx, RawIdx};
 use patricia_tree::PatriciaMap;
 use smol_str::SmolStr;
-use thin_vec::ThinVec;
 
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    ops::Range,
-};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
 
 pub type ExprIdx = Idx<Expr>;
 pub type FnDefIdx = Idx<FnDef>;
@@ -96,14 +90,13 @@ pub enum ScopeKind {
 #[derive(Debug, Default)]
 pub struct DefAllocator<D: NameIndexed> {
     pub names: Arena<SmolStr>,
-    pub name_to_name_idx: HashMap<SmolStr, StrIdx>,
     pub definitions: Arena<D>,
     pub name_to_idx_trie: NameToIndexTrie<D>,
 }
 
 impl<D: NameIndexed> DefAllocator<D> {
-    pub fn alloc(&mut self, name: SmolStr, mut d: D) -> HIRResult<Idx<D>> {
-        if self.name_to_idx_trie.get(&name).is_some() {
+    pub fn alloc(&mut self, name: &SmolStr, mut d: D) -> HIRResult<Idx<D>> {
+        if self.name_to_idx_trie.get(name).is_some() {
             return Err(HIRError::with_msg(format!(
                 "shadowing is not allowed, {:?} is already defined",
                 name
@@ -229,12 +222,12 @@ impl Scope {
             (name_idx, *idx)
         })
     }
-    pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, elm: E) -> HIRResult<Idx<E>>
+    pub fn allocate<E, S: Selector<E>>(&mut self, name: &SmolStr, elm: E) -> HIRResult<Idx<E>>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
     {
         let allocator = S::select_alloc_mut(self);
-        allocator.alloc(name, elm)
+        allocator.alloc(&name, elm)
     }
     pub fn allocate_expr(&mut self, expr: Expr) -> ExprIdx {
         self.exprs.alloc(expr)
