@@ -1,6 +1,6 @@
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
-use thin_vec::ThinVec;
+use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
     control_flow::{Condition, parse_condition_and_block},
@@ -8,7 +8,8 @@ use crate::{
     errors::ASTError,
     expression::Expr,
     lang_elems::{
-        ensure_node_kind_is, ensure_node_kind_is_any, get_children_in_errs, get_token_of,
+        ensure_node_kind_is, ensure_node_kind_is_any, filtered_children_with_tokens,
+        first_child_of_kind_errs, get_children_in_errs, get_first_child_in, get_token_of,
     },
 };
 
@@ -30,7 +31,24 @@ pub enum Loop {
     For(Identifiers, In, Block),
 }
 
-impl Loop {}
+fn parse_var_ref_as_identifier(node: &SyntaxNode) -> ThinVec<SmolStr> {
+    let token = get_token_of(node, SyntaxKind::Ident).unwrap();
+    thin_vec![token.text().to_smolstr()]
+}
+fn parse_tuple_identifiers(node: &SyntaxNode) -> ThinVec<SmolStr> {
+    let mut identifiers = thin_vec![];
+
+    for child in node.children() {
+        if child.kind() == SyntaxKind::Tuple {
+            let identifiers_within = parse_tuple_identifiers(&child);
+            identifiers.extend_from_slice(identifiers_within.as_slice());
+            continue;
+        }
+        identifiers.extend_from_slice(parse_var_ref_as_identifier(&child).as_slice());
+    }
+
+    identifiers
+}
 
 impl TryFrom<&SyntaxNode> for Loop {
     type Error = ASTError;
@@ -39,13 +57,17 @@ impl TryFrom<&SyntaxNode> for Loop {
         ensure_node_kind_is_any(node, [SyntaxKind::ForLoop, SyntaxKind::WhileLoop].as_ref())?;
         match node.kind() {
             SyntaxKind::ForLoop => {
-                let identifiers = get_children_in_errs(node, SyntaxKind::ForIdent)?
-                    .iter()
-                    .map(|syntax_node| {
-                        let ident_token = get_token_of(syntax_node, SyntaxKind::Ident).unwrap();
-                        ident_token.text().to_smolstr()
-                    })
-                    .collect::<ThinVec<_>>();
+                let for_identifier_node = first_child_of_kind_errs(node, SyntaxKind::ForIdent)?;
+                let sub_tree = filtered_children_with_tokens(
+                    &for_identifier_node,
+                    [SyntaxKind::Ident, SyntaxKind::Tuple].as_slice(),
+                );
+                let child = sub_tree.first().unwrap();
+                let identifiers = if child.kind() == SyntaxKind::Tuple {
+                    parse_tuple_identifiers(child.as_node().unwrap())
+                } else {
+                    thin_vec![child.as_token().map(|t| t.text().to_smolstr()).unwrap()]
+                };
                 let in_part = get_children_in_errs(node, SyntaxKind::In)?
                     .first()
                     .unwrap()
@@ -101,6 +123,6 @@ mod test {
         for_range: "for i in 0_9{something()}",
         for_each: "for elm in elements {something()}",
         for_method_call: "for hair in head.get_hairs() {something()}",
-        for_enumerated: "for ix, hair in head.get_hairs().enumerate() {something()}",
+        for_enumerated: "for (ix, hair) in head.get_hairs().enumerate() {something()}",
     }
 }
