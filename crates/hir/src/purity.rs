@@ -32,6 +32,15 @@ impl Purity {
 }
 
 impl HIRBuilder {
+    pub fn fn_def_purity(&self, fn_def: &FnDef) -> Purity {
+        if !self.is_block_pure(&fn_def.callable.body) {
+            Purity::Impure
+        } else if !self.are_parameters_pure(fn_def.callable.parameters.as_slice()) {
+            Purity::Impure
+        } else {
+            Purity::Pure
+        }
+    }
     pub fn is_binary_infix_pure(&self, infix: &BinaryInfix) -> bool {
         use BinaryOp::*;
         match infix.op() {
@@ -48,6 +57,10 @@ impl HIRBuilder {
         block.is_pure
     }
     pub fn is_call_pure(&self, call: &Call) -> bool {
+        // * Note: if any of the arguments are impure, the call becomes impure.
+        if !call.arguments.iter().all(|arg| self.is_pure(arg.0)) {
+            return false;
+        }
         match &call.on {
             On::Binding(idx) => {
                 let scope = self.get_current_scope();
@@ -69,7 +82,7 @@ impl HIRBuilder {
     pub fn is_expr_slice_pure(&self, exprs: &[ExprIdx]) -> bool {
         exprs.iter().all(|expr_idx| self.is_pure(*expr_idx))
     }
-    pub fn is_fn_def_pure(&self, fn_def_idx: &Idx<FnDef>) -> bool {
+    pub fn is_fn_def_of_idx_pure(&self, fn_def_idx: &Idx<FnDef>) -> bool {
         let scope = self.get_current_scope();
         let metadata = &scope.metadata.fns;
         metadata
@@ -87,14 +100,16 @@ impl HIRBuilder {
         })
     }
     pub fn is_indexing_pure(&self, indexing: &Indexing) -> bool {
-        indexing.indices.iter().all(|s| self.is_pure(s.index))
+        let is_reference_pure = self.is_pure(indexing.reference.index);
+        let are_indices_pure = indexing.indices.iter().all(|s| self.is_pure(s.index));
+        is_reference_pure && are_indices_pure
     }
     pub fn is_let_binding_pure(&self, indices: &[Idx<LetBinding>]) -> bool {
         let scope = self.get_current_scope();
         let allocator = VarSelector::select_alloc(scope);
         indices.iter().all(|lbi| {
             let binding = &allocator.definitions[*lbi];
-            self.is_pure(binding.spanned_expr_idx.index)
+            !binding.identifier.is_mut && self.is_pure(binding.spanned_expr_idx.index)
         })
     }
     pub fn is_maybe_pure(&self, maybe: &Maybe<Type>) -> bool {
@@ -104,7 +119,16 @@ impl HIRBuilder {
             Maybe::Unchecked(_types) => false,
         }
     }
-    pub fn is_types_pure(&self, ty: &[Type]) -> bool {
+    pub fn are_parameters_pure(&self, params: &[Param]) -> bool {
+        params.iter().all(|p| match p {
+            Param::Generic { is_mut, .. } => !*is_mut,
+            Param::Named {
+                is_mut, param_type, ..
+            } => !*is_mut && self.is_type_pure(param_type),
+            Param::SelfRef { is_mut, .. } => !*is_mut,
+        })
+    }
+    pub fn are_types_pure(&self, ty: &[Type]) -> bool {
         ty.iter().all(|t| self.is_type_pure(t))
     }
     pub fn is_type_pure(&self, ty: &Type) -> bool {
@@ -114,16 +138,23 @@ impl HIRBuilder {
             FnSig {
                 param_types,
                 return_type,
-            } => self.is_type_pure(return_type) && self.is_types_pure(param_types),
+            } => self.is_type_pure(return_type) && self.are_types_pure(param_types),
             Ptr { of, is_mut } => !*is_mut && self.is_type_pure(of),
             // ! FIXME: PurityEnv should have a map to identify impure types
             StructAsType(status) => match status {
-                Status::Pending(idx) => todo!(),
-                Status::Resolved(idx) => todo!(),
+                Status::Pending(idx) => false,
+                Status::Resolved(idx) => false,
             },
-            Struct { fields, .. } => self.is_types_pure(fields),
+            Struct { fields, .. } => self.are_types_pure(fields),
             Tensor { data_type, .. } => self.is_maybe_pure(data_type),
-            Tuple(types) => self.is_types_pure(types),
+            Tuple(types) => self.are_types_pure(types),
+            _ => true,
+        }
+    }
+    pub fn is_unary_op_pure(&self, unary: &Unary) -> bool {
+        use UnaryOp::*;
+        match unary.op() {
+            Ref => self.is_pure(unary.operand().0),
             _ => true,
         }
     }
@@ -163,13 +194,6 @@ impl HIRBuilder {
             _ => true,
         }
     }
-    pub fn is_unary_op_pure(&self, unary: &Unary) -> bool {
-        use UnaryOp::*;
-        match unary.op() {
-            Ref => self.is_pure(unary.operand().0),
-            _ => true,
-        }
-    }
     pub fn is_pure_with_scope(&self, scope_idx: ScopeIdx, expr_idx: ExprIdx) -> bool {
         self.expr_purity.contains(&(scope_idx, expr_idx))
     }
@@ -185,7 +209,7 @@ impl HIRBuilder {
         match stmt {
             Stmt::ControlFlow(control_flow) => self.is_controlflow_pure(control_flow),
             Stmt::Expr(idx) => self.is_pure(*idx),
-            Stmt::FnDef(idx) => self.is_fn_def_pure(idx),
+            Stmt::FnDef(idx) => self.is_fn_def_of_idx_pure(idx),
             Stmt::Impl(imp) => self.is_impl_pure(imp),
             Stmt::Jump(jump) => match jump {
                 Jump::Continue => true,
@@ -207,16 +231,24 @@ impl HIRBuilder {
 mod test {
     use super::*;
 
-    use ast::{ast_root_from, cast_node_into_type, expression::Expr as ASTExpr};
+    use crate::test::program_into_hir_and_node;
+
+    use crate::{
+        expression::Expr,
+        resolution::{Baggage, Reference},
+    };
+    use ast::{
+        ast_root_from_assert_no_err, cast_node_into_type, expression::Expr as ASTExpr,
+        statement::Stmt as ASTStmt,
+    };
     use parameterized_test::create;
 
     create! {
         expression_purity_test,
         (program, expr_purity), {
-            let ast_root = ast_root_from(program);
-            let expr_node = ast_root.get_root().first_child().unwrap();
+            let (expr_node, mut hir) = program_into_hir_and_node(program);
+            let expr_node = expr_node.first_child().unwrap();
             let ast_expr= cast_node_into_type::<ASTExpr>(&expr_node);
-            let mut hir = HIRBuilder::new(ast_root);
 
             let expr_idx = hir.lower_expr_as_idx(&ast_expr).expect("should have been lowered");
             assert_eq!(expr_purity, hir.is_pure(expr_idx));
@@ -237,5 +269,94 @@ mod test {
         pure_tuple: ("(0,0,0)", PURE),
         pure_unary: ("&self", PURE),
         impure_unary: ("&mut self", IMPURE),
+        pure_struct_indexing: ("Struct{}.a[0]", PURE),
+    }
+
+    fn resolved_purity_of_fn_call(hir: &HIRBuilder, fn_expr_idx: ExprIdx) -> bool {
+        let expr = hir.get_expr(fn_expr_idx);
+        let unresolved_call_reference = if let Expr::FnCall(unresolved_call_reference) = expr {
+            unresolved_call_reference
+        } else {
+            panic!("should have been a Call");
+        };
+
+        let resolved_fn_def_reference = hir
+            .resolve_fn_call(unresolved_call_reference)
+            .expect("should have been resolved");
+        let (obj_idx, fn_args) = if let Reference::Resolved {
+            baggage, obj_idx, ..
+        } = resolved_fn_def_reference
+        {
+            (
+                obj_idx,
+                if let Baggage::Arg(fn_args) = baggage {
+                    fn_args
+                } else {
+                    panic!("should have a baggage of Args");
+                },
+            )
+        } else {
+            panic!("should have a resolved reference");
+        };
+        let resolved_call = Call {
+            on: On::Binding(obj_idx),
+            arguments: fn_args,
+        };
+        hir.is_call_pure(&resolved_call)
+    }
+
+    fn resolved_purity_of_var_ref(hir: &HIRBuilder, var_ref_expr_idx: ExprIdx) -> bool {
+        let expr = hir.get_expr(var_ref_expr_idx);
+        let unresolved_reference = if let Expr::VarRef(unresolved_reference) = expr {
+            unresolved_reference
+        } else {
+            panic!("should have been a VarRef");
+        };
+
+        let resolved_variable_reference = hir
+            .resolve_var_ref(unresolved_reference)
+            .expect("should have been resolved");
+        let let_binding_idx = if let Reference::Resolved {
+            baggage, obj_idx, ..
+        } = resolved_variable_reference
+        {
+            assert_eq!(baggage, Baggage::None);
+            obj_idx
+        } else {
+            panic!("should have a resolved reference");
+        };
+        hir.is_let_binding_pure([let_binding_idx].as_slice())
+    }
+
+    create! {
+        call_expression_purity_test,
+        (definition_program, referencing_program, resolver, exp_purity), {
+            let (_, mut hir) = program_into_hir_and_node("");
+
+            let def_ast_root = ast_root_from_assert_no_err(definition_program);
+            let def_node = def_ast_root.get_root().first_child().unwrap();
+            let ast_stmt = cast_node_into_type::<ASTStmt>(&def_node);
+
+            hir.lower_statement(&ast_stmt).expect("statement should have been lowered");
+            assert!(hir.errors.is_empty());
+
+            let ref_ast_root = ast_root_from_assert_no_err(referencing_program);
+            let ref_node = ref_ast_root.get_root().first_child().unwrap();
+            let ast_expr = cast_node_into_type::<ASTExpr>(&ref_node);
+
+            let expr_idx = hir.lower_expr_as_idx(&ast_expr).expect("expression should have been lowered");
+
+            // first we need to resolve
+            let resolved_purity = resolver(&hir, expr_idx);
+
+            assert_eq!(exp_purity, resolved_purity);
+        }
+    }
+    call_expression_purity_test! {
+        impure_fn_call: ("fn impure(s: &mut str) {s[0] = '_';}", "impure(s)", resolved_purity_of_fn_call, IMPURE),
+        pure_fn_call: ("fn pure(s: &str) {}", "pure(s)", resolved_purity_of_fn_call, PURE),
+        impure_parameter_call: ("fn pure(s: &str) {}", "pure(s += \"impurty\")", resolved_purity_of_fn_call, IMPURE),
+        // Note: added spaces to mimick var to be the next statement to pass span checks
+        impure_struct: ("let mut var = Struct{};", "                                var", resolved_purity_of_var_ref, IMPURE),
     }
 }
