@@ -1,11 +1,18 @@
 use std::fmt::Debug;
 
+use smol_str::SmolStr;
 use thin_vec::ThinVec;
 
 use crate::{
+    builder::HIRBuilder,
     context::{LoweringContext, UsageContext},
+    control_flow::Conditional,
+    expression::Expr,
+    function::Callable,
+    literal::Value,
     purity::Purity,
-    scope::{ScopeIdx, Span},
+    scope::{ExprIdx, ScopeIdx, Span, StrIdx},
+    statement::Stmt,
     typing::hindley_milner::types::Type,
 };
 
@@ -67,6 +74,20 @@ pub struct FnMeta {
     pub inline_hint: bool,  // Should this function be inlined?
     pub is_recursive: bool, // Does this function call itself?
     pub is_cyclic: bool,    // Is there a call cycle? (not sure if this is useful)
+}
+
+// * is recursive is painful to handle:
+// *    a) if bottom up, I miss the recursion through bindings (if I bind f() to a, calling a() won't be considered)
+// *    b) if top to bottom, I end up lots of retrieving a lot and traversing the whole tree again
+// *    maybe during lowering, I can have a list of fns and lambdas that are deferred with certain info,
+// *        so that after resolution pass, I can check for b. for cases where we bind inside a scope, we can remember
+// *        them, (a -> foo), thus can check there.
+impl HIRBuilder {
+    // ! TODO: add graphs to analyse further for indirect recursions
+    // ! e.g. a() calls b(), b() calls a()
+    pub fn is_recursive(&self, callable: &Callable, name_idx: &StrIdx) -> bool {
+        false // TODO: replace with actual graph traversal
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

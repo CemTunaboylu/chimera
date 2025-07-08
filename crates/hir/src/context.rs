@@ -6,6 +6,7 @@ pub enum UsageContext {
     RefMut,
     Deref,
     FnArg,
+    Def,
     Init,      // let x = 2;
     Moved,     // let y = x; where x is move only
     Mut,       // declared as mut

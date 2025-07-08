@@ -1,5 +1,5 @@
 use hir_macro::{scoped, with_context};
-use thin_vec::ThinVec;
+use thin_vec::{ThinVec, thin_vec};
 
 use ast::{
     function::{
@@ -15,11 +15,13 @@ use crate::{
     context::UsageContext,
     delimited::Block,
     literal::Literal,
+    metadata::{Common, FnMeta, Usage, Usages},
     mut_clone_with_err,
     parameter::Param,
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
     scope::{
-        ExprIdx, FnDefIdx, FnSelector, NameIndexed, ScopeIdx, ScopeKind, StrIdx, placeholder_idx,
+        ExprIdx, FnDefIdx, FnSelector, NameIndexed, ScopeIdx, ScopeKind, Span, StrIdx,
+        placeholder_idx,
     },
     typing::hindley_milner::types::Type,
 };
@@ -39,6 +41,7 @@ pub struct Callable {
 pub struct FnDef {
     pub name_index: StrIdx,
     pub callable: Callable,
+    pub span: Span,
     pub scope_idx: ScopeIdx,
 }
 
@@ -56,6 +59,7 @@ impl Default for FnDef {
         Self {
             name_index: placeholder_idx(),
             callable: Default::default(),
+            span: Default::default(),
             scope_idx: placeholder_idx(),
         }
     }
@@ -83,6 +87,11 @@ pub enum MayNeedResolution {
 }
 
 impl HIRBuilder {
+    #[with_context(UsageContext::FnArg)]
+    pub fn lower_fn_arg(&mut self, fn_arg: &ASTFnArg) -> HIRResult<FnArg> {
+        let expr_id = self.lower_expr_as_idx(&fn_arg.0)?;
+        Ok(FnArg(expr_id))
+    }
     pub fn lower_fn_args(&mut self, fn_args: &[ASTFnArg]) -> HIRResult<ThinVec<FnArg>> {
         let mut arguments = ThinVec::with_capacity(fn_args.len());
 
@@ -150,6 +159,8 @@ impl HIRBuilder {
 
     pub fn lower_fn_def(&mut self, fn_def: &ASTFnDef) -> HIRResult<FnDefIdx> {
         let name = fn_def.name().clone();
+        let span = fn_def.span.clone();
+        self.allocate_span(&name, span.clone());
         let scope_idx = self.current_scope_cursor;
 
         let callable = self.lower_callable(&fn_def.callable)?;
@@ -157,15 +168,36 @@ impl HIRBuilder {
         let low_fn_def = FnDef {
             callable,
             name_index: placeholder_idx(),
+            span: span.clone().into(),
             scope_idx,
         };
 
-        self.allocate::<FnDef, FnSelector>(name, low_fn_def)
+        let fn_def_idx = self.allocate::<FnDef, FnSelector>(&name, low_fn_def.clone())?;
+        self.allocate_fn_meta(&low_fn_def, fn_def_idx)?;
+        Ok(fn_def_idx)
     }
-    #[with_context(UsageContext::FnArg)]
-    pub fn lower_fn_arg(&mut self, fn_arg: &ASTFnArg) -> HIRResult<FnArg> {
-        let expr_id = self.lower_expr_as_idx(&fn_arg.0)?;
-        Ok(FnArg(expr_id))
+    pub fn allocate_fn_meta(&mut self, fn_def: &FnDef, fn_def_idx: FnDefIdx) -> HIRResult<()> {
+        let def = Usage {
+            kind: UsageContext::Def,
+            span: fn_def.span,
+            scope_idx: fn_def.scope_idx,
+            stmt_idx: self.get_current_stmt_idx(),
+        };
+        let common = Common {
+            purity: self.fn_def_purity(fn_def),
+            refs_as_stmt_indices: thin_vec![],
+        };
+        let fn_meta = FnMeta {
+            common,
+            def,
+            usages: Usages::new(),
+            inline_hint: false,
+            is_recursive: self.is_recursive(&fn_def.callable, &fn_def.name_index),
+            is_cyclic: false,
+        };
+        let scope = self.get_current_scope_mut();
+        scope.metadata.fns.insert(fn_def_idx, fn_meta);
+        Ok(())
     }
 }
 
