@@ -1,9 +1,6 @@
 use smol_str::{SmolStr, ToSmolStr};
-use syntax::{bitset::SyntaxKindBitSet, language::SyntaxToken, syntax_kind::SyntaxKind::*};
-use syntax::{
-    language::{NodeOrToken, SyntaxNode},
-    syntax_kind::SyntaxKind,
-};
+use syntax::language::{NodeOrToken, SyntaxNode};
+use syntax::{bitset::SyntaxKindBitSet, language::SyntaxToken, syntax_kind::SyntaxKind};
 use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
@@ -73,6 +70,7 @@ fn extract_type_hint_from(type_hint_node: &SyntaxNode) -> ASTResult<Type> {
 }
 
 fn filter_dim_hints(dim_hints_node: &SyntaxNode, err: bool) -> ASTResult<ThinVec<NodeOrToken>> {
+    use SyntaxKind::*;
     let unwanted: SyntaxKindBitSet = [Comma, Whitespace].as_ref().into();
     let children: ThinVec<NodeOrToken> = dim_hints_node.children_with_tokens().collect();
     if err && children.is_empty() {
@@ -93,14 +91,14 @@ impl TryFrom<&SyntaxNode> for Type {
 
     fn try_from(parent_node: &SyntaxNode) -> Result<Self, Self::Error> {
         let t = match parent_node.kind() {
-            PrefixUnaryOp => {
-                get_token_of_errs(parent_node, And)?;
+            SyntaxKind::PrefixUnaryOp => {
+                get_token_of_errs(parent_node, SyntaxKind::And)?;
                 let children = filter_irrelevant_out(
                     parent_node.children_with_tokens(),
                     get_kind_on_node_or_token,
                 );
                 let child = children.first().unwrap();
-                let is_mut = child.kind() == Mut;
+                let is_mut = child.kind() == SyntaxKind::Mut;
                 let ty = if is_mut {
                     let grand_children = filter_irrelevant_out(
                         child.as_node().unwrap().children_with_tokens(),
@@ -116,8 +114,8 @@ impl TryFrom<&SyntaxNode> for Type {
                     is_mut,
                 }
             }
-            SelfRef => Self::SelfRef(SelfRef::try_from(parent_node)?),
-            Tuple => {
+            SyntaxKind::SelfRef => Self::SelfRef(SelfRef::try_from(parent_node)?),
+            SyntaxKind::Tuple => {
                 let types = vector_of_children_and_tokens_as(
                     parent_node,
                     ASTTuple::to_remove_from_tuples(),
@@ -125,7 +123,7 @@ impl TryFrom<&SyntaxNode> for Type {
                 )?;
                 Self::Tuple(types)
             }
-            TyBuffer => {
+            SyntaxKind::TyBuffer => {
                 let type_hint_node = get_first_child_in(parent_node, SyntaxKind::TypeHint).ok_or(
                     ASTError::with_err_msg(
                         parent_node.text_range().into(),
@@ -160,7 +158,7 @@ impl TryFrom<&SyntaxNode> for Type {
                     shape,
                 }
             }
-            TyFn => {
+            SyntaxKind::TyFn => {
                 let param_nodes = filter_irrelevant_out(
                     parent_node.children_with_tokens(),
                     get_kind_on_node_or_token,
@@ -178,7 +176,7 @@ impl TryFrom<&SyntaxNode> for Type {
                     return_type,
                 }
             }
-            TyTensor => {
+            SyntaxKind::TyTensor => {
                 let mut type_hint = None;
                 if let Some(type_hint_node) = get_first_child_in(parent_node, SyntaxKind::TypeHint)
                 {
@@ -192,10 +190,10 @@ impl TryFrom<&SyntaxNode> for Type {
                     let dims = filter_dim_hints(&dim_hints_node, false)?;
                     shape = ThinVec::with_capacity(dims.len());
                     for dim_node in dims {
-                        if dim_node.kind() == Under {
+                        if dim_node.kind() == SyntaxKind::Under {
                             shape.push(None);
                             continue;
-                        } else if dim_node.kind() == Int {
+                        } else if dim_node.kind() == SyntaxKind::Int {
                             let l = Literal(Value::Int(parse_into::<i32>(
                                 dim_node.as_token().unwrap().text(),
                                 dim_node.text_range().into(),
@@ -212,8 +210,9 @@ impl TryFrom<&SyntaxNode> for Type {
                     shape,
                 }
             }
-            Unit => Self::Unit,
+            SyntaxKind::Unit => Self::Unit,
             _ => {
+                use SyntaxKind::*;
                 ensure_node_kind_is_any(
                     parent_node,
                     [StructAsType, TyBuffer, TyFn, TyTensor].as_ref(),
@@ -229,6 +228,7 @@ impl TryFrom<&SyntaxToken> for Type {
     type Error = ASTError;
 
     fn try_from(token: &SyntaxToken) -> Result<Self, Self::Error> {
+        use SyntaxKind::*;
         let t = match token.kind() {
             TyBool => Self::Bool,
             TyChar => Self::Char,
@@ -275,8 +275,8 @@ pub fn parse_type_hinted(type_hint_node: &SyntaxNode) -> ASTResult<(Expr, Type)>
     }
     let ident = nodes.first().unwrap();
     let type_hinted = match ident.kind() {
-        Mut => Expr::Mut(ASTMut::try_from(ident.as_node().unwrap())?),
-        VarRef => Expr::try_from(ident)?,
+        SyntaxKind::Mut => Expr::Mut(ASTMut::try_from(ident.as_node().unwrap())?),
+        SyntaxKind::VarRef => Expr::try_from(ident)?,
         _ => {
             return Err(ASTError::with_err_msg(
                 type_hint_node.text_range().into(),
@@ -321,7 +321,7 @@ impl Hint {
     pub fn type_hint(typehint_node: &SyntaxNode) -> ASTResult<Self> {
         // ! for container
         let type_hint = Binary::new(typehint_node)?;
-        assert_eq!(type_hint.op(), Some(Colon));
+        assert_eq!(type_hint.op(), Some(SyntaxKind::Colon));
         let type_ = type_hint.lhs().unwrap();
         if let Expr::Class(ty) = type_ {
             Ok(Self::Type(ty.clone()))
@@ -388,7 +388,7 @@ mod tests {
         let fn_def_node = ast_root.get_root().first_child().unwrap();
         let param_node = fn_def_node
             .children()
-            .find(|node| node.kind() == ParamDecl)
+            .find(|node| node.kind() == SyntaxKind::ParamDecl)
             .unwrap();
         let struct_as_type = param_node.last_token().unwrap();
         cast_token_into_type::<Type>(&struct_as_type);
@@ -400,7 +400,7 @@ mod tests {
         let fn_def_node = ast_root.get_root().first_child().unwrap();
         let param_node = fn_def_node
             .children()
-            .find(|node| node.kind() == ParamDecl)
+            .find(|node| node.kind() == SyntaxKind::ParamDecl)
             .unwrap();
         let param = Param::try_from(&param_node).expect("should have been parsed");
         assert_eq!(param.name, "arg");
