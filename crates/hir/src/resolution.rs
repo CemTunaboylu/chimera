@@ -105,19 +105,18 @@ pub fn resolve<'caller, E, S: Selector<E>>(
 where
     E: Clone + Debug + Eq + Hash + PartialEq + PartialOrd + NameIndexed,
 {
-    let current_scope = scopes.next();
+    let (mut scope_idx, mut scope) = *unwrap_or_err(
+        scopes.next().as_ref(),
+        format!("cannot find scope for {:?}", unresolved_ref).as_str(),
+    )?;
     let (key, resolution_type, baggage) = {
-        let enumerated_scope = *unwrap_or_err(
-            current_scope.as_ref(),
-            format!("cannot find scope for {:?}", unresolved_ref).as_str(),
-        )?;
         let idx = unresolved_ref.get_unresolved_index()?;
-        let unresolved = &enumerated_scope.1.to_resolve[idx];
+        let unresolved = &scope.to_resolve[idx];
         (&unresolved.name, &unresolved.for_type, &unresolved.baggage)
     };
 
     let mut guesstimates = ThinVec::new();
-    for (scope_idx, scope) in scopes {
+    loop {
         if let Some((name_idx, obj_idx)) = scope.resolve_in::<E, S>(key) {
             span_check(scope, key, resolution_type)?;
             let resolved = Reference::<E>::Resolved {
@@ -129,9 +128,14 @@ where
             return Ok(resolved);
         } else {
             guesstimates.push(guess(&S::select_alloc(scope).name_to_idx_trie, key));
+            let next = scopes.next();
+            if next.is_none() {
+                break Err(ResolutionError::new_with_guestimate(key, guesstimates).into());
+            }
+            (scope_idx, scope) = next.unwrap();
         }
     }
-    Err(ResolutionError::new_with_guestimate(key, guesstimates).into())
+    // Err(ResolutionError::new_with_guestimate(key, guesstimates).into())
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
