@@ -204,5 +204,6 @@ mod tests {
         unary: "-[[1,0,0],[0,1,0],[0,0,1]]",
         unit: "()",
         var_ref: "my_tensor_ref",
+        struct_init_followed_by_dot_and_index: "Struct{}.a[0]",
     }
 }
