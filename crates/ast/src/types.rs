@@ -339,14 +339,15 @@ mod tests {
 
     use super::*;
     use crate::{
-        ast::ASTResult, ast_root_from, cast_node_into_type, cast_token_into_type, parameter::Param,
+        ast::ASTResult, ast_root_from_assert_no_err, ast_root_from_no_assertion,
+        cast_node_into_type, cast_token_into_type, parameter::Param,
     };
     use parameterized_test::create;
 
     create! {
         create_type_test_from_token,
         (program), {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let token = ast_root.get_root().first_token().unwrap();
         cast_token_into_type::<Type>(&token);
         }
@@ -355,7 +356,7 @@ mod tests {
     create! {
         create_type_test_from_node,
         (program), {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Type>(&node);
         }
@@ -381,8 +382,8 @@ mod tests {
 
     #[test]
     fn valid_struct_identifier() {
-        let program = "fn def(arg:Structure)";
-        let ast_root = ast_root_from(program);
+        let program = "fn def(arg:Structure){}";
+        let ast_root = ast_root_from_assert_no_err(program);
 
         let fn_def_node = ast_root.get_root().first_child().unwrap();
         let param_node = fn_def_node
@@ -394,8 +395,8 @@ mod tests {
     }
     #[test]
     fn tuple_with_struct_identifier() {
-        let program = "fn def(arg:(char, Structure, Structure,))";
-        let ast_root = ast_root_from(program);
+        let program = "fn def(arg:(char, Structure, Structure,)){}";
+        let ast_root = ast_root_from_assert_no_err(program);
         let fn_def_node = ast_root.get_root().first_child().unwrap();
         let param_node = fn_def_node
             .children()
@@ -417,8 +418,8 @@ mod tests {
 
     #[test]
     fn valid_fn_parameter() {
-        let program = "fn apply(f:fn(tensor)->tensor)";
-        let ast_root = ast_root_from(program);
+        let program = "fn apply(f:fn(tensor)->tensor){}";
+        let ast_root = ast_root_from_assert_no_err(program);
 
         let fn_def_node = ast_root.get_root().first_child().unwrap();
         let param_node = Param::get_params_nodes_from(&fn_def_node);
@@ -446,7 +447,7 @@ mod tests {
     #[test]
     fn valid_tensor_identifier() {
         let program = "tensor<i32><10,10,10>";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
 
         let node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Type>(&node);
@@ -454,7 +455,7 @@ mod tests {
     #[test]
     fn invalid_type() {
         let program = "structure";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_no_assertion(program);
         let child = ast_root.get_root().first_child().unwrap();
 
         let result: ASTResult<Type> = (&child).try_into();
@@ -468,7 +469,7 @@ mod tests {
     #[should_panic]
     fn recovered_second_dims() {
         let program = "buffer<3,3,3><3,3,3>";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_no_assertion(program);
         let buffer_type_node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Literal>(&buffer_type_node);
     }
@@ -476,7 +477,7 @@ mod tests {
     #[should_panic]
     fn recovered_second_types() {
         let program = "tensor<f32><i32>";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_no_assertion(program);
         let tensor_init_node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Literal>(&tensor_init_node);
     }

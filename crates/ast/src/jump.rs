@@ -63,13 +63,13 @@ impl TryFrom<&SyntaxNode> for Jump {
 mod tests {
 
     use super::*;
-    use crate::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from_assert_no_err, cast_node_into_type};
     use parameterized_test::create;
 
     create! {
         create_jump_test,
         (program), {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let jump_node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Jump>(&jump_node);
         }
@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn valid_returning_break() {
         let program = "break do_something();";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         cast_node_into_type::<Jump>(ast_root.get_root().first_child().as_ref().unwrap());
     }
 }

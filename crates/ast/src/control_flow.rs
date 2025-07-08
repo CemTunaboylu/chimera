@@ -122,12 +122,12 @@ mod test {
     use parameterized_test::create;
 
     use super::*;
-    use crate::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from_assert_no_err, cast_node_into_type};
 
     create! {
         happy_path_condition_test,
         (program), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let control_flow_node = ast_root.get_root().first_child().unwrap();
             let conditional_node = control_flow_node.first_child().unwrap();
             let condition_node = conditional_node.first_child().unwrap();
@@ -145,7 +145,7 @@ mod test {
     create! {
         happy_path_control_flow_test,
         (program), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let control_flow_node = ast_root.get_root().first_child().unwrap();
             _ = cast_node_into_type::<ControlFlow>(&control_flow_node);
         }

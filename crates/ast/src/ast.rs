@@ -63,7 +63,7 @@ impl TryFrom<&ConcreteSyntaxTree> for Root {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::ast_root_from;
+    use crate::ast_root_from_no_assertion;
     use thin_vec::ThinVec;
 
     #[test]
@@ -78,7 +78,7 @@ pub mod tests {
      */
     fn try_from_let_binding_malformed_with_no_name() {
         let malformed = "let = 9";
-        let root = ast_root_from(&malformed);
+        let root = ast_root_from_no_assertion(&malformed);
         let stmts = root.statements();
         let collected = stmts.collect::<ThinVec<_>>();
         assert_eq!(0, collected.len());
@@ -107,7 +107,7 @@ pub mod tests {
 
     fn try_from_overflowing_number() {
         let overflowing = "let a = 9 + 18446744073709551616";
-        let root = ast_root_from(&overflowing);
+        let root = ast_root_from_no_assertion(&overflowing);
         let collected = root.statements().collect::<ThinVec<_>>();
         assert_eq!(0, collected.len());
     }

@@ -82,13 +82,13 @@ mod tests {
     use crate::{
         builder::HIRBuilder, scope::placeholder_idx, typing::hindley_milner::types::Status,
     };
-    use ast::{ast_root_from, cast_node_into_type};
+    use ast::{ast_root_from_assert_no_err, cast_node_into_type};
     use parameterized_test::create;
     use smol_str::SmolStr;
     use thin_vec::ThinVec;
 
     fn get_params_nodes_from(program: &str) -> Vec<ASTParam> {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let fn_def_node = ast_root.get_root().first_child().unwrap();
         ast::parameter::Param::get_params_nodes_from(&fn_def_node)
             .into_iter()
@@ -100,7 +100,7 @@ mod tests {
         lower_self_ref_param,
         (program, exp_by_ref, exp_is_mut), {
             let ast_param = get_params_nodes_from(program).remove(0);
-            let mut builder = HIRBuilder::new(ast_root_from(program));
+            let mut builder = HIRBuilder::new(ast_root_from_assert_no_err(program));
             let hir_param = builder.lower_parameter(&ast_param).unwrap();
             assert_eq!(hir_param, Param::SelfRef { by_ref: exp_by_ref, is_mut: exp_is_mut });
         }
@@ -118,7 +118,7 @@ mod tests {
         lower_named_param,
         (program, exp_is_mut, exp_name, exp_type), {
             let ast_param = get_params_nodes_from(program).remove(0);
-            let mut builder = HIRBuilder::new(ast_root_from(program));
+            let mut builder = HIRBuilder::new(ast_root_from_assert_no_err(program));
             let hir_param = builder.lower_parameter(&ast_param).unwrap();
             assert_eq!(hir_param, Param::Named {
                 is_mut: exp_is_mut,
@@ -160,7 +160,7 @@ mod tests {
     fn lower_multiple_params() {
         let program = "fn f(&mut self, s: &Structure, c:i32) {}";
         let ast_params = get_params_nodes_from(program);
-        let mut builder = HIRBuilder::new(ast_root_from(program));
+        let mut builder = HIRBuilder::new(ast_root_from_assert_no_err(program));
         let lowered: ThinVec<_> = ast_params
             .iter()
             .map(|p| builder.lower_parameter(p).unwrap())
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn lower_lambda_generic_params() {
         let program = "|g, en, eric| {g+en+eric}";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let literal_node = ast_root.get_root().first_child().unwrap();
         let lambda_node = literal_node.first_child().unwrap();
         let params_nodes = ast::parameter::Param::get_params_nodes_from(&lambda_node);

@@ -91,7 +91,9 @@ mod tests {
         typing::hindley_milner::types::{Maybe, Type},
     };
 
-    use ast::{ast_root_from, cast_node_into_type, indexing::Indexing as ASTIndexing};
+    use ast::{
+        ast_root_from_assert_no_err, cast_node_into_type, indexing::Indexing as ASTIndexing,
+    };
 
     fn unresolved_for_var_ref(name: &str) -> Unresolved {
         let span: Span = (0..name.len()).into();
@@ -104,7 +106,7 @@ mod tests {
     create! {
         happy_path_var_ref_indexing_test,
         (program, unresolved_for_reference, exp_indice_len), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let indexing_node = ast_root.get_root().first_child().unwrap();
             let ast_indexing = cast_node_into_type::<ASTIndexing>(&indexing_node);
             let mut hir = HIRBuilder::new(ast_root);
@@ -142,7 +144,7 @@ mod tests {
     #[test]
     fn detailed_testing_of_buffer_literal_indexing() {
         let program = "[ [0],[0],[1] ][0][0]";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let indexing_node = ast_root.get_root().first_child().unwrap();
         let ast_indexing = cast_node_into_type::<ASTIndexing>(&indexing_node);
         let mut hir = HIRBuilder::new(ast_root);

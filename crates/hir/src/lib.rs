@@ -134,3 +134,18 @@ pub fn mut_clone_with_err<Any: Clone, Post>(
     }
     Ok(clone)
 }
+
+#[cfg(test)]
+pub mod test {
+    use crate::builder::HIRBuilder;
+
+    use ast::ast_root_from_assert_no_err;
+    use syntax::language::SyntaxNode;
+
+    pub fn program_into_hir_and_node(program: &str) -> (SyntaxNode, HIRBuilder) {
+        let ast_root = ast_root_from_assert_no_err(program);
+        let node = ast_root.get_root().clone_subtree();
+        let hir = HIRBuilder::new(ast_root);
+        (node, hir)
+    }
+}

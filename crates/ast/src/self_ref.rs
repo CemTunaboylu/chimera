@@ -37,14 +37,14 @@ impl TryFrom<&SyntaxNode> for SelfRef {
 mod tests {
 
     use super::*;
-    use crate::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from_assert_no_err, cast_node_into_type};
 
     use parameterized_test::create;
 
     create! {
         happy_path_self_ref_test,
         (program, exp), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let self_ref =
                 cast_node_into_type::<SelfRef>(ast_root.get_root().first_child().as_ref().unwrap());
             assert_eq!(exp, self_ref);

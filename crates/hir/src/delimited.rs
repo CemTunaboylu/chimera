@@ -90,13 +90,13 @@ mod test {
     use super::*;
     use crate::{builder::HIRBuilder, scope::into_idx};
     use ast::{
-        ast_root_from, cast_node_into_type, delimited::Tuple as ASTTuple,
+        ast_root_from_assert_no_err, cast_node_into_type, delimited::Tuple as ASTTuple,
         expression::Expr as ASTExpr,
     };
     use parameterized_test::create;
 
     fn get_hir_builder_and_ast_root(program: &str) -> (ASTTuple, HIRBuilder) {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let node = ast_root.get_root().first_child().unwrap();
         let ast_expr = cast_node_into_type::<ast::expression::Expr>(&node);
         let ast_tuple = if let ASTExpr::Tuple(tuple) = ast_expr {
@@ -138,7 +138,7 @@ mod test {
     fn unit_tuple_is_unit_expr() {
         let program = "()";
 
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let node = ast_root.get_root().first_child().unwrap();
         let ast_expr = cast_node_into_type::<ast::expression::Expr>(&node);
         assert!(matches!(ast_expr, ASTExpr::Unit));

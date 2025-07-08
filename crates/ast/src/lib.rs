@@ -28,8 +28,19 @@ pub mod statement;
 pub mod structure;
 pub mod types;
 
-pub fn ast_root_from(program: &str) -> Root {
+pub fn ast_root_from_assert_no_err(program: &str) -> Root {
+    ast_root_from(program, true)
+}
+
+pub fn ast_root_from_no_assertion(program: &str) -> Root {
+    ast_root_from(program, false)
+}
+
+fn ast_root_from(program: &str, assert_no_err: bool) -> Root {
     let root = Parser::new(program).parse();
+    if assert_no_err {
+        assert!(root.errors.is_empty());
+    }
     Root::try_from(root).expect("should have been ok")
 }
 

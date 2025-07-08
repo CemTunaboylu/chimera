@@ -189,14 +189,14 @@ mod tests {
     use thin_vec::ThinVec;
 
     use super::*;
-    use crate::{ast::Root, ast_root_from, cast_node_into_type};
+    use crate::{ast::Root, ast_root_from_assert_no_err, cast_node_into_type};
 
     use parameterized_test::create;
 
     create! {
         happy_path_self_ref_parameter_test,
         (program, exp_by_ref, exp_is_mut), {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let params_nodes = get_params_nodes_from(ast_root);
         let p = cast_node_into_type::<Param>(params_nodes.first().unwrap());
         let Param{ by_ref, is_mut, param_type, name, .. } = p;
@@ -218,7 +218,7 @@ mod tests {
     create! {
         happy_path_named_parameter_test,
         (program, exp_is_mut, exp_name, exp_type), {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let params_nodes = get_params_nodes_from(ast_root);
         let p = cast_node_into_type::<Param>(params_nodes.first().unwrap());
 
@@ -250,7 +250,7 @@ mod tests {
     #[test]
     fn multiple_params() {
         let program = "fn f(&mut self, s: &Structure, c:i32) {}";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let params_nodes = get_params_nodes_from(ast_root);
         let assert_param_types = [
             |p: Param| assert_eq!(p, Param::new_self_ref(BY_REF, IS_MUT, 5..14)),
@@ -297,7 +297,7 @@ mod tests {
     #[test]
     fn generic_lambda_params() {
         let program = "|g, en, eric| {g+en+eric}";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
 
         let literal_node = ast_root.get_root().first_child().unwrap();
         let lambda_node = literal_node.first_child().unwrap();

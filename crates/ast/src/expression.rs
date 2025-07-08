@@ -173,20 +173,20 @@ impl TryFrom<&NodeOrToken> for Expr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from_assert_no_err, cast_node_into_type};
     use parameterized_test::create;
 
     create! {
         create_expr_test,
         (program), {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let expr_node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Expr>(&expr_node);
         }
     }
 
     create_expr_test! {
-        block: "{ return self.block() }",
+        block: "{ return self.block(); }",
         buffer_literal: "[[1,0,0],[0,1,0],[0,0,1]]",
         buffer_type: "buffer<i32><3,3,3>",
         fn_call: "random_tensor()",

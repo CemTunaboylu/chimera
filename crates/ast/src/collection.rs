@@ -253,13 +253,13 @@ mod tests {
 
     use super::{BufferTree, ContainerInitializer, Expr, Literal, Shape, Value};
     use crate::{
-        ast_root_from, cast_node_into_type,
+        ast_root_from_assert_no_err, cast_node_into_type,
         function::{Call, On},
         let_binding::VarRef,
     };
 
     fn literal_from(program: &str) -> Literal {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let container_node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Literal>(&container_node)
     }

@@ -253,7 +253,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        ast_root_from, cast_node_into_type,
+        ast_root_from_assert_no_err, cast_node_into_type,
         function::{FnArg, On},
         literal::Value,
     };
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn valid_var_ref() {
         let program = "var";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let var_ref =
             cast_node_into_type::<VarRef>(ast_root.get_root().first_child().as_ref().unwrap());
         assert_eq!(program, var_ref.name().as_str());
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn let_binding_with_tuple_pattern() {
         let program = "let (mut p1_norm : Point, p2_norm : Point) = (point_1.normalize(), point_2.normalize());";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
         let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
         let identifiers = get_identifiers_from_tuple_pattern(let_binding.pattern());
@@ -362,7 +362,7 @@ mod tests {
     #[test]
     fn let_binding_with_nested_tuple_pattern() {
         let program = "let ((mut p1_norm : Point, p2_norm : Point), mut distance: i32) = ((point_1.normalize(), point_2.normalize()), 100);";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
         let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
         let (nested_tuple_pattern, _) = match let_binding.pattern() {
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn let_binding() {
         let program = "let diff_norm : Point = (point_1.locus() - point_2.locus()).normalize();";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
         let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
         assert_eq!("diff_norm", let_binding.pattern().name().unwrap().as_str());
@@ -438,7 +438,7 @@ mod tests {
     #[test]
     fn mut_let_binding() {
         let program = "let mut diff_norm = (point_1.locus() - point_2.locus()).normalize();";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
         let let_binding = cast_node_into_type::<LetBinding>(&let_binding_node);
         assert_eq!("diff_norm", let_binding.pattern().name().unwrap().as_str());

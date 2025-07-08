@@ -195,13 +195,13 @@ mod tests {
     use thin_vec::ThinVec;
 
     use super::*;
-    use ast::{ast_root_from, cast_node_into_type, literal::Literal as ASTLiteral};
+    use ast::{ast_root_from_assert_no_err, cast_node_into_type, literal::Literal as ASTLiteral};
 
     use crate::{collection::Shape, metadata::Common, typing::hindley_milner::types::Maybe};
     use crate::{literal::Value, scope::into_idx};
 
     fn get_tensor_literal_for(program: &str) -> CanonicalBuffer {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let literal_node = ast_root.get_root().first_child().unwrap();
         let ast_literal = cast_node_into_type::<ASTLiteral>(&literal_node);
         let mut hir_builder = HIRBuilder::new(ast_root);

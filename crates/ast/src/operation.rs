@@ -120,7 +120,7 @@ pub(crate) mod test {
     use super::*;
     use crate::{
         ast::Root,
-        ast_root_from,
+        ast_root_from_assert_no_err,
         function::On,
         let_binding::VarRef,
         literal::{Literal, Value},
@@ -162,7 +162,7 @@ pub(crate) mod test {
     #[test]
     fn happy_path_for_infix() {
         let program = "3+14";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let infix_bin_op = new_bin_from(&ast_root);
         assert_infix_bin_op_with(
             &infix_bin_op,
@@ -175,7 +175,7 @@ pub(crate) mod test {
     #[test]
     fn happy_path_for_nested_infix_() {
         let program = "(3+14)*(4-25)";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let infix_bin_op = new_bin_from(&ast_root);
         let lhs = infix_bin_op.lhs().unwrap();
         let rhs = infix_bin_op.rhs().unwrap();
@@ -205,7 +205,7 @@ pub(crate) mod test {
     #[test]
     fn happy_path_for_nested_unary_prefix() {
         let program = "--3";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let unary_prefix_op = new_unary_from(&ast_root, Unary::prefix);
         let operand = unary_prefix_op.operand().unwrap();
         let op = unary_prefix_op.op().unwrap();
@@ -220,7 +220,7 @@ pub(crate) mod test {
     #[test]
     fn happy_path_for_nested_unary_postfix() {
         let program = "opt_opt??";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let unary_postfix_op = new_unary_from(&ast_root, Unary::postfix);
         let operand = unary_postfix_op.operand().unwrap();
         let op = unary_postfix_op.op().unwrap();
@@ -240,7 +240,7 @@ pub(crate) mod test {
     fn all_ops_nested_acc_to_precedence() {
         // will be equal to (-1)*(9?)
         let program = "-1*9?";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let infix_bin_op = new_bin_from(&ast_root);
 
         let op = infix_bin_op.op().unwrap();
@@ -276,7 +276,7 @@ pub(crate) mod test {
     #[test]
     fn tensor_struct_construction() {
         let program = "tensor<3,3,3><f32>::new()";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let infix_bin_op = new_bin_from(&ast_root);
 
         let op = infix_bin_op.op().unwrap();

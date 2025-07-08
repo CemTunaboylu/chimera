@@ -342,12 +342,12 @@ mod tests {
     use super::*;
     use crate::{expression::Expr, scope::into_idx};
 
-    use ast::{ast_root_from, cast_node_into_type};
+    use ast::{ast_root_from_assert_no_err, cast_node_into_type};
 
     create! {
         happy_path_let_binding_with_tuple_pattern_test,
         (program), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let binding_node = ast_root.get_root().first_child().unwrap();
             let ast_let_binding= cast_node_into_type::<ASTLetBinding>(&binding_node);
             let mut hir = HIRBuilder::new(ast_root);
@@ -384,7 +384,7 @@ mod tests {
     #[test]
     fn detailed_testing_of_buffer_literal_indexing() {
         let program = "let ((r,g,b), mut alpha) = pixel.get_colors();";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let indexing_node = ast_root.get_root().first_child().unwrap();
         let ast_let_binding = cast_node_into_type::<ASTLetBinding>(&indexing_node);
         let mut hir = HIRBuilder::new(ast_root);

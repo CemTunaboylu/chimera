@@ -25,7 +25,7 @@ impl HIRBuilder {
 mod tests {
 
     use super::*;
-    use ast::{ast_root_from, cast_node_into_type};
+    use ast::{ast_root_from_assert_no_err, cast_node_into_type};
     use parameterized_test::create;
     use thin_vec::{ThinVec, thin_vec};
 
@@ -34,7 +34,7 @@ mod tests {
     create! {
         create_tensor_struct_test,
         (program, exp_dims, exp_type, exp_init), {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let tensor_node = ast_root.get_root().first_child().unwrap();
         let ast_tensor_struct = cast_node_into_type::<ASTTensorStruct>(&tensor_node);
         let mut hir_builder = HIRBuilder::new(ast_root);

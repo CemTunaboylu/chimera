@@ -82,12 +82,12 @@ mod test {
     use parameterized_test::create;
 
     use super::*;
-    use crate::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from_assert_no_err, cast_node_into_type};
 
     create! {
         happy_path_loop_test,
         (program), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let loop_node = ast_root.get_root().first_child().unwrap();
             _ = cast_node_into_type::<Loop>(&loop_node);
         }
