@@ -48,11 +48,11 @@ impl HIRBuilder {
         let mut lowered_statements = ThinVec::with_capacity(statements.len());
         let mut returns = ThinVec::new();
 
-        let mut is_pure = false;
+        let mut is_pure = true;
 
         for stmt in statements {
             let low_stmt = self.lower_statement(stmt)?;
-            is_pure |= self.is_stmt_pure(&low_stmt);
+            is_pure &= self.is_stmt_pure(&low_stmt);
             match low_stmt {
                 Stmt::Return(_) => {
                     returns.push(lowered_statements.len());
