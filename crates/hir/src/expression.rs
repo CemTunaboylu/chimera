@@ -5,7 +5,7 @@ use crate::{
     builder::HIRBuilder,
     climbing::climb,
     delimited::{Block, Paren, Tuple},
-    function::{Call, MayNeedResolution, On},
+    function::{Call, FnDef, MayNeedResolution, On},
     indexing::Indexing,
     let_binding::{LetBinding, VarRef},
     literal::{Literal, Value},
@@ -13,7 +13,7 @@ use crate::{
     operation::{BinaryInfix, Unary},
     parameter::Param,
     resolution::Reference,
-    scope::{ExprIdx, FnSelector, Selector, into_idx},
+    scope::{ExprIdx, FnSelector, Selector, StrIdx, into_idx},
     self_ref::SelfRef,
     structure::StructRef,
     typing::hindley_milner::types::Type,
@@ -23,7 +23,7 @@ use crate::{
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Expr {
     Block(Block),
-    FnCall(Reference<Call>),
+    FnCall(Reference<FnDef>),
     LitCall(Call),
     Indexing(Indexing),
     Infix(BinaryInfix),
