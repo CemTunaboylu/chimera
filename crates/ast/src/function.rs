@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
@@ -103,6 +105,7 @@ impl TryFrom<&SyntaxNode> for Lambda {
 pub struct FnDef {
     name: SmolStr,
     pub callable: Callable,
+    pub span: Range<usize>,
 }
 
 impl FnDef {
@@ -118,10 +121,11 @@ impl TryFrom<&SyntaxNode> for FnDef {
         let name = get_token_of_errs(fn_def_node, SyntaxKind::Ident)?
             .text()
             .to_smolstr();
-
+        let span: Range<usize> = fn_def_node.text_range().into();
         Ok(Self {
             name,
             callable: Callable::try_from(fn_def_node)?,
+            span,
         })
     }
 }
