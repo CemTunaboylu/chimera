@@ -150,8 +150,7 @@ impl HIRBuilder {
                     shape_former.get_dim_for_shape(values.len());
                     for v in values {
                         let idx_for_value = self.lower_expr_as_idx(&v)?;
-                        let expr = self.get_expr(idx_for_value);
-                        collection_examination.add(expr, idx_for_value)?;
+                        collection_examination.add_with_id(idx_for_value)?;
                         flattened.push(idx_for_value);
                     }
                     continue 'outer;
@@ -159,7 +158,7 @@ impl HIRBuilder {
             }
             let idx_for_value = self.lower_expr_as_idx(&ast_expr)?;
             let expr = self.get_expr(idx_for_value);
-            collection_examination.add(expr, idx_for_value)?;
+            collection_examination.add_with_id(idx_for_value)?;
             flattened.push(idx_for_value);
         }
 
@@ -197,7 +196,7 @@ mod tests {
     use super::*;
     use ast::{ast_root_from_assert_no_err, cast_node_into_type, literal::Literal as ASTLiteral};
 
-    use crate::{collection::Shape, metadata::Common, typing::hindley_milner::types::Maybe};
+    use crate::{collection::Shape, metadata::Common};
     use crate::{literal::Value, scope::into_idx};
 
     fn get_tensor_literal_for(program: &str) -> CanonicalBuffer {
@@ -230,12 +229,7 @@ mod tests {
                 purity: Purity::Pure,
                 refs_as_stmt_indices: thin_vec![],
             },
-            max: Some(max),
-            min: Some(Value::Int(0)),
             sparse: is_sparse,
-            num_refs: 0,
-            op_log: thin_vec![],
-            // data_type: Maybe::Checked(Box::new(dtype)),
             layout: Layout::row_major(&shape),
             shape,
             is_allocated: true,

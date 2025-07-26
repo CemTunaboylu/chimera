@@ -22,24 +22,25 @@ use crate::{
 
 use super::{Shape, layout::Layout, op::TensorOp};
 
+/* TODO:
+- max,min while traversing, but the type must impl. Cmp,
+    delegate to an object
+- cache for ops, have a generation field, each time mutated
+    increment, thus ops won't collide with cache?
+    have a cache TensorOp -> result
+    pub op_log: ThinVec<TensorOp>
+*/
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
 pub struct CollectionMeta {
     // pub data_type: Maybe<Type>,
     pub common: Common,
     pub layout: Layout,
     pub shape: Shape,
-    // can be used for quantization,
-    // TODO: get rid of Option
-    pub max: Option<Value>,
-    pub min: Option<Value>,
     // sparsity: if more than X% is same element, tensor is
     // considered sparse
-    pub sparse: bool,    //
-    pub num_refs: usize, // How many times is this function called statically?
-    // cache only make sense if things stay the same
-    // TODO: have a cache TensorOp -> result
-    pub op_log: ThinVec<TensorOp>, // How many times is this function used?
-    pub group_id: u32, // heap tensors are grouped by shape + type hash to reuse backing memory across allocations  (Allocation Pooling)
+    pub sparse: bool,
+    // heap tensors are grouped by shape + type hash to reuse backing memory across allocations  (Allocation Pooling)
+    pub group_id: u32,
     pub is_allocated: bool,
 }
 
@@ -49,16 +50,9 @@ impl CollectionMeta {
         collection_examination: CollectionExamination,
         shape: Shape,
     ) -> Self {
-        // let MinMax { max, min } = min_max;
         Self {
             common: Common::default(),
-            // max: max,
-            // min: min,
-            max: None,
-            min: None,
             sparse: collection_examination.sparsity.is_sparse(),
-            num_refs: 0,
-            op_log: ThinVec::new(),
             // data_type: collection_examination.unchecked_types(),
             shape: shape.clone(),
             layout: Layout::row_major(&shape),
@@ -70,8 +64,7 @@ impl CollectionMeta {
 
 pub struct CollectionExamination {
     sparsity: Sparsity<ExprIdx>,
-    // min_max: MinMax,
-    // types: Types,
+    expressions: HashSet<ExprIdx>,
 }
 impl Default for CollectionExamination {
     fn default() -> Self {
@@ -83,41 +76,19 @@ impl CollectionExamination {
     pub fn new() -> Self {
         Self {
             sparsity: Sparsity::new(),
-            // min_max: MinMax::new(),
-            // types: Types::new(),
+            expressions: HashSet::new(),
         }
     }
-    pub fn add(&mut self, _expr: &Expr, idx: ExprIdx) -> HIRResult<()> {
+    pub fn add(&mut self, _expr: &Expr) -> HIRResult<()> {
+        todo!()
+    }
+    pub fn add_with_id(&mut self, idx: ExprIdx) -> HIRResult<()> {
         self.sparsity.count(&idx);
-        // self.min_max.min_max(value);
-        // self.types.add(expr)?;
+        self.expressions.insert(idx);
         Ok(())
     }
-    // pub fn unchecked_types(self) -> Maybe<Type> {
-    //     Maybe::Unchecked(self.types.0.into_iter().collect())
-    // }
 }
 
-#[derive(Default)]
-pub struct MinMax {
-    max: Option<Value>,
-    min: Option<Value>,
-}
-
-impl MinMax {
-    pub fn min_max(&mut self, value: &Value) {
-        let v = value.clone();
-        let mx = self.max.get_or_insert(v.clone());
-        if *mx < v {
-            *mx = v;
-            return;
-        }
-        let mn = self.min.get_or_insert(v.clone());
-        if *mn > v {
-            *mn = v;
-        }
-    }
-}
 pub struct Sparsity<V: Eq + Hash + Clone>(HashMap<V, usize>, usize);
 
 impl<V: Eq + Hash + Clone> Default for Sparsity<V> {
@@ -143,31 +114,5 @@ impl<V: Eq + Hash + Clone> Sparsity<V> {
         let threshold = (whole as f32 * 0.7) as usize;
         // TODO: record the most frequent
         self.0.iter().any(|entry| *entry.1 >= threshold)
-    }
-}
-
-#[derive(Default)]
-pub struct Types(HashSet<Type>);
-
-impl Types {
-    pub fn add(&mut self, _value: &Expr) -> HIRResult<()> {
-        // Expr -> HMExpr -> Type
-        // let t: Type = Type::from(&hm);
-        // if !self.0.contains(&t) {
-        //     self.0.insert(t);
-        // }
-        Ok(())
-    }
-
-    pub fn type_check(&self) -> HIRResult<()> {
-        if self.0.len() > 1 {
-            let msg = format!("found multiple types within tensor: {:?}", self.0);
-            return Err(HIRError::with_msg(msg).into());
-        }
-        Ok(())
-    }
-    pub fn get_only_type(self) -> Type {
-        let e = self.0.iter().next();
-        e.unwrap().clone()
     }
 }
