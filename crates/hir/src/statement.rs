@@ -5,11 +5,12 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     control_flow::ControlFlow,
+    expression::Expr,
     impl_block::Impl,
     jump::Jump,
     loops::Loop,
     return_stmt::Return,
-    scope::{ExprIdx, FnDefIdx, LetBindingIdx, StructDefIdx},
+    scope::{ExprIdx, FnDefIdx, LetBindingIdx, StmtIdx, StructDefIdx},
     semi::Semi,
 };
 
@@ -30,6 +31,20 @@ pub enum Stmt {
 }
 
 impl HIRBuilder {
+    pub fn lower_statement_as_idx(&mut self, stmt: &ASTStmt) -> HIRResult<StmtIdx> {
+        let lowered_stmt = self.lower_statement(stmt)?;
+        let scope = self.get_current_scope_mut();
+        Ok(scope.allocate_stmt(lowered_stmt))
+    }
+    pub fn does_statement_of_idx_return(&self, stmt_idx: StmtIdx) -> bool {
+        let scope = self.get_current_scope();
+        let stmt = &scope.statements[stmt_idx];
+        match stmt {
+            Stmt::Return(_) => true,
+            Stmt::Expr(idx) if !matches!(self.get_expr(*idx), Expr::Missing) => true,
+            _ => false,
+        }
+    }
     pub fn lower_statement(&mut self, stmt: &ASTStmt) -> HIRResult<Stmt> {
         let lowered = match stmt {
             ASTStmt::ControlFlow(c_flow) => {

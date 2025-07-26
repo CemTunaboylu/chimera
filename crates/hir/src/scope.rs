@@ -7,6 +7,7 @@ use crate::{
     let_binding::LetBinding,
     metadata::{FnMeta, StructMeta, VarMeta},
     resolution::Unresolved,
+    statement::Stmt,
     structure::StructDef,
 };
 use la_arena::{Arena, Idx, RawIdx};
@@ -19,6 +20,7 @@ pub type ExprIdx = Idx<Expr>;
 pub type FnDefIdx = Idx<FnDef>;
 pub type ScopeIdx = Idx<Scope>;
 pub type StrIdx = Idx<SmolStr>;
+pub type StmtIdx = Idx<Stmt>;
 pub type StructDefIdx = Idx<StructDef>;
 pub type CollectionLiteralIdx = Idx<CanonicalBuffer>;
 pub type LetBindingIdx = Idx<LetBinding>;
@@ -172,6 +174,8 @@ pub struct Scope {
 
     pub(crate) to_resolve: Arena<Unresolved>,
     pub(crate) name_to_spans: PatriciaMap<Span>,
+
+    pub(crate) statements: Arena<Stmt>,
 }
 
 impl Scope {
@@ -190,6 +194,8 @@ impl Scope {
         let to_resolve = Arena::<Unresolved>::new();
         let name_to_spans = PatriciaMap::<Span>::new();
 
+        let statements = Arena::new();
+
         Self {
             kind,
             parent,
@@ -202,6 +208,7 @@ impl Scope {
             buffer_literals,
             to_resolve,
             name_to_spans,
+            statements,
         }
     }
 
@@ -228,6 +235,9 @@ impl Scope {
     }
     pub fn allocate_expr(&mut self, expr: Expr) -> ExprIdx {
         self.exprs.alloc(expr)
+    }
+    pub fn allocate_stmt(&mut self, stmt: Stmt) -> StmtIdx {
+        self.statements.alloc(stmt)
     }
     pub fn allocate_span(&mut self, name: &SmolStr, span: Span) {
         self.name_to_spans.insert(name, span);

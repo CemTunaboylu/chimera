@@ -12,7 +12,7 @@ use crate::{
     errors::HIRError,
     expression::Expr,
     mut_clone_with_err,
-    scope::{ExprIdx, ScopeIdx, ScopeKind, placeholder_idx},
+    scope::{ExprIdx, Scope, ScopeIdx, ScopeKind, StmtIdx, placeholder_idx},
     statement::Stmt,
 };
 
@@ -24,8 +24,7 @@ pub struct Paren(pub ExprIdx);
 pub struct Block {
     pub is_pure: bool,
     pub scope_idx: ScopeIdx,
-    pub statements: ThinVec<Stmt>,
-    pub returns: ThinVec<usize>,
+    pub returns: ThinVec<StmtIdx>,
 }
 
 impl Default for Block {
@@ -34,7 +33,6 @@ impl Default for Block {
             is_pure: Default::default(),
             scope_idx: placeholder_idx(),
             returns: Default::default(),
-            statements: Default::default(),
         }
     }
 }
@@ -45,29 +43,21 @@ impl HIRBuilder {
     #[scoped(ScopeKind::Block)]
     pub fn lower_block(&mut self, block: &ASTBlock) -> HIRResult<Block> {
         let statements = block.statements();
-        let mut lowered_statements = ThinVec::with_capacity(statements.len());
         let mut returns = ThinVec::new();
 
         let mut is_pure = true;
 
         for stmt in statements {
-            let low_stmt = self.lower_statement(stmt)?;
-            is_pure &= self.is_stmt_pure(&low_stmt);
-            match low_stmt {
-                Stmt::Return(_) => {
-                    returns.push(lowered_statements.len());
-                }
-                Stmt::Expr(idx) if !matches!(self.get_expr(idx), Expr::Missing) => {
-                    returns.push(lowered_statements.len());
-                }
-                _ => {}
+            let low_stmt_idx = self.lower_statement_as_idx(stmt)?;
+            // * TODO: indexing multiple times, fix this
+            is_pure &= self.is_stmt_of_idx_pure(low_stmt_idx);
+            if self.does_statement_of_idx_return(low_stmt_idx) {
+                returns.push(low_stmt_idx);
             }
-            lowered_statements.push(low_stmt);
         }
         Ok(Block {
             is_pure,
             scope_idx: self.current_scope_cursor,
-            statements: lowered_statements,
             returns,
         })
     }

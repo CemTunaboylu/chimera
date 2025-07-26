@@ -14,7 +14,7 @@ use crate::{
     literal::Value,
     operation::{BinaryOp, UnaryOp},
     resolution::{Baggage, Reference},
-    scope::ExprIdx,
+    scope::{ExprIdx, StmtIdx},
     self_ref::SelfRef,
 };
 
@@ -43,7 +43,7 @@ pub enum HMExpr {
     // TODO: Not sure of the returns part, see block_with_conditional_returns, propagating the return
     // can be a pain in the ass, revisit this
     Block {
-        returns: ThinVec<usize>,
+        returns: ThinVec<u32>,
         statements: ThinVec<HMStmt>,
     },
     Class(Type),
@@ -106,11 +106,16 @@ where
 impl HIRBuilder {
     pub fn try_into_hm_block(&self, block: &Block) -> HIRResult<HMExpr> {
         let mut statements = ThinVec::new();
-        for statement in block.statements.iter() {
+        let block_scope = &self.scopes[block.scope_idx];
+        for statement in block_scope.statements.values() {
             statements.push(self.try_into_hm_stmt(statement)?);
         }
         Ok(HMExpr::Block {
-            returns: block.returns.clone(),
+            returns: block
+                .returns
+                .iter()
+                .map(|idx| idx.into_raw().into_u32())
+                .collect(),
             statements,
         })
     }

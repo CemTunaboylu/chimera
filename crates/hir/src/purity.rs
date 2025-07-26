@@ -13,7 +13,7 @@ use crate::{
     loops::Loop,
     operation::{BinaryInfix, BinaryOp, Unary, UnaryOp},
     parameter::Param,
-    scope::{ExprIdx, FnSelector, ScopeIdx, Selector, VarSelector},
+    scope::{ExprIdx, FnSelector, ScopeIdx, Selector, StmtIdx, VarSelector},
     statement::Stmt,
     typing::hindley_milner::types::{Maybe, Status, Type},
 };
@@ -224,6 +224,12 @@ impl HIRBuilder {
             Stmt::StructDef(_idx) => true,
             Stmt::LetBinding(thin_vec) => self.is_let_binding_pure(thin_vec.as_slice()),
         }
+    }
+
+    pub fn is_stmt_of_idx_pure(&self, stmt_idx: StmtIdx) -> bool {
+        let current_scope = self.get_current_scope();
+        let stmt = &current_scope.statements[stmt_idx];
+        self.is_stmt_pure(stmt)
     }
 }
 

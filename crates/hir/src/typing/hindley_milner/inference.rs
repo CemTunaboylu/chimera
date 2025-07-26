@@ -291,11 +291,11 @@ pub fn infer_expr(
         } => {
             let unit_type = unit_type();
             let mut return_type = unit_type.clone();
-            let mut returning_indices: HashSet<usize> = HashSet::from_iter(returns.iter().copied());
+            let mut returning_indices: HashSet<u32> = HashSet::from_iter(returns.iter().copied());
 
             for (ix, stmt) in statements.iter().enumerate() {
                 let inferred = infer_stmt(stmt, ctx, store)?;
-                if !returning_indices.remove(&ix) {
+                if !returning_indices.remove(&(ix as u32)) {
                     continue;
                 }
                 if return_type == unit_type {

@@ -160,7 +160,6 @@ impl HIRBuilder {
                 let idx = self.allocate_for_resolution(unresolved);
                 Expr::VarRef(Reference::Unresolved(idx))
             }
-            _ => todo!(),
         };
         let idx = self.as_expr_idx(expr);
         if is_pure {

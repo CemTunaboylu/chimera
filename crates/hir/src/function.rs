@@ -380,15 +380,14 @@ mod tests {
             }
             assert_eq!(&RetType(Type::Bool), callable.return_type.as_ref().unwrap());
             let Block {
-                scope_idx,
-                returns,
-                statements,
-                ..
+                scope_idx, returns, ..
             } = callable.body;
             // note: scopeIdx(2) since lower_fn_params_and_body starts a scope and then Block starts its own
             assert_eq!(into_idx(2), scope_idx);
-            assert_eq!(&[0], returns.as_slice());
-            assert_eq!(&[Stmt::Expr(into_idx(1))], statements.as_slice());
+            assert_eq!(&[into_idx(0)], returns.as_slice());
+            let block_scope = &hir_builder.scopes[scope_idx];
+            assert_eq!(1, block_scope.statements.len());
+            assert_eq!(Stmt::Expr(into_idx(1)), block_scope.statements[into_idx(0)]);
         } else {
             unreachable!()
         }
@@ -444,15 +443,14 @@ mod tests {
             }
             assert_eq!(&RetType(Type::Bool), callable.return_type.as_ref().unwrap());
             let Block {
-                scope_idx,
-                returns,
-                statements,
-                ..
+                scope_idx, returns, ..
             } = callable.body;
             // note: scopeIdx(2) since lower_fn_params_and_body starts a scope and then Block starts its own
             assert_eq!(into_idx(2), scope_idx);
-            assert_eq!(&[0], returns.as_slice());
-            assert_eq!(&[Stmt::Expr(into_idx(1))], statements.as_slice());
+            assert_eq!(&[into_idx(0)], returns.as_slice());
+            let block_scope = &hir_builder.scopes[scope_idx];
+            assert_eq!(1, block_scope.statements.len());
+            assert_eq!(Stmt::Expr(into_idx(1)), block_scope.statements[into_idx(0)]);
         } else {
             unreachable!()
         }
