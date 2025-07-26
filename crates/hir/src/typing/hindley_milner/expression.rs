@@ -46,6 +46,7 @@ pub enum HMExpr {
         returns: ThinVec<usize>,
         statements: ThinVec<HMStmt>,
     },
+    Class(Type),
     BinaryOp {
         op: BinaryOp,
         lhs: Box<HMExpr>,
@@ -118,6 +119,7 @@ impl HIRBuilder {
     pub fn try_into_hm_expr(&self, expr: &Expr) -> HIRResult<HMExpr> {
         match expr {
             Expr::Block(block) => self.try_into_hm_block(block),
+            Expr::Class(t) => Ok(HMExpr::Class(t.clone())),
             Expr::FnCall(reference) => {
                 let (type_key, baggage) = get_resolved_materials(reference)?;
                 let baggages = match baggage {

@@ -23,6 +23,7 @@ use crate::{
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Expr {
     Block(Block),
+    Class(Type),
     FnCall(Reference<FnDef>),
     LitCall(Call),
     Indexing(Indexing),
@@ -105,6 +106,11 @@ impl HIRBuilder {
                     Expr::LitCall(call)
                 }
             },
+            ASTExpr::Class(ty) => {
+                let t = self.lower_type(ty)?;
+                is_pure = self.is_type_pure(&t);
+                Expr::Class(t)
+            }
             ASTExpr::Indexing(indexing) => {
                 let lowered_indexing = self.lower_indexing(indexing)?;
                 is_pure = self.is_indexing_pure(&lowered_indexing);
