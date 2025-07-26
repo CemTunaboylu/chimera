@@ -33,7 +33,6 @@ pub enum Expr {
     Mut(Mut),
     Paren(Paren),
     SelfRef(SelfRef),
-    StructRef(Reference<StructRef>),
     Tuple(Tuple),
     Unary(Unary),
     Unit,

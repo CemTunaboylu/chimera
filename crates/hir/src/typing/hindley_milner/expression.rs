@@ -71,7 +71,6 @@ pub enum HMExpr {
     // Ref
     SelfRef, // only corresponds to Self, self is resolved separately under Var("self")
     Str,
-    StructAsType(TypeKey),
     StructInit {
         key: TypeKey,
         fields: ThinVec<(TypeKey, HMExpr)>,
@@ -163,11 +162,6 @@ impl HIRBuilder {
                 SelfRef::Instance => todo!(), // TODO: Var("self"), we need self's idx
                 SelfRef::Struct => Ok(HMExpr::SelfRef),
             },
-            Expr::StructRef(reference) => {
-                let (type_key, baggage) = get_resolved_materials(reference)?;
-                expect_non_baggage(&baggage, type_key)?;
-                Ok(HMExpr::StructAsType(type_key))
-            }
             Expr::Tuple(tuple) => {
                 let to_hm = |idx: &ExprIdx, hir: &HIRBuilder| {
                     let expr = hir.get_expr(*idx);

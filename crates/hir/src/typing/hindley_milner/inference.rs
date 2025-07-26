@@ -350,12 +350,6 @@ pub fn infer_expr(
             Ok(store.resolve(&t_ret))
         }
         HMExpr::Mut(inner) => infer_expr(inner, ctx, store),
-        // note: before the type checking, HIR elements that are not unresolved
-        // will be resolved first, thus it is assumed to be of Status::Resolved(_) type
-        HMExpr::StructAsType(key) => {
-            let ty = ctx.get_type_with_key(key)?;
-            Ok(ty)
-        }
         // TODO: remove this
         HMExpr::StructInit { key, fields } => {
             let struct_def = ctx.get_type_with_key(key)?;
@@ -933,18 +927,6 @@ mod tests {
                             }),
                     )
             },
-            Type::I32,
-        ),
-        /*
-            Chimera equivalent:
-               p.x      // where we know that p is of type Point
-        */
-        struct_as_type_and_dot: (
-            &HMStmt::Expr(HMExpr::BinaryOp{
-                lhs : Box::new(HMExpr::StructAsType(get_idx_for("Point"))),
-                op: BinaryOp::Dot,
-                rhs : Box::new(HMExpr::Var(get_idx_for("x"))),
-            }),
             Type::I32,
         ),
         /*
