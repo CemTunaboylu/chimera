@@ -167,7 +167,6 @@ pub struct Scope {
 
     pub(crate) metadata: MetadataStore,
 
-    pub(crate) strs: Arena<SmolStr>,
     pub(crate) tensor_literals: Arena<CanonicalBuffer>,
     pub(crate) buffer_literals: Arena<CanonicalBuffer>,
 
@@ -185,7 +184,6 @@ impl Scope {
 
         let metadata = MetadataStore::default();
 
-        let strs = Arena::<SmolStr>::new();
         let tensor_literals = Arena::<CanonicalBuffer>::new();
         let buffer_literals = Arena::<CanonicalBuffer>::new();
 
@@ -200,7 +198,6 @@ impl Scope {
             struct_allocator,
             variable_allocator,
             metadata,
-            strs,
             tensor_literals,
             buffer_literals,
             to_resolve,
@@ -234,9 +231,6 @@ impl Scope {
     }
     pub fn allocate_span(&mut self, name: &SmolStr, span: Span) {
         self.name_to_spans.insert(name, span);
-    }
-    pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
-        self.strs.alloc(string)
     }
     pub fn allocate_tensor_literal(
         &mut self,

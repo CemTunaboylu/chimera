@@ -7,6 +7,7 @@ pub mod delimited;
 pub mod errors;
 pub mod expression;
 pub mod function;
+pub mod hash_cons;
 pub mod hir;
 pub mod impl_block;
 pub mod indexing;
@@ -29,17 +30,47 @@ pub mod structure;
 pub mod types;
 pub mod typing;
 
+use std::hash::Hash;
+
 use builder::HIRBuilder;
 use errors::HIRError;
-use la_arena::Idx;
+use la_arena::{Arena, Idx};
 use resolution::Baggage;
+use rustc_hash::FxHasher;
 use thin_vec::ThinVec;
 
 use miette::Report;
 use typing::hindley_milner::inference::TypeKey;
 
-use crate::scope::{Span, placeholder_idx};
+use crate::{
+    hash_cons::FingerPrints,
+    scope::{Span, placeholder_idx},
+};
 
+#[derive(Debug)]
+pub struct DedupArena<V: Hash> {
+    arena: Arena<V>,
+    fingerprints: FingerPrints<Idx<V>, FxHasher>,
+}
+
+impl<V: Hash> DedupArena<V> {
+    pub fn new() -> Self {
+        Self {
+            arena: Arena::new(),
+            fingerprints: FingerPrints::new(),
+        }
+    }
+    pub fn allocate(&mut self, value: V) -> Idx<V> {
+        let fingerprint = FingerPrints::<Idx<V>, FxHasher>::fingerprint(&value);
+        if let Some(idx) = self.fingerprints.get(fingerprint) {
+            *idx
+        } else {
+            let idx = self.arena.alloc(value);
+            _ = self.fingerprints.insert(idx, fingerprint);
+            idx
+        }
+    }
+}
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Spanned<I> {
     pub index: I,

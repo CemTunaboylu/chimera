@@ -10,9 +10,10 @@ use thin_vec::ThinVec;
 use ast::{ast::Root as ASTRoot, statement::Stmt as ASTStmt};
 
 use crate::{
-    HIRResult,
+    DedupArena, HIRResult,
     collection::canonical::CanonicalBuffer,
     context::{LoweringContext, UsageContext},
+    hash_cons::FingerPrints,
     scope::{
         CollectionLiteralIdx, ExprIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span,
         StrIdx, into_idx,
@@ -27,9 +28,10 @@ pub struct HIRBuilder {
     pub(crate) contexts: ThinVec<LoweringContext>,
     pub(crate) current_scope_cursor: ScopeIdx,
     pub(crate) errors: ThinVec<Report>,
+    pub(crate) expr_purity: HashSet<(ScopeIdx, ExprIdx), FxBuildHasher>,
     pub(crate) lowered: ThinVec<Stmt>,
     pub(crate) scopes: Arena<Scope>,
-    pub(crate) expr_purity: HashSet<(ScopeIdx, ExprIdx), FxBuildHasher>,
+    pub(crate) strs: DedupArena<SmolStr>,
     stmts: ThinVec<ASTStmt>,
 }
 
@@ -52,6 +54,8 @@ impl HIRBuilder {
 
         let expr_purity = FxHashSet::default();
 
+        let strs = DedupArena::new();
+
         Self {
             ast_root,
             contexts,
@@ -61,6 +65,7 @@ impl HIRBuilder {
             lowered,
             scopes,
             stmts,
+            strs,
         }
     }
     pub fn start_new_scope(&mut self, with: ScopeKind) -> ScopeIdx {
@@ -100,8 +105,7 @@ impl HIRBuilder {
         current_scope.allocate_span(name, span.into());
     }
     pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
-        let current_scope = self.get_current_scope_mut();
-        current_scope.allocate_string(string)
+        self.strs.allocate(string)
     }
     pub fn allocate_tensor_literal(
         &mut self,
