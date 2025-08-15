@@ -10,3 +10,4 @@ hir = { path = "../hir" }
 
 miette = { version = "7.5.0", features = ["fancy"] }
 clap = { version = "4.5.30", features = ["derive"] }
+thin-vec = "0.2.13"

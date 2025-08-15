@@ -1,17 +1,21 @@
-use hir::builder::lower;
+use hir::{
+    builder::lower,
+    scope::{ScopeIdx, ScopedStmtIdx, StmtIdx},
+};
 use miette::{Context, IntoDiagnostic, Result as MietteResult};
 use parser::{cst::ConcreteSyntaxTree, parser::Parser as ChimeraParser};
 
 use ast::{ast::Root, statement::Stmt as AstStmt};
 // use hir::lower;
 
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use std::{
     fs::read_to_string,
     io::{Write, stdin, stdout},
 };
 
 use clap::{Parser, Subcommand};
+use thin_vec::ThinVec;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -91,10 +95,13 @@ fn display_as_hir(cst: &ConcreteSyntaxTree) {
     display_as_cst(cst);
     let ast_root = Root::try_from(cst).unwrap();
     println!("ast_root {:?}", ast_root);
-    let mut expr_arena = lower(ast_root);
+    let mut hir_builder = lower(ast_root);
 
-    for elm in &mut expr_arena {
-        println!("{:?}", elm);
+    let stmt_idx: ThinVec<ScopedStmtIdx> = hir_builder.into_iter().collect();
+
+    for idx in stmt_idx {
+        let stmt = hir_builder.get_statement(&idx);
+        println!("stmt: {:?}", stmt);
     }
 }
 
