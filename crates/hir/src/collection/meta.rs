@@ -13,7 +13,7 @@ use crate::{
     expression::Expr,
     literal::Value,
     metadata::Common,
-    scope::ExprIdx,
+    scope::{ExprIdx, ScopeIdx, placeholder_idx},
     typing::hindley_milner::{
         expression::HMExpr,
         types::{Maybe, Type},
@@ -63,18 +63,20 @@ impl CollectionMeta {
 }
 
 pub struct CollectionExamination {
+    scope_idx: ScopeIdx,
     sparsity: Sparsity<ExprIdx>,
     expressions: HashSet<ExprIdx>,
 }
 impl Default for CollectionExamination {
     fn default() -> Self {
-        Self::new()
+        Self::new(placeholder_idx())
     }
 }
 
 impl CollectionExamination {
-    pub fn new() -> Self {
+    pub fn new(scope_idx: ScopeIdx) -> Self {
         Self {
+            scope_idx,
             sparsity: Sparsity::new(),
             expressions: HashSet::new(),
         }

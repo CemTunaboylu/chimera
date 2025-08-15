@@ -13,7 +13,10 @@ use crate::{
     loops::Loop,
     operation::{BinaryInfix, BinaryOp, Unary, UnaryOp},
     parameter::Param,
-    scope::{ExprIdx, FnSelector, ScopeIdx, Selector, StmtIdx, VarSelector},
+    scope::{
+        ExprIdx, FnSelector, ScopeIdx, Scoped, ScopedExprIdx, ScopedStmtIdx, Selector, StmtIdx,
+        VarSelector,
+    },
     statement::Stmt,
     typing::hindley_milner::types::{Maybe, Status, Type},
 };
@@ -48,7 +51,7 @@ impl HIRBuilder {
             Dot | Namespaced => {
                 let lhs = infix.lhs();
                 let rhs = infix.rhs();
-                self.is_pure(lhs.0) && self.is_pure(rhs.0)
+                self.is_pure(&lhs.0) && self.is_pure(&rhs.0)
             }
             _ => true,
         }
@@ -58,7 +61,7 @@ impl HIRBuilder {
     }
     pub fn is_call_pure(&self, call: &Call) -> bool {
         // * Note: if any of the arguments are impure, the call becomes impure.
-        if !call.arguments.iter().all(|arg| self.is_pure(arg.0)) {
+        if !call.arguments.iter().all(|arg| self.is_pure(&arg.0)) {
             return false;
         }
         match &call.on {
@@ -74,13 +77,15 @@ impl HIRBuilder {
     }
     pub fn is_controlflow_pure(&self, control_flow: &ControlFlow) -> bool {
         control_flow.0.iter().all(|cond| match cond {
-            Conditional::If(condition, block) => block.is_pure && self.is_pure(condition.0),
-            Conditional::Elif(condition, block) => block.is_pure && self.is_pure(condition.0),
+            Conditional::If(condition, block) => block.is_pure && self.is_pure(&condition.0),
+            Conditional::Elif(condition, block) => block.is_pure && self.is_pure(&condition.0),
             Conditional::Else(block) => block.is_pure,
         })
     }
-    pub fn is_expr_slice_pure(&self, exprs: &[ExprIdx]) -> bool {
-        exprs.iter().all(|expr_idx| self.is_pure(*expr_idx))
+    pub fn is_expr_slice_pure(&self, scope_idx: ScopeIdx, exprs: &[ExprIdx]) -> bool {
+        exprs
+            .iter()
+            .all(|expr_idx| self.is_pure(&Scoped::new(scope_idx, *expr_idx)))
     }
     pub fn is_fn_def_of_idx_pure(&self, fn_def_idx: &Idx<FnDef>) -> bool {
         let scope = self.get_current_scope();
@@ -100,8 +105,12 @@ impl HIRBuilder {
         })
     }
     pub fn is_indexing_pure(&self, indexing: &Indexing) -> bool {
-        let is_reference_pure = self.is_pure(indexing.reference.index);
-        let are_indices_pure = indexing.indices.iter().all(|s| self.is_pure(s.index));
+        let is_reference_pure = self.is_pure(&indexing.scoped_reference());
+        let are_indices_pure = indexing
+            .indices
+            .iter()
+            .map(|spanned| Scoped::new(indexing.scope_idx, spanned.index))
+            .all(|scoped| self.is_pure(&scoped));
         is_reference_pure && are_indices_pure
     }
     pub fn is_let_binding_pure(&self, indices: &[Idx<LetBinding>]) -> bool {
@@ -109,7 +118,8 @@ impl HIRBuilder {
         let allocator = VarSelector::select_alloc(scope);
         indices.iter().all(|lbi| {
             let binding = &allocator.definitions[*lbi];
-            !binding.identifier.is_mut && self.is_pure(binding.spanned_expr_idx.index)
+            let scoped = Scoped::new(binding.scope_idx, binding.spanned_expr_idx.index);
+            !binding.identifier.is_mut && self.is_pure(&scoped)
         })
     }
     pub fn is_maybe_pure(&self, maybe: &Maybe<Type>) -> bool {
@@ -154,7 +164,7 @@ impl HIRBuilder {
     pub fn is_unary_op_pure(&self, unary: &Unary) -> bool {
         use UnaryOp::*;
         match unary.op() {
-            Ref => self.is_pure(unary.operand().0),
+            Ref => self.is_pure(&unary.operand().0),
             _ => true,
         }
     }
@@ -182,7 +192,13 @@ impl HIRBuilder {
                 .internal_with_field_values
                 .data
                 .iter()
-                .all(|(_, expr_idx)| self.is_pure(*expr_idx)),
+                .map(|(_, expr_idx)| {
+                    Scoped::new(
+                        struct_literal.internal_with_field_values.scope_idx,
+                        *expr_idx,
+                    )
+                })
+                .all(|scoped_expr_idx| self.is_pure(&scoped_expr_idx)),
             Value::Tensor { idx, data_type, .. } => {
                 let scope = self.get_current_scope();
                 let metadata = &scope.metadata.buffers;
@@ -194,41 +210,40 @@ impl HIRBuilder {
             _ => true,
         }
     }
-    pub fn is_pure_with_scope(&self, scope_idx: ScopeIdx, expr_idx: ExprIdx) -> bool {
-        self.expr_purity.contains(&(scope_idx, expr_idx))
-    }
-    pub fn is_pure(&self, expr_idx: ExprIdx) -> bool {
-        let scope_idx = self.current_scope_cursor;
-        self.expr_purity.contains(&(scope_idx, expr_idx))
+    pub fn is_pure(&self, scoped_expr_idx: &ScopedExprIdx) -> bool {
+        self.expr_purity.contains(scoped_expr_idx)
     }
     pub fn set_as_pure(&mut self, expr_idx: ExprIdx) {
         let scope_idx = self.current_scope_cursor;
-        self.expr_purity.insert((scope_idx, expr_idx));
+        let scoped = Scoped::new(scope_idx, expr_idx);
+        self.expr_purity.insert(scoped);
     }
     pub fn is_stmt_pure(&self, stmt: &Stmt) -> bool {
         match stmt {
             Stmt::ControlFlow(control_flow) => self.is_controlflow_pure(control_flow),
-            Stmt::Expr(idx) => self.is_pure(*idx),
+            Stmt::Expr(idx) => self.is_pure(idx),
             Stmt::FnDef(idx) => self.is_fn_def_of_idx_pure(idx),
             Stmt::Impl(imp) => self.is_impl_pure(imp),
             Stmt::Jump(jump) => match jump {
                 Jump::Continue => true,
-                Jump::Break(idx) => idx.is_some_and(|expr_idx| self.is_pure(expr_idx)),
+                Jump::Break(idx) => idx.is_some_and(|expr_idx| self.is_pure(&expr_idx)),
             },
             Stmt::Loop(l) => match l {
-                Loop::While(condition, block) => block.is_pure && self.is_pure(condition.0),
-                Loop::For(_identifiers, in_expr, block) => block.is_pure && self.is_pure(in_expr.0),
+                Loop::While(condition, block) => block.is_pure && self.is_pure(&condition.0),
+                Loop::For(_identifiers, in_expr, block) => {
+                    block.is_pure && self.is_pure(&in_expr.0)
+                }
             },
-            Stmt::Return(ret) => self.is_pure(ret.0),
-            Stmt::Semi(semi) => self.is_pure(semi.0),
+            Stmt::Return(ret) => self.is_pure(&ret.0),
+            Stmt::Semi(semi) => self.is_pure(&semi.0),
             Stmt::StructDef(_idx) => true,
             Stmt::LetBinding(thin_vec) => self.is_let_binding_pure(thin_vec.as_slice()),
         }
     }
 
-    pub fn is_stmt_of_idx_pure(&self, stmt_idx: StmtIdx) -> bool {
-        let current_scope = self.get_current_scope();
-        let stmt = &current_scope.statements[stmt_idx];
+    pub fn is_stmt_of_idx_pure(&self, stmt_idx: &ScopedStmtIdx) -> bool {
+        let scope = &self.scopes[stmt_idx.scope_idx];
+        let stmt = &scope.statements[stmt_idx.elm];
         self.is_stmt_pure(stmt)
     }
 }
@@ -257,7 +272,7 @@ mod test {
             let ast_expr= cast_node_into_type::<ASTExpr>(&expr_node);
 
             let expr_idx = hir.lower_expr_as_idx(&ast_expr).expect("should have been lowered");
-            assert_eq!(expr_purity, hir.is_pure(expr_idx));
+            assert_eq!(expr_purity, hir.is_pure(&expr_idx));
         }
     }
 
@@ -278,8 +293,8 @@ mod test {
         pure_struct_indexing: ("Struct{}.a[0]", PURE),
     }
 
-    fn resolved_purity_of_fn_call(hir: &HIRBuilder, fn_expr_idx: ExprIdx) -> bool {
-        let expr = hir.get_expr(fn_expr_idx);
+    fn resolved_purity_of_fn_call(hir: &HIRBuilder, fn_expr_idx: ScopedExprIdx) -> bool {
+        let expr = hir.get_expr(&fn_expr_idx);
         let unresolved_call_reference = if let Expr::FnCall(unresolved_call_reference) = expr {
             unresolved_call_reference
         } else {
@@ -311,8 +326,8 @@ mod test {
         hir.is_call_pure(&resolved_call)
     }
 
-    fn resolved_purity_of_var_ref(hir: &HIRBuilder, var_ref_expr_idx: ExprIdx) -> bool {
-        let expr = hir.get_expr(var_ref_expr_idx);
+    fn resolved_purity_of_var_ref(hir: &HIRBuilder, var_ref_expr_idx: ScopedExprIdx) -> bool {
+        let expr = hir.get_expr(&var_ref_expr_idx);
         let unresolved_reference = if let Expr::VarRef(unresolved_reference) = expr {
             unresolved_reference
         } else {
@@ -320,7 +335,7 @@ mod test {
         };
 
         let resolved_variable_reference = hir
-            .resolve_var_ref(unresolved_reference)
+            .resolve_var_ref(&unresolved_reference)
             .expect("should have been resolved");
         let let_binding_idx = if let Reference::Resolved {
             baggage, obj_idx, ..

@@ -15,8 +15,8 @@ use crate::{
     context::{LoweringContext, UsageContext},
     hash_cons::FingerPrints,
     scope::{
-        CollectionLiteralIdx, ExprIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span,
-        StrIdx, into_idx,
+        CollectionLiteralIdx, ExprIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, ScopedExprIdx,
+        ScopedStmtIdx, Selector, Span, StmtIdx, StrIdx, into_idx,
     },
     statement::Stmt,
 };
@@ -28,8 +28,7 @@ pub struct HIRBuilder {
     pub(crate) contexts: ThinVec<LoweringContext>,
     pub(crate) current_scope_cursor: ScopeIdx,
     pub(crate) errors: ThinVec<Report>,
-    pub(crate) expr_purity: HashSet<(ScopeIdx, ExprIdx), FxBuildHasher>,
-    pub(crate) lowered: ThinVec<Stmt>,
+    pub(crate) expr_purity: HashSet<ScopedExprIdx, FxBuildHasher>,
     pub(crate) scopes: Arena<Scope>,
     pub(crate) strs: DedupArena<SmolStr>,
     stmts: ThinVec<ASTStmt>,
@@ -47,8 +46,6 @@ impl HIRBuilder {
         let master_scope = Scope::new(current_scope_cursor, ScopeKind::Master);
         assert_eq!(current_scope_cursor, scopes.alloc(master_scope));
 
-        let lowered = ThinVec::<Stmt>::new();
-
         let mut stmts = ast_root.statements().collect::<ThinVec<_>>();
         stmts.reverse();
 
@@ -62,7 +59,6 @@ impl HIRBuilder {
             current_scope_cursor,
             expr_purity,
             errors,
-            lowered,
             scopes,
             stmts,
             strs,
@@ -78,9 +74,10 @@ impl HIRBuilder {
         self.current_scope_cursor = current_scope.parent;
     }
     pub fn push_usage_context(&mut self, usage: UsageContext) {
+        let statement_idx = self.get_current_scope().statements.len();
         let lowering_ctx = LoweringContext {
             usage,
-            statement_idx: self.lowered.len(),
+            statement_idx,
             scope_idx: self.current_scope_cursor,
         };
         self.contexts.push(lowering_ctx);
@@ -89,7 +86,7 @@ impl HIRBuilder {
         self.contexts.last()
     }
     pub fn get_current_stmt_idx(&self) -> usize {
-        self.lowered.len()
+        self.get_current_scope().statements.len()
     }
     pub fn pop_usage_context(&mut self) {
         self.contexts.pop();
@@ -99,6 +96,9 @@ impl HIRBuilder {
     }
     pub fn get_current_scope(&self) -> &Scope {
         &self.scopes[self.current_scope_cursor]
+    }
+    pub fn get_current_scope_idx(&self) -> ScopeIdx {
+        self.current_scope_cursor
     }
     pub fn allocate_span(&mut self, name: &SmolStr, span: impl Into<Span>) {
         let current_scope = self.get_current_scope_mut();
@@ -125,16 +125,13 @@ impl HIRBuilder {
 }
 
 impl Iterator for &mut HIRBuilder {
-    type Item = Stmt;
+    type Item = ScopedStmtIdx;
 
     fn next(&mut self) -> Option<Self::Item> {
         let stmt = self.stmts.pop()?;
-        let stmt = self.lower_statement(&stmt);
-        match stmt {
-            Ok(lowered) => {
-                self.lowered.push(lowered.clone());
-                Some(lowered)
-            }
+        let stmt_id = self.lower_statement_as_idx(&stmt);
+        match stmt_id {
+            Ok(scoped_idx) => Some(scoped_idx),
             Err(err) => {
                 self.errors.push(err);
                 self.next()

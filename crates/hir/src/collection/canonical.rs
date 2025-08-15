@@ -127,7 +127,7 @@ impl HIRBuilder {
         let mut stack =
             clone_from_iter_with_err(to_stack.into_iter().rev(), len, |e: Expr| Ok((1, e)))?;
 
-        let mut collection_examination = CollectionExamination::new();
+        let mut collection_examination = CollectionExamination::new(self.get_current_scope_idx());
 
         'outer: while !stack.is_empty() {
             let mut ast_expr = {
@@ -150,16 +150,16 @@ impl HIRBuilder {
                     shape_former.get_dim_for_shape(values.len());
                     for v in values {
                         let idx_for_value = self.lower_expr_as_idx(&v)?;
-                        collection_examination.add_with_id(idx_for_value)?;
-                        flattened.push(idx_for_value);
+                        collection_examination.add_with_id(idx_for_value.elm)?;
+                        flattened.push(idx_for_value.elm);
                     }
                     continue 'outer;
                 }
             }
             let idx_for_value = self.lower_expr_as_idx(&ast_expr)?;
-            let expr = self.get_expr(idx_for_value);
-            collection_examination.add_with_id(idx_for_value)?;
-            flattened.push(idx_for_value);
+            let expr = self.get_expr(&idx_for_value);
+            collection_examination.add_with_id(idx_for_value.elm)?;
+            flattened.push(idx_for_value.elm);
         }
 
         let common = Common {

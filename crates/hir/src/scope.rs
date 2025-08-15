@@ -15,10 +15,23 @@ use patricia_tree::PatriciaMap;
 use smol_str::SmolStr;
 
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub struct Scoped<A> {
+    pub scope_idx: ScopeIdx,
+    pub elm: A,
+}
+
+impl<A> Scoped<A> {
+    pub fn new(scope_idx: ScopeIdx, elm: A) -> Self {
+        Self { scope_idx, elm }
+    }
+}
 
 pub type ExprIdx = Idx<Expr>;
 pub type FnDefIdx = Idx<FnDef>;
 pub type ScopeIdx = Idx<Scope>;
+pub type ScopedExprIdx = Scoped<ExprIdx>;
+pub type ScopedStmtIdx = Scoped<StmtIdx>;
 pub type StrIdx = Idx<SmolStr>;
 pub type StmtIdx = Idx<Stmt>;
 pub type StructDefIdx = Idx<StructDef>;

@@ -1,10 +1,10 @@
 use ast::mutable::Mut as ASTMut;
 use hir_macro::with_context;
 
-use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ExprIdx};
+use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ScopedExprIdx};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Mut(pub ExprIdx);
+pub struct Mut(pub ScopedExprIdx);
 
 impl HIRBuilder {
     #[with_context(UsageContext::Mut)]

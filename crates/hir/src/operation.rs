@@ -4,7 +4,7 @@ use syntax::syntax_kind::SyntaxKind;
 
 use crate::{
     HIRResult, builder::HIRBuilder, context::UsageContext, err_if_none, errors::HIRError,
-    scope::ExprIdx,
+    scope::ScopedExprIdx,
 };
 
 use ast::{
@@ -13,7 +13,7 @@ use ast::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Operand(pub ExprIdx);
+pub struct Operand(pub ScopedExprIdx);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum BinaryOp {

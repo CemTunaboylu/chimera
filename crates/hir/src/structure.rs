@@ -203,7 +203,7 @@ impl HIRBuilder {
         for field in struct_literal.fields.iter() {
             let name = field.name.clone();
             let expr_idx = self.lower_expr_as_idx(&field.value)?;
-            internal.add(name, expr_idx)?;
+            internal.add(name, expr_idx.elm)?;
         }
 
         let struct_literal = StructLiteral {

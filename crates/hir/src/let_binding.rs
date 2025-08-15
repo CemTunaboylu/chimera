@@ -12,7 +12,7 @@ use smol_str::{SmolStr, ToSmolStr};
 use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
-    HIRResult, Spanned,
+    HIRResult, SpannedIdx,
     builder::HIRBuilder,
     climbing::climb,
     context::UsageContext,
@@ -21,7 +21,10 @@ use crate::{
     literal::{Literal, Value},
     metadata::{Usage, Usages, VarMeta},
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
-    scope::{ExprIdx, LetBindingIdx, NameIndexed, Span, StrIdx, VarSelector},
+    scope::{
+        ExprIdx, LetBindingIdx, NameIndexed, ScopeIdx, ScopedExprIdx, Span, StrIdx, VarSelector,
+        placeholder_idx,
+    },
     typing::hindley_milner::types::Type,
 };
 
@@ -29,11 +32,11 @@ use crate::{
 pub struct Identifier {
     pub is_mut: bool,
     pub type_hint: Option<Type>,
-    pub spanned_name_idx: Spanned<StrIdx>,
+    pub spanned_name_idx: SpannedIdx<SmolStr>,
 }
 
 impl Identifier {
-    fn new(is_mut: bool, type_hint: Option<Type>, spanned_name_idx: Spanned<StrIdx>) -> Self {
+    fn new(is_mut: bool, type_hint: Option<Type>, spanned_name_idx: SpannedIdx<SmolStr>) -> Self {
         Self {
             is_mut,
             type_hint,
@@ -51,11 +54,23 @@ impl NameIndexed for Identifier {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct LetBinding {
+    pub scope_idx: ScopeIdx,
     pub identifier: Identifier,
-    pub spanned_expr_idx: Spanned<ExprIdx>,
+    pub spanned_expr_idx: SpannedIdx<Expr>,
     pub span: Span,
+}
+
+impl Default for LetBinding {
+    fn default() -> Self {
+        Self {
+            scope_idx: placeholder_idx(),
+            identifier: Default::default(),
+            spanned_expr_idx: Default::default(),
+            span: Default::default(),
+        }
+    }
 }
 
 impl NameIndexed for LetBinding {
@@ -92,9 +107,9 @@ impl BindingLoweringPhase {
             tmps_expr_idx: with,
         }
     }
-    fn wrap_current_tmp_expr_idx_with_span_of(&self, ast_pattern: &ASTPattern) -> Spanned<ExprIdx> {
+    fn wrap_current_tmp_expr_idx_with_span_of(&self, ast_pattern: &ASTPattern) -> SpannedIdx<Expr> {
         let new_span: Span = ast_pattern.span().into();
-        Spanned::new(self.tmps_expr_idx, new_span)
+        SpannedIdx::new(self.tmps_expr_idx, new_span)
     }
 }
 
@@ -110,7 +125,7 @@ impl HIRBuilder {
             let lowered_type = self.lower_type(ast_type)?;
             type_hint = Some(lowered_type);
         }
-        let spanned_name_idx: Spanned<Idx<SmolStr>> = Spanned::spanned(span);
+        let spanned_name_idx: SpannedIdx<SmolStr> = SpannedIdx::spanned(span);
         let identifier = Identifier::new(is_mut, type_hint, spanned_name_idx);
         let name = ast_identifier.name();
         Ok(NamedIdentifier {
@@ -121,7 +136,7 @@ impl HIRBuilder {
 
     // ! FIXME: depending on expr type, context should change i.e. if & it is not move.
     #[with_context(UsageContext::Moved)]
-    pub fn lower_let_binding_rhs(&mut self, expr: &ASTExpr) -> HIRResult<ExprIdx> {
+    pub fn lower_let_binding_rhs(&mut self, expr: &ASTExpr) -> HIRResult<ScopedExprIdx> {
         self.lower_expr_as_idx(expr)
     }
     fn store_metadata_for_let_binding(
@@ -163,11 +178,12 @@ impl HIRBuilder {
         Expr::Literal(Literal(Value::Int(i)))
     }
 
-    fn bind_a_tmp_with(&mut self, spanned_expr_idx: Spanned<ExprIdx>) -> HIRResult<ExprIdx> {
+    fn bind_a_tmp_with(&mut self, spanned_expr_idx: SpannedIdx<Expr>) -> HIRResult<ExprIdx> {
         let span = spanned_expr_idx.span;
         let tmp_name = Self::temporary_binding_name(span);
-        let identifier = Identifier::new(false, None, Spanned::spanned(span));
+        let identifier = Identifier::new(false, None, SpannedIdx::spanned(span));
         let tmp_binding = LetBinding {
+            scope_idx: self.get_current_scope_idx(),
             identifier,
             spanned_expr_idx,
             span,
@@ -194,9 +210,10 @@ impl HIRBuilder {
         let int_literal_idx = self.as_expr_idx(int_literal);
         current.ix += 1;
         let indexing = Indexing {
+            scope_idx: self.get_current_scope_idx(),
             // * Note: the referenced expression actually does not change, thus we use the rhs_span
-            reference: Spanned::new(current.tmps_expr_idx, rhs_span),
-            indices: thin_vec![Spanned::new(
+            reference: SpannedIdx::new(current.tmps_expr_idx, rhs_span),
+            indices: thin_vec![SpannedIdx::new(
                 int_literal_idx,
                 // * Note: since this actually does not exist, to make debugging easier and things practical,
                 // * we use the span of the current identifier for the index that is corresponding to it
@@ -219,13 +236,15 @@ impl HIRBuilder {
         let rhs_span: Span = rhs.span.clone().into();
         let expr_index = self.lower_let_binding_rhs(&rhs.element)?;
 
+        let scope_idx = self.get_current_scope_idx();
         // * No tuples, thus we don't need to destructure anything
         if let ASTPattern::Ident(ast_identifier) = ast_let_binding.pattern() {
             // * Note: if we don't have a tuple pattern, expr to bind with will have its own span
-            let spanned_expr_idx = Spanned::new(expr_index, rhs_span);
+            let spanned_expr_idx = SpannedIdx::new(expr_index.elm, rhs_span);
             let NamedIdentifier { name, identifier } =
                 self.lower_into_named_identifier(ast_identifier)?;
             let let_binding = LetBinding {
+                scope_idx,
                 identifier,
                 spanned_expr_idx,
                 span,
@@ -252,7 +271,7 @@ impl HIRBuilder {
 
         let mut binding_indices = thin_vec![];
         // * Note: since we have a tuple pattern, expr to bind with will have the span of the pattern instead
-        let spanned_expr_idx = Spanned::new(expr_index, ast_let_binding.pattern_span());
+        let spanned_expr_idx = SpannedIdx::new(expr_index.elm, ast_let_binding.pattern_span());
 
         let mut current = BindingLoweringPhase::with(
             self.bind_a_tmp_with(spanned_expr_idx)?,
@@ -296,8 +315,9 @@ impl HIRBuilder {
             self.allocate_span(&name_of_the_binding, span);
 
             let binding = LetBinding {
+                scope_idx,
                 identifier,
-                spanned_expr_idx: Spanned::new(ith_indexing_expr_idx, current.span),
+                spanned_expr_idx: SpannedIdx::new(ith_indexing_expr_idx, current.span),
                 span: current.span,
             };
             let binding_idx =
@@ -362,7 +382,8 @@ mod tests {
                 let let_binding = &current_scope.variable_allocator.definitions[idx];
                 assert!(matches!(&let_binding.identifier, ident));
                 let expr_idx = let_binding.spanned_expr_idx.index;
-                let expr = hir.get_expr(expr_idx);
+                let scoped = crate::scope::Scoped::new(let_binding.scope_idx, expr_idx);
+                let expr = hir.get_expr(&scoped);
                 assert!(matches!(expr, Expr::Indexing(Indexing{indices, ..}) if indices.len() == 1));
             }
         }
@@ -415,7 +436,7 @@ mod tests {
             assert!(
                 matches!(
                 let_binding.identifier,
-                Identifier{ is_mut , type_hint: None, spanned_name_idx: Spanned { index, .. } }
+                Identifier{ is_mut , type_hint: None, spanned_name_idx: SpannedIdx { index, .. } }
                 if index == into_idx(name_idx) && is_mut == is_mutable
                 ),
                 "identifier did not match {:?} with is_mut: {:?}, index: {:?}",
@@ -424,7 +445,7 @@ mod tests {
                 into_idx::<SmolStr>(name_idx)
             );
 
-            let Spanned { index, span } = let_binding.identifier.spanned_name_idx;
+            let SpannedIdx { index, span } = let_binding.identifier.spanned_name_idx;
 
             let (exp_name, exp_span) = &expected_binding_assertions[i];
             let retrieved_name = &current_scope.variable_allocator.names[index];
@@ -432,12 +453,14 @@ mod tests {
             assert_eq!(Into::<Span>::into(exp_span.clone()), span);
 
             let expr_idx = let_binding.spanned_expr_idx.index;
-            let expr = hir.get_expr(expr_idx);
+            let scoped = crate::scope::Scoped::new(let_binding.scope_idx, expr_idx);
+            let expr = hir.get_expr(&scoped);
             assert!(matches!(expr, Expr::Indexing(Indexing{indices, ..}) if indices.len() == 1));
 
             if let Expr::Indexing(indexing) = expr {
                 let reference_idx = indexing.reference.index;
-                let reference = hir.get_expr(reference_idx);
+                let scoped = crate::scope::Scoped::new(indexing.scope_idx, expr_idx);
+                let reference = hir.get_expr(&scoped);
                 if let Expr::VarRef(Reference::Resolved {
                     at,
                     baggage,
@@ -446,7 +469,7 @@ mod tests {
                 }) = reference
                 {
                     assert_eq!(hir.current_scope_cursor, *at);
-                    assert_eq!(Baggage::None, *baggage);
+                    assert_eq!(&Baggage::None, baggage);
 
                     let name = &current_scope.variable_allocator.names[*name_idx];
                     assert!(

@@ -5,17 +5,15 @@ use crate::{
     builder::HIRBuilder,
     climbing::climb,
     delimited::{Block, Paren, Tuple},
-    function::{Call, FnDef, MayNeedResolution, On},
+    function::{Call, FnDef, MayNeedResolution},
     indexing::Indexing,
-    let_binding::{LetBinding, VarRef},
-    literal::{Literal, Value},
+    let_binding::LetBinding,
+    literal::Literal,
     mutable::Mut,
     operation::{BinaryInfix, Unary},
-    parameter::Param,
     resolution::Reference,
-    scope::{ExprIdx, FnSelector, Selector, StrIdx, into_idx},
+    scope::{ExprIdx, Scoped, ScopedExprIdx, into_idx},
     self_ref::SelfRef,
-    structure::StructRef,
     typing::hindley_milner::types::Type,
     unwrap_or_err,
 };
@@ -39,22 +37,20 @@ pub enum Expr {
     VarRef(Reference<LetBinding>),
 }
 
+impl Default for Expr {
+    fn default() -> Self {
+        Self::Missing
+    }
+}
+
 pub const MISSING: u32 = 0;
 
 impl HIRBuilder {
-    pub fn get_expr(&self, idx: ExprIdx) -> &Expr {
-        let climber = climb(self.current_scope_cursor, &self.scopes);
-        let mut expr = &Expr::Missing;
-        for (_, scope) in climber {
-            if scope.exprs.len() <= idx.into_raw().into_u32() as usize {
-                continue;
-            }
-            expr = &scope.exprs[idx];
-            break;
-        }
-        expr
+    pub fn get_expr(&self, idx: &ScopedExprIdx) -> &Expr {
+        let scope = &self.scopes[idx.scope_idx];
+        &scope.exprs[idx.elm]
     }
-    pub fn infer_type_from_expr(&self, idx: ExprIdx) -> Type {
+    pub fn infer_type_from_expr(&self, idx: ScopedExprIdx) -> Type {
         // match self.get_expr(idx) {
         // TODO: if returning, infer the type from them
         // Expr::Block(block) => todo!(),
@@ -74,19 +70,25 @@ impl HIRBuilder {
         // }
         todo!()
     }
-    pub fn try_lowering_expr_as_idx(&mut self, ast_expr: Option<ASTExpr>) -> HIRResult<ExprIdx> {
+    pub fn try_lowering_expr_as_idx(
+        &mut self,
+        ast_expr: Option<ASTExpr>,
+    ) -> HIRResult<ScopedExprIdx> {
         let expr = unwrap_or_err(ast_expr.as_ref(), "expression")?;
         self.lower_expr_as_idx(expr)
     }
     pub fn try_lower_expr_as_idx_with_default(
         &mut self,
         ast_expr: Option<&ASTExpr>,
-    ) -> HIRResult<ExprIdx> {
+    ) -> HIRResult<ScopedExprIdx> {
         ast_expr
             .map(|expr| self.lower_expr_as_idx(expr))
-            .unwrap_or(Ok(into_idx(MISSING)))
+            .unwrap_or(Ok(Scoped::new(
+                self.get_current_scope_idx(),
+                into_idx(MISSING),
+            )))
     }
-    pub fn lower_expr_as_idx(&mut self, from: &ASTExpr) -> HIRResult<ExprIdx> {
+    pub fn lower_expr_as_idx(&mut self, from: &ASTExpr) -> HIRResult<ScopedExprIdx> {
         let is_pure: bool;
         let expr = match from {
             ASTExpr::Block(block) => {
@@ -132,7 +134,7 @@ impl HIRBuilder {
             }
             ASTExpr::Paren(paren) => {
                 let lowered_paren = self.lower_paren(paren)?;
-                is_pure = self.is_pure(lowered_paren.0);
+                is_pure = self.is_pure(&lowered_paren.0);
                 Expr::Paren(lowered_paren)
             }
             ASTExpr::SelfRef(self_ref) => {
@@ -141,7 +143,9 @@ impl HIRBuilder {
             }
             ASTExpr::Tuple(tuple) => {
                 let lowered_tuple = self.lower_tuple(tuple)?;
-                is_pure = self.is_expr_slice_pure(lowered_tuple.0.as_slice());
+                let scope_idx = lowered_tuple.0;
+                let exprs_slice = lowered_tuple.1.as_slice();
+                is_pure = self.is_expr_slice_pure(scope_idx, exprs_slice);
                 Expr::Tuple(lowered_tuple)
             }
             ASTExpr::Unit => {
@@ -165,7 +169,8 @@ impl HIRBuilder {
         if is_pure {
             self.set_as_pure(idx);
         }
-        Ok(idx)
+        let scoped = Scoped::new(self.get_current_scope_idx(), idx);
+        Ok(scoped)
     }
 
     pub fn as_expr_idx(&mut self, exp: Expr) -> ExprIdx {

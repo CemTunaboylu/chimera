@@ -12,19 +12,18 @@ use crate::{
     errors::HIRError,
     expression::Expr,
     mut_clone_with_err,
-    scope::{ExprIdx, Scope, ScopeIdx, ScopeKind, StmtIdx, placeholder_idx},
-    statement::Stmt,
+    scope::{ExprIdx, ScopeIdx, ScopeKind, ScopedExprIdx, ScopedStmtIdx, placeholder_idx},
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Paren(pub ExprIdx);
+pub struct Paren(pub ScopedExprIdx);
 
 // TODO: needs metadata as well
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Block {
     pub is_pure: bool,
     pub scope_idx: ScopeIdx,
-    pub returns: ThinVec<StmtIdx>,
+    pub returns: ThinVec<ScopedStmtIdx>,
 }
 
 impl Default for Block {
@@ -37,7 +36,7 @@ impl Default for Block {
     }
 }
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Tuple(pub(crate) ThinVec<ExprIdx>);
+pub struct Tuple(pub(crate) ScopeIdx, pub(crate) ThinVec<ExprIdx>);
 
 impl HIRBuilder {
     #[scoped(ScopeKind::Block)]
@@ -50,8 +49,8 @@ impl HIRBuilder {
         for stmt in statements {
             let low_stmt_idx = self.lower_statement_as_idx(stmt)?;
             // * TODO: indexing multiple times, fix this
-            is_pure &= self.is_stmt_of_idx_pure(low_stmt_idx);
-            if self.does_statement_of_idx_return(low_stmt_idx) {
+            is_pure &= self.is_stmt_of_idx_pure(&low_stmt_idx);
+            if self.does_statement_of_idx_return(&low_stmt_idx) {
                 returns.push(low_stmt_idx);
             }
         }
@@ -66,12 +65,14 @@ impl HIRBuilder {
         Ok(Paren(index))
     }
     pub fn lower_tuple(&mut self, tuple: &ASTTuple) -> HIRResult<Tuple> {
-        let to_expr = |hc: &ASTExpr, hir: &mut HIRBuilder| hir.lower_expr_as_idx(hc);
+        let to_expr =
+            |hc: &ASTExpr, hir: &mut HIRBuilder| hir.lower_expr_as_idx(hc).map(|scoped| scoped.elm);
         let ast_exprs_in_tuple = tuple
             .elements()
             .map_err(|ast_err| HIRError::for_ast(ast_err, "a valid expression within tuple"))?;
         let expr_idx = mut_clone_with_err(ast_exprs_in_tuple.as_ref(), self, to_expr)?;
-        Ok(Tuple(expr_idx))
+        let scope_idx = self.get_current_scope_idx();
+        Ok(Tuple(scope_idx, expr_idx))
     }
 }
 
@@ -111,14 +112,15 @@ mod test {
     }
 
     lower_tuple! {
-        nested_tuples_with_unit: ("((), (),(), )", &[|ht: &Tuple, _| { assert_eq!( ht.0.len(), 3);}]),
-        flat_tuple: ("(1,2,3)", &[|ht: &Tuple, _| { assert_eq!( ht.0.len(), 3);}] ),
-        nested_tuple: ("((1,2),3)", &[|ht: &Tuple, _| { assert_eq!( ht.0.len(), 2);}] ),
+        nested_tuples_with_unit: ("((), (),(), )", &[|ht: &Tuple, _| { assert_eq!( ht.1.len(), 3);}]),
+        flat_tuple: ("(1,2,3)", &[|ht: &Tuple, _| { assert_eq!( ht.1.len(), 3);}] ),
+        nested_tuple: ("((1,2),3)", &[|ht: &Tuple, _| { assert_eq!( ht.1.len(), 2);}] ),
         tuple_with_exprs: ( "(3+5, 2*4)", &[
-        |ht: &Tuple, _| {assert_eq!(ht.0.len(), 2)},
+        |ht: &Tuple, _| {assert_eq!(ht.1.len(), 2)},
         |ht: &Tuple, hir: &HIRBuilder| {
-            for expr_idx in ht.0.iter() {
-                let expr = hir.get_expr(*expr_idx);
+            for expr_idx in ht.1.iter() {
+                let scoped = crate::scope::Scoped::new(ht.0,*expr_idx);
+                let expr = hir.get_expr(&scoped);
                 assert!(matches!(expr, crate::expression::Expr::Infix(_)));
             }
         }]),
@@ -138,12 +140,13 @@ mod test {
         let unit = hir
             .lower_expr_as_idx(&ast_expr)
             .expect("should have been able to lower to unit");
-        assert_eq!(unit, into_idx(1));
+        assert_eq!(unit.elm, into_idx(1));
+        assert_eq!(unit.scope_idx, into_idx(0));
 
         let scope = hir.get_current_scope();
         let exprs = &scope.exprs;
 
-        let lowered = &exprs[unit];
+        let lowered = &exprs[unit.elm];
         assert_eq!(lowered, &Expr::Unit);
     }
 }

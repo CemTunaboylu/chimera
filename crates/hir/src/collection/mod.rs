@@ -7,7 +7,7 @@ use crate::{
     builder::HIRBuilder,
     expression::Expr,
     literal::{Literal, Value},
-    scope::ExprIdx,
+    scope::ScopedExprIdx,
 };
 use ast::collection::Shape as ASTShape;
 
@@ -28,7 +28,7 @@ pub struct Strides(pub ThinVec<usize>);
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Dim {
     Static(usize),
-    Dynamic(ExprIdx),
+    Dynamic(ScopedExprIdx),
     #[default]
     Unknown,
 }
@@ -67,7 +67,7 @@ impl HIRBuilder {
                 for expr in shape.iter() {
                     if let Some(expr) = expr {
                         let expr_idx = self.lower_expr_as_idx(expr)?;
-                        let expr = self.get_expr(expr_idx);
+                        let expr = self.get_expr(&expr_idx);
                         let d = if let Expr::Literal(Literal(Value::Int(i))) = expr {
                             Dim::Static(*i as usize)
                         } else {

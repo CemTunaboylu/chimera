@@ -1,13 +1,13 @@
 use ast::jump::Jump as ASTJump;
 use hir_macro::with_context;
 
-use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ExprIdx};
+use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ScopedExprIdx};
 
 // possible types are primitives + custom types i.e. structs
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Jump {
     Continue,
-    Break(Option<ExprIdx>),
+    Break(Option<ScopedExprIdx>),
 }
 
 impl HIRBuilder {

@@ -1,10 +1,10 @@
 use ast::return_stmt::Return as ASTReturn;
 use hir_macro::with_context;
 
-use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ExprIdx};
+use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ScopedExprIdx};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Return(pub ExprIdx);
+pub struct Return(pub ScopedExprIdx);
 
 impl HIRBuilder {
     #[with_context(UsageContext::Return)]

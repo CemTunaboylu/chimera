@@ -14,7 +14,7 @@ use crate::{
     literal::Value,
     operation::{BinaryOp, UnaryOp},
     resolution::{Baggage, Reference},
-    scope::{ExprIdx, StmtIdx},
+    scope::{Scoped, ScopedExprIdx},
     self_ref::SelfRef,
 };
 
@@ -114,7 +114,7 @@ impl HIRBuilder {
             returns: block
                 .returns
                 .iter()
-                .map(|idx| idx.into_raw().into_u32())
+                .map(|idx| idx.elm.into_raw().into_u32())
                 .collect(),
             statements,
         })
@@ -132,7 +132,7 @@ impl HIRBuilder {
                 };
 
                 let to_hm = |fn_arg: &FnArg, hir: &HIRBuilder| {
-                    let expr = hir.get_expr(fn_arg.0);
+                    let expr = hir.get_expr(&fn_arg.0);
                     hir.try_into_hm_expr(expr).map(HMStmt::Expr)
                 };
                 let args = clone_with_err(baggages.as_slice(), self, to_hm)?;
@@ -148,10 +148,10 @@ impl HIRBuilder {
             }
             Expr::Infix(binary_infix) => {
                 let lhs_operand = binary_infix.lhs();
-                let lhs = Box::new(self.try_into_hm_expr(self.get_expr(lhs_operand.0))?);
+                let lhs = Box::new(self.try_into_hm_expr(self.get_expr(&lhs_operand.0))?);
 
                 let rhs_operand = binary_infix.rhs();
-                let rhs = Box::new(self.try_into_hm_expr(self.get_expr(rhs_operand.0))?);
+                let rhs = Box::new(self.try_into_hm_expr(self.get_expr(&rhs_operand.0))?);
 
                 let op = binary_infix.op().clone();
                 Ok(HMExpr::BinaryOp { op, lhs, rhs })
@@ -159,27 +159,32 @@ impl HIRBuilder {
             Expr::Literal(literal) => HMExpr::try_from(&literal.0).map_err(|e| e.into()),
             Expr::Missing => Err(HIRError::with_msg("Missing expression").into()),
             Expr::Mut(inner) => {
-                let inner_as_hm_expr = self.try_into_hm_expr(self.get_expr(inner.0))?;
+                let inner_as_hm_expr = self.try_into_hm_expr(self.get_expr(&inner.0))?;
                 Ok(HMExpr::Mut(Box::new(inner_as_hm_expr)))
             }
-            Expr::Paren(paren) => self.try_into_hm_expr(self.get_expr(paren.0)),
+            Expr::Paren(paren) => self.try_into_hm_expr(self.get_expr(&paren.0)),
             Expr::SelfRef(self_ref) => match self_ref {
                 SelfRef::Instance => todo!(), // TODO: Var("self"), we need self's idx
                 SelfRef::Struct => Ok(HMExpr::SelfRef),
             },
             Expr::Tuple(tuple) => {
-                let to_hm = |idx: &ExprIdx, hir: &HIRBuilder| {
-                    let expr = hir.get_expr(*idx);
+                let to_hm = |idx: &ScopedExprIdx, hir: &HIRBuilder| {
+                    let expr = hir.get_expr(idx);
                     hir.try_into_hm_expr(expr)
                 };
-                let types = clone_with_err(tuple.0.as_slice(), self, to_hm)?;
+                let scoped_expr_slice: ThinVec<ScopedExprIdx> = tuple
+                    .1
+                    .iter()
+                    .map(|expr_idx| Scoped::new(tuple.0, *expr_idx))
+                    .collect();
+                let types = clone_with_err(scoped_expr_slice.as_slice(), self, to_hm)?;
                 Ok(HMExpr::Tuple(types))
             }
             Expr::Unit => Ok(HMExpr::Unit),
             // TODO: will be modified as a literal, delete this after its finished
             // Expr::StructInit(struct_init) => todo!(),
             Expr::Unary(unary) => {
-                let hm = Box::new(self.try_into_hm_expr(self.get_expr(unary.operand().0))?);
+                let hm = Box::new(self.try_into_hm_expr(self.get_expr(&unary.operand().0))?);
                 let op = *unary.op();
                 Ok(HMExpr::Unary(op, hm))
             }

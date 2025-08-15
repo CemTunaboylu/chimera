@@ -30,7 +30,7 @@ pub mod structure;
 pub mod types;
 pub mod typing;
 
-use std::hash::Hash;
+use std::{default, hash::Hash};
 
 use builder::HIRBuilder;
 use errors::HIRError;
@@ -72,12 +72,12 @@ impl<V: Hash> DedupArena<V> {
     }
 }
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Spanned<I> {
-    pub index: I,
+pub struct SpannedIdx<I> {
+    pub index: Idx<I>,
     pub span: Span,
 }
 
-impl<I> Default for Spanned<Idx<I>> {
+impl<I> Default for SpannedIdx<I> {
     fn default() -> Self {
         Self {
             index: placeholder_idx(),
@@ -86,17 +86,17 @@ impl<I> Default for Spanned<Idx<I>> {
     }
 }
 
-impl<I> Spanned<Idx<I>> {
+impl<I: Default> SpannedIdx<I> {
     fn new(index: Idx<I>, span: impl Into<Span>) -> Self {
         Self {
             span: span.into(),
-            index,
+            index: index,
         }
     }
     fn spanned(span: impl Into<Span>) -> Self {
         Self {
             span: span.into(),
-            ..Default::default()
+            index: placeholder_idx(),
         }
     }
 }
