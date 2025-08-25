@@ -2,49 +2,39 @@ use thin_vec::{ThinVec, thin_vec};
 
 use ast::{
     collection::{BufferTree as ASTBufferTree, buffer_tree_from},
-    expression::Expr,
+    expression::Expr as ASTExpr,
 };
 
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    climbing::climb,
     clone_from_iter_with_err,
+    collection::{ScopedCanonicalLiteralIdx, storage::ScopedStorageIdx},
     literal::Value,
     metadata::Common,
     purity::Purity,
-    scope::ExprIdx,
+    scope::{ExprIdx, Scoped},
     typing::hindley_milner::types::{Maybe, Type},
 };
 
 use super::{
-    CanonicalLiteralIdx, Shape,
+    CanonicalLiteralIdx,
     layout::Layout,
     meta::{CollectionExamination, CollectionMeta},
+    shape::{Shape, ShapeFormer},
+    storage::Storage,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub enum Storage {
-    Direct(ThinVec<Value>),
-    Indexed(ThinVec<ExprIdx>),
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Canonical {
-    pub idx: CanonicalLiteralIdx,
-    pub data_type: Type,
-    pub layout: Layout,
-    pub metadata: CollectionMeta,
-    pub shape: Shape,
-}
-
-#[derive(Clone, Debug, PartialEq)]
+/// CanonicalBuffer is the enclosing structure that holds the
+/// flattened buffer (from shape [d_1, d_2, ...] to shape [d_1*d_2*..])
+/// that is stored in the memory acc. to the provided Layout,
 pub struct CanonicalBuffer {
     // data: Cow<'arena, [PrimitiveValue]>,
-    // TODO: put metadata in an arena and have the idx here
     pub data: Storage,
     pub data_type: Maybe<Type>,
     pub layout: Layout,
+    // TODO: put metadata in an arena and have the idx here
     pub metadata: CollectionMeta,
     pub shape: Shape,
 }
@@ -77,41 +67,6 @@ impl CanonicalBuffer {
     }
 }
 
-struct ShapeFormer {
-    shape: ThinVec<usize>,
-    depth: usize,
-}
-impl ShapeFormer {
-    #[inline]
-    fn new(len: usize) -> Self {
-        Self {
-            shape: thin_vec![len],
-            depth: 1,
-        }
-    }
-    #[inline]
-    fn get_dim_for_shape(&mut self, dim: usize) {
-        if self.shape.len() <= self.depth {
-            self.shape.push(dim)
-        }
-    }
-    #[inline]
-    fn deepen(&mut self) {
-        self.depth += 1;
-    }
-    #[inline]
-    fn new_depth(&mut self, d: usize) {
-        self.depth = d;
-    }
-    #[inline]
-    fn get_depth(&mut self) -> usize {
-        self.depth
-    }
-    #[inline]
-    fn form(self) -> Shape {
-        Shape::Buffer(self.shape)
-    }
-}
 impl HIRBuilder {
     pub fn flatten_buffer_tree(
         &mut self,
@@ -125,7 +80,7 @@ impl HIRBuilder {
         let len = to_stack.len();
         let mut shape_former = ShapeFormer::new(len);
         let mut stack =
-            clone_from_iter_with_err(to_stack.into_iter().rev(), len, |e: Expr| Ok((1, e)))?;
+            clone_from_iter_with_err(to_stack.into_iter().rev(), len, |e: ASTExpr| Ok((1, e)))?;
 
         let mut collection_examination = CollectionExamination::new(self.get_current_scope_idx());
 
@@ -137,7 +92,7 @@ impl HIRBuilder {
             };
             while let Some(tree) = buffer_tree_from(&ast_expr) {
                 if let Some(mut sub_tree) = tree.sub_tree() {
-                    shape_former.get_dim_for_shape(sub_tree.len());
+                    shape_former.push_dim_for_shape(sub_tree.len());
                     sub_tree.reverse();
                     ast_expr = sub_tree.pop().expect("expected a buffer tree");
                     shape_former.deepen();
@@ -147,9 +102,9 @@ impl HIRBuilder {
                         stack.push((depth, s));
                     }
                 } else if let Some(values) = tree.values() {
-                    shape_former.get_dim_for_shape(values.len());
-                    for v in values {
-                        let idx_for_value = self.lower_expr_as_idx(&v)?;
+                    shape_former.push_dim_for_shape(values.len());
+                    for expr in values {
+                        let idx_for_value = self.lower_expr_as_idx(&expr)?;
                         collection_examination.add_with_id(idx_for_value.elm)?;
                         flattened.push(idx_for_value.elm);
                     }
@@ -157,7 +112,6 @@ impl HIRBuilder {
                 }
             }
             let idx_for_value = self.lower_expr_as_idx(&ast_expr)?;
-            let expr = self.get_expr(&idx_for_value);
             collection_examination.add_with_id(idx_for_value.elm)?;
             flattened.push(idx_for_value.elm);
         }
@@ -172,17 +126,10 @@ impl HIRBuilder {
 
     pub fn get_canonical_collection_with(
         &self,
-        idx: CanonicalLiteralIdx,
+        idx: &ScopedCanonicalLiteralIdx,
     ) -> Option<&CanonicalBuffer> {
-        let climber = climb(self.current_scope_cursor, &self.scopes);
-        let mut t: Option<&CanonicalBuffer> = None;
-        for (_, scope) in climber {
-            if scope.tensor_literals.len() <= idx.into_raw().into_u32() as usize {
-                continue;
-            }
-            t = Some(&scope.tensor_literals[idx]);
-        }
-        t
+        let scope = &self.scopes[idx.scope_idx];
+        Some(&scope.tensor_literals[idx.elm])
     }
 }
 
@@ -196,7 +143,7 @@ mod tests {
     use super::*;
     use ast::{ast_root_from_assert_no_err, cast_node_into_type, literal::Literal as ASTLiteral};
 
-    use crate::{collection::Shape, metadata::Common};
+    use crate::{collection::Shape, expression::Expr, metadata::Common};
     use crate::{literal::Value, scope::into_idx};
 
     fn get_tensor_literal_for(program: &str) -> CanonicalBuffer {
@@ -282,35 +229,6 @@ mod tests {
         };
         // note: at the end we will be using the same expressions, i.e. won't insert the same expression twice into the arena
         // thus, same expressions will result with the same expression index
-        // let data = thin_vec![
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(1),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(1),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(3)
-        // ];
         let indexed_data = indexed(1..28);
         assert_eq!(indexed_data, tensor_literal.data);
 
@@ -348,40 +266,6 @@ mod tests {
         ];
         // note: at the end we will be using the same expressions, i.e. won't insert the same expression twice into the arena
         // thus, same expressions will result with the same expression index
-        // let data = thin_vec![
-        //     into_idx(1),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(1),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(3),
-        //     into_idx(3),
-        //     into_idx(4),
-        //     into_idx(4),
-        //     into_idx(3),
-        //     into_idx(3),
-        //     into_idx(4),
-        //     into_idx(4),
-        //     into_idx(1),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(1),
-        //     into_idx(1),
-        //     into_idx(2),
-        //     into_idx(2),
-        //     into_idx(3),
-        //     into_idx(3),
-        //     into_idx(4),
-        //     into_idx(4),
-        //     into_idx(3),
-        //     into_idx(3),
-        //     into_idx(4),
-        //     into_idx(4),
-        // ];
         let indexed = |range: Range<usize>| {
             let mut data = ThinVec::with_capacity(range.end - range.start);
             for i in range {

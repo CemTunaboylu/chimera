@@ -1,12 +1,13 @@
 use crate::{HIRResult, builder::HIRBuilder, unwrap_or_err};
 
-use super::{canonical::Canonical, uninit::Uninitialized};
+use super::{canonical::CanonicalBuffer, uninit::Uninitialized};
 
 use ast::{collection::BufferTree, errors::ASTError, literal::Value as ASTValue};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Buffer {
-    Initialized(Canonical),
+    Initialized(CanonicalBuffer),
+    /// [<value>; <shape array>] is uninitialized
     Uninitialized(Uninitialized),
 }
 

@@ -174,7 +174,7 @@ impl HIRBuilder {
                 let scope = self.get_current_scope();
                 let metadata = &scope.metadata.buffers;
                 let is_buffer_itself_pure = metadata
-                    .get(&idx)
+                    .get(&idx.elm)
                     .is_some_and(|m| m.common.purity.is_pure());
                 is_buffer_itself_pure && self.is_maybe_pure(data_type)
             }
@@ -203,7 +203,7 @@ impl HIRBuilder {
                 let scope = self.get_current_scope();
                 let metadata = &scope.metadata.buffers;
                 let is_tensor_itself_pure = metadata
-                    .get(&idx)
+                    .get(&idx.elm)
                     .is_some_and(|m| m.common.purity.is_pure());
                 is_tensor_itself_pure && self.is_maybe_pure(data_type)
             }

@@ -1,12 +1,12 @@
 use crate::{HIRResult, builder::HIRBuilder, unwrap_or_err};
 
-use super::{canonical::Canonical, uninit::Uninitialized};
+use super::{canonical::CanonicalBuffer, uninit::Uninitialized};
 
 use ast::{collection::BufferTree, errors::ASTError, literal::Value as ASTValue};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tensor {
-    Initialized(Canonical),
+    Initialized(CanonicalBuffer),
     Uninitialized(Uninitialized),
 }
 

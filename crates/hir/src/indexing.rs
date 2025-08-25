@@ -96,7 +96,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        collection::{Shape, canonical::Storage},
+        collection::{shape::Shape, storage::Storage},
         expression::Expr,
         literal::{Literal, Value},
         resolution::{Reference, Unresolved},
@@ -175,13 +175,14 @@ mod tests {
             data_type,
         })) = literal
         {
-            assert_eq!(*idx, into_idx(0));
+            assert_eq!(idx.scope_idx, into_idx(0));
+            assert_eq!(idx.elm, into_idx(0));
             let expected_shape = Shape::Buffer(thin_vec![3, 1]);
             assert_eq!(*shape, expected_shape);
             assert_eq!(*data_type, Maybe::Checked(Box::new(Type::I32)));
 
             let canonical_collection = hir
-                .get_canonical_collection_with(*idx)
+                .get_canonical_collection_with(idx)
                 .expect("should have a canonical collection at that index");
             assert_eq!(
                 canonical_collection.data,

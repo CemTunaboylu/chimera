@@ -1,6 +1,10 @@
 use crate::{
     HIRResult,
-    collection::{canonical::CanonicalBuffer, meta::CollectionMeta},
+    collection::{
+        canonical::CanonicalBuffer,
+        meta::CollectionMeta,
+        storage::{Storage, StorageIdx},
+    },
     errors::HIRError,
     expression::Expr,
     function::FnDef,
@@ -36,6 +40,7 @@ pub type StrIdx = Idx<SmolStr>;
 pub type StmtIdx = Idx<Stmt>;
 pub type StructDefIdx = Idx<StructDef>;
 pub type CollectionLiteralIdx = Idx<CanonicalBuffer>;
+pub type ScopedCollectionLiteralIdx = Scoped<CollectionLiteralIdx>;
 pub type LetBindingIdx = Idx<LetBinding>;
 
 pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
@@ -182,8 +187,9 @@ pub struct Scope {
 
     pub(crate) metadata: MetadataStore,
 
-    pub(crate) tensor_literals: Arena<CanonicalBuffer>,
+    // ! TODO: have literals in a separate arena
     pub(crate) buffer_literals: Arena<CanonicalBuffer>,
+    pub(crate) tensor_literals: Arena<CanonicalBuffer>,
 
     pub(crate) to_resolve: Arena<Unresolved>,
     pub(crate) name_to_spans: PatriciaMap<Span>,
@@ -201,8 +207,8 @@ impl Scope {
 
         let metadata = MetadataStore::default();
 
-        let tensor_literals = Arena::<CanonicalBuffer>::new();
         let buffer_literals = Arena::<CanonicalBuffer>::new();
+        let tensor_literals = Arena::<CanonicalBuffer>::new();
 
         let to_resolve = Arena::<Unresolved>::new();
         let name_to_spans = PatriciaMap::<Span>::new();
@@ -217,8 +223,8 @@ impl Scope {
             struct_allocator,
             variable_allocator,
             metadata,
-            tensor_literals,
             buffer_literals,
+            tensor_literals,
             to_resolve,
             name_to_spans,
             statements,

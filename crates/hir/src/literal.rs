@@ -6,9 +6,9 @@ use thin_vec::ThinVec;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    collection::{Shape, canonical::CanonicalBuffer, layout::Layout},
+    collection::{canonical::CanonicalBuffer, layout::Layout, shape::Shape},
     function::Callable,
-    scope::{CollectionLiteralIdx, StrIdx},
+    scope::{Scoped, ScopedCollectionLiteralIdx, StrIdx},
     structure::StructLiteral,
     typing::hindley_milner::types::{Maybe, Type},
 };
@@ -17,7 +17,7 @@ use crate::{
 pub enum Value {
     Bool(bool),
     Buffer {
-        idx: CollectionLiteralIdx,
+        idx: ScopedCollectionLiteralIdx,
         shape: Shape,
         data_type: Maybe<Type>,
     },
@@ -28,7 +28,7 @@ pub enum Value {
     Str(StrIdx),
     Struct(StructLiteral),
     Tensor {
-        idx: CollectionLiteralIdx,
+        idx: ScopedCollectionLiteralIdx,
         shape: ThinVec<Option<usize>>,
         data_type: Maybe<Type>,
     },
@@ -74,8 +74,9 @@ impl HIRBuilder {
                 let canonical_buffer_literal =
                     CanonicalBuffer::new(flattened, Layout::row_major, &ten_meta);
                 let canonical_buffer_idx = self.allocate_tensor_literal(canonical_buffer_literal);
+                let scope_idx = self.get_current_scope_idx();
                 Value::Buffer {
-                    idx: canonical_buffer_idx,
+                    idx: Scoped::new(scope_idx, canonical_buffer_idx),
                     shape: ten_meta.shape.clone(),
                     data_type: Maybe::Checked(Box::new(Type::I32)), // TODO: FIX ME: for now a dyummy default value to make tests pass
                                                                     // data_type: ten_meta.data_type.clone(),
