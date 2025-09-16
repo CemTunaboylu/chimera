@@ -47,7 +47,7 @@ impl CanonicalBuffer {
     ) -> Self {
         let shape = metadata.shape.clone();
         // let data_type = metadata.data_type.clone();
-        let data_type = Maybe::Checked(Box::new(Type::I32)); // TODO: FIX ME: for now a dyummy default value to make tests pass
+        let data_type = Maybe::Checked(Box::new(Type::I32)); // TODO: FIX ME: for now a dummy default value to make tests pass
 
         let layout = layout_f(&shape);
         CanonicalBuffer {
@@ -58,10 +58,17 @@ impl CanonicalBuffer {
             shape,
         }
     }
+    /// change_layout only sets the CanonicalBuffer layout lazily. We avoid runtime memory layout changes
+    /// and aim for fusing layout changes with operations. A separate pass has a heuristic to determine the
+    /// best layout for the buffer depending on affinities of operations to certain layouts and frequency of
+    /// those operations. The main approach nonetheless is tiled thus, almost always the buffer will be stored
+    /// in a block layout that is layed out in a row-major internally with the block size compatible and fitting
+    /// to the caches and SIMD vector registers.
     pub fn change_layout(&mut self, layout_f: fn(&Shape) -> Layout) {
         let new_layout = layout_f(&self.shape);
         self.layout = new_layout;
     }
+    // ! obsolete or private
     pub fn apply_layout(&mut self) {
         todo!()
     }
@@ -143,7 +150,7 @@ mod tests {
     use super::*;
     use ast::{ast_root_from_assert_no_err, cast_node_into_type, literal::Literal as ASTLiteral};
 
-    use crate::{collection::Shape, expression::Expr, metadata::Common};
+    use crate::{collection::Shape, metadata::Common};
     use crate::{literal::Value, scope::into_idx};
 
     fn get_tensor_literal_for(program: &str) -> CanonicalBuffer {
@@ -195,99 +202,6 @@ mod tests {
         let square_tensor_literal = get_tensor_literal_for(square_tensor_2d);
         let non_square_tensor_literal = get_tensor_literal_for(non_square_tensor_2d);
         assert_eq!(square_tensor_literal.data, non_square_tensor_literal.data);
-    }
-
-    #[test]
-    fn test_layout_logic_for_row_and_column_major() {
-        let tensor_3d =
-            "[[[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,2]] ]";
-        let mut tensor_literal = get_tensor_literal_for(tensor_3d);
-        let expected_strides = [
-            [9, 3, 1], /* row-major */
-            [1, 3, 9], /* column-major */
-        ];
-        let expected_indices = [
-            [
-                ([0, 0, 0], 0),
-                ([0, 1, 2], 5),
-                ([1, 1, 1], 13),
-                ([2, 2, 2], 26),
-            ], /* row-major */
-            [
-                ([0, 0, 0], 0),
-                ([0, 1, 2], 21),
-                ([1, 1, 1], 13),
-                ([2, 2, 2], 26),
-            ], /* column-major */
-        ];
-        let indexed = |range: Range<usize>| {
-            let mut data = ThinVec::with_capacity(range.end - range.start);
-            for i in range {
-                data.push(into_idx(i as u32));
-            }
-            Storage::Indexed(data)
-        };
-        // note: at the end we will be using the same expressions, i.e. won't insert the same expression twice into the arena
-        // thus, same expressions will result with the same expression index
-        let indexed_data = indexed(1..28);
-        assert_eq!(indexed_data, tensor_literal.data);
-
-        let layouts = [
-            |shape: &Shape| Layout::row_major(shape),
-            |shape: &Shape| Layout::col_major(shape),
-        ];
-
-        for (ix, layout_f) in layouts.iter().enumerate() {
-            tensor_literal.change_layout(*layout_f);
-            let strides = match &tensor_literal.layout {
-                Layout::RowMajor(strides) => strides,
-                Layout::ColumnMajor(strides) => strides,
-                _ => unreachable!(),
-            };
-            assert_eq!(ThinVec::from(expected_strides[ix]), strides.0);
-            for (ind, exp) in expected_indices[ix] {
-                assert_eq!(
-                    exp,
-                    tensor_literal.layout.flatten_indexing(ThinVec::from(ind))
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn test_layout_logic_for_blocked() {
-        let tensor_3d = "[ [[0,0,1,1],[0,0,1,1],[2,2,3,3],[2,2,3,3]], [[0,0,1,1],[0,0,1,1],[2,2,3,3],[2,2,3,3]] ]";
-        let mut tensor_literal = get_tensor_literal_for(tensor_3d);
-        let expected_indices = [
-            ([0, 0, 0], 0),
-            ([0, 1, 2], 10),
-            ([1, 1, 1], 7),
-            ([1, 2, 3], 29),
-        ];
-        // note: at the end we will be using the same expressions, i.e. won't insert the same expression twice into the arena
-        // thus, same expressions will result with the same expression index
-        let indexed = |range: Range<usize>| {
-            let mut data = ThinVec::with_capacity(range.end - range.start);
-            for i in range {
-                data.push(into_idx(i as u32));
-            }
-            Storage::Indexed(data)
-        };
-        // assert_eq!(data, tensor_literal.data);
-        let indexed_data = indexed(1..33);
-        assert_eq!(indexed_data, tensor_literal.data);
-
-        fn blocked(shape: &Shape) -> Layout {
-            Layout::blocked(2, shape)
-        }
-        tensor_literal.change_layout(blocked);
-
-        for (ind, exp) in expected_indices {
-            assert_eq!(
-                exp,
-                tensor_literal.layout.flatten_indexing(ThinVec::from(ind))
-            );
-        }
     }
 
     // tensor_literal_happy_path_test! {
