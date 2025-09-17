@@ -30,6 +30,15 @@ pub type ScopedCanonicalLiteralIdx = Scoped<CanonicalLiteralIdx>;
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Strides(pub ThinVec<usize>);
 
+impl Strides {
+    pub(crate) fn swap(&mut self) {
+        let len = self.0.len();
+        if len >= 2 {
+            self.0.swap(len - 1, len - 2);
+        }
+    }
+}
+
 impl HIRBuilder {
     pub fn lower_shape(&mut self, shape: &ASTShape) -> HIRResult<Shape> {
         match shape {
