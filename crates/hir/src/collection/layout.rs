@@ -4,6 +4,10 @@ use thin_vec::{ThinVec, thin_vec};
 
 use super::{Shape, Strides};
 
+pub trait LayoutIndexing {
+    fn indexing(&self, indices: &[usize]) -> usize;
+}
+
 // ! einops-like shape for layout
 // ! a [r,c,d] should be transposable to
 //   - [c,r,d],
@@ -114,10 +118,12 @@ impl Layout {
             inner_strides,
         }
     }
+}
+
+impl LayoutIndexing for Layout {
     /// Converts multi-dimensional indices into the corresponding index of the flattened buffer.
     /// Handles RowMajor, ColumnMajor, and Blocked layouts.
-    // ! make this a trait
-    pub fn flatten_indexing(&self, indices: ThinVec<usize>) -> usize {
+    fn indexing(&self, indices: &[usize]) -> usize {
         let strides = match self {
             Layout::RowMajor(strides) => strides,
             Layout::ColumnMajor(strides) => strides,
@@ -219,7 +225,7 @@ mod tests {
             };
             assert_eq!(ThinVec::from(expected_strides[ix]), strides.0);
             for (ind, exp) in expected_indices[ix] {
-                assert_eq!(exp, layout.flatten_indexing(ThinVec::from(ind)));
+                assert_eq!(exp, layout.indexing(&ind));
             }
         }
     }
@@ -260,7 +266,7 @@ mod tests {
         let layout = Layout::blocked(2, shape);
 
         for (ind, exp) in expected_indices {
-            assert_eq!(exp, layout.flatten_indexing(ThinVec::from(ind)));
+            assert_eq!(exp, layout.indexing(&ind));
         }
     }
 
