@@ -1,8 +1,24 @@
-use std::{error, fmt::Error};
-
+use smol_str::{SmolStr, ToSmolStr};
 use thin_vec::{ThinVec, thin_vec};
+use thiserror::Error;
 
 use super::{Shape, Strides};
+
+#[derive(Clone, Debug, Error, PartialEq)]
+#[error("LayoutError")]
+pub enum LayoutError {
+    NotAMajorLayout(SmolStr),
+    UnknownShape(SmolStr),
+}
+
+impl LayoutError {
+    pub fn not_a_major_layout(layout: &Layout) -> Self {
+        Self::NotAMajorLayout(format!("{:?} is not a Major layout", layout).to_smolstr())
+    }
+    pub fn unknown_shape() -> Self {
+        Self::UnknownShape("expected a known shape".to_smolstr())
+    }
+}
 
 pub trait LayoutIndexing {
     fn indexing(&self, indices: &[usize]) -> usize;
@@ -46,7 +62,9 @@ impl Layout {
     /// In RowMajor, the last dimension is contiguous in memory.
     pub fn row_major(shape: &Shape) -> Self {
         let length = shape.dimensionality();
-        let shape_vec = shape.get().expect("expected a known shape");
+        let shape_vec = shape
+            .get()
+            .expect(&LayoutError::unknown_shape().to_smolstr());
         let mut strides = thin_vec![1; length];
 
         for ix in 1..length {
@@ -58,7 +76,9 @@ impl Layout {
     /// In ColumnMajor, the first dimension is contiguous in memory.
     pub fn col_major(shape: &Shape) -> Self {
         let length = shape.dimensionality();
-        let shape_vec = shape.get().expect("expected a known shape");
+        let shape_vec = shape
+            .get()
+            .expect(&LayoutError::unknown_shape().to_smolstr());
         let mut strides = thin_vec![1; length];
 
         for rev_ix in (0..length - 1).rev() {
@@ -68,9 +88,9 @@ impl Layout {
     }
     /// Switches between RowMajor and ColumnMajor layouts by reversing the strides.
     /// Returns an error if called on a Blocked layout.
-    pub fn switch_major(&mut self) -> Result<(), String> {
+    pub fn switch_major(&mut self) -> Result<(), LayoutError> {
         let strides = match self {
-            Self::Blocked { .. } => return Err(format!("{:?} is not a Major layout", self)),
+            Self::Blocked { .. } => return Err(LayoutError::not_a_major_layout(self)),
             Self::ColumnMajor(strides) | Self::RowMajor(strides) => strides,
         };
 
