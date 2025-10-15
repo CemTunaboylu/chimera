@@ -4,6 +4,7 @@ use crate::{
         canonical::CanonicalBuffer,
         meta::CollectionMeta,
         storage::{Storage, StorageIdx},
+        uninit::LazyInit,
     },
     errors::HIRError,
     expression::Expr,
@@ -39,6 +40,7 @@ pub type ScopedStmtIdx = Scoped<StmtIdx>;
 pub type StrIdx = Idx<SmolStr>;
 pub type StmtIdx = Idx<Stmt>;
 pub type StructDefIdx = Idx<StructDef>;
+pub type LazyInitIdx = Idx<LazyInit>;
 pub type CollectionLiteralIdx = Idx<CanonicalBuffer>;
 pub type ScopedCollectionLiteralIdx = Scoped<CollectionLiteralIdx>;
 pub type LetBindingIdx = Idx<LetBinding>;
@@ -189,6 +191,7 @@ pub struct Scope {
 
     // ! TODO: have literals in a separate arena
     pub(crate) buffer_literals: Arena<CanonicalBuffer>,
+    pub(crate) lazy_inits: Arena<LazyInit>,
     pub(crate) tensor_literals: Arena<CanonicalBuffer>,
 
     pub(crate) to_resolve: Arena<Unresolved>,
@@ -208,6 +211,7 @@ impl Scope {
         let metadata = MetadataStore::default();
 
         let buffer_literals = Arena::<CanonicalBuffer>::new();
+        let lazy_inits = Arena::<LazyInit>::new();
         let tensor_literals = Arena::<CanonicalBuffer>::new();
 
         let to_resolve = Arena::<Unresolved>::new();
@@ -224,6 +228,7 @@ impl Scope {
             variable_allocator,
             metadata,
             buffer_literals,
+            lazy_inits,
             tensor_literals,
             to_resolve,
             name_to_spans,
@@ -266,5 +271,8 @@ impl Scope {
         tensor_literal: CanonicalBuffer,
     ) -> CollectionLiteralIdx {
         self.tensor_literals.alloc(tensor_literal)
+    }
+    pub fn allocate_lazy_init(&mut self, lazy_init: LazyInit) -> LazyInitIdx {
+        self.lazy_inits.alloc(lazy_init)
     }
 }

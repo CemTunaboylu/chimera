@@ -1,4 +1,5 @@
 use ast::literal::{Literal as ASTLiteral, Value as ASTValue};
+use std::hash::Hash;
 
 use rust_decimal::Decimal;
 use thin_vec::ThinVec;
@@ -13,6 +14,36 @@ use crate::{
     typing::hindley_milner::types::{Maybe, Type},
 };
 
+#[derive(Clone, Debug)]
+pub enum LazyCollection {
+    Buffer(ASTValue),
+    Tensor(ASTValue),
+}
+
+impl Eq for LazyCollection {}
+
+impl PartialEq for LazyCollection {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Buffer(l0), Self::Buffer(r0)) => l0 == r0,
+            (Self::Tensor(l0), Self::Tensor(r0)) => l0 == r0,
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd for LazyCollection {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        todo!()
+    }
+}
+
+impl Hash for LazyCollection {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+    }
+}
+
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Value {
     Bool(bool),
@@ -24,6 +55,7 @@ pub enum Value {
     Char(char),
     Float(Decimal),
     Lambda(Callable),
+    LazyInit(LazyCollection),
     Int(i32),
     Str(StrIdx),
     Struct(StructLiteral),
@@ -88,6 +120,10 @@ impl HIRBuilder {
             primitive => Value::from(&primitive),
         };
         Ok(Literal(value))
+    }
+
+    pub fn materialize(&mut self, lazy_collection: &LazyCollection) -> HIRResult<Literal> {
+        todo!()
     }
 }
 

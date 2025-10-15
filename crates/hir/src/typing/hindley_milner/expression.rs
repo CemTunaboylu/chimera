@@ -225,6 +225,7 @@ impl TryFrom<&Value> for HMExpr {
             }),
             Value::Lambda(callable) => todo!(),
             Value::Struct(struct_literal) => todo!(),
+            Value::LazyInit(lazy_collection) => todo!(),
         }
     }
 }
