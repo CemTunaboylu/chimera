@@ -3,7 +3,6 @@ use ast::expression::Expr as ASTExpr;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    climbing::climb,
     delimited::{Block, Paren, Tuple},
     function::{Call, FnDef, MayNeedResolution},
     indexing::Indexing,
