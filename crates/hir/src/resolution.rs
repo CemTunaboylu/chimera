@@ -1,7 +1,12 @@
 use crate::{
+    HIRResult,
     climbing::EnumeratedScope,
+    control_flow::{Conditional, ControlFlow},
+    expression::Expr,
     indexing::Indexing,
-    scope::{NameIndexed, Selector, Span, placeholder_idx},
+    scope::{ExprIdx, NameIndexed, Selector, Span, placeholder_idx},
+    statement::Stmt,
+    typing::hindley_milner::types::{Maybe, Status, Type},
     unwrap_or_err,
 };
 use la_arena::Idx;
@@ -12,7 +17,7 @@ use thiserror::Error;
 
 use core::hash::Hash;
 
-use std::{borrow::Cow, fmt::Debug};
+use std::{borrow::Cow, collections::HashMap, fmt::Debug};
 
 use crate::{
     builder::HIRBuilder,
@@ -214,10 +219,100 @@ where
         }
     }
 }
+
+fn does_type_slice_need_resolution(types: &[Type]) -> bool {
+    types.iter().any(|t| does_type_need_resolution(t))
+}
+fn does_maybe_need_resolution(m: &Maybe<Type>) -> bool {
+    match m {
+        Maybe::None => return false,
+        Maybe::Checked(_) => return false,
+        Maybe::Unchecked(thin_vec) => does_type_slice_need_resolution(thin_vec.as_slice()),
+    }
+}
+fn does_type_need_resolution(t: &Type) -> bool {
+    let types = match t {
+        Type::Buffer { data_type, .. } => return does_maybe_need_resolution(data_type),
+        Type::FnSig {
+            param_types,
+            return_type,
+        } => {
+            if does_type_need_resolution(return_type) {
+                return true;
+            }
+            param_types
+        }
+        Type::Ptr { of, .. } => return does_type_need_resolution(of),
+        Type::StructAsType(status) => return matches!(status, Status::Pending(_)),
+        Type::Struct { fields, .. } => fields,
+        Type::Tensor { data_type, .. } => return does_maybe_need_resolution(data_type),
+        Type::Tuple(thin_vec) => thin_vec,
+        Type::Var(_) => return true,
+        _ => return false,
+    };
+    does_type_slice_need_resolution(types)
+}
 impl HIRBuilder {
     pub fn allocate_for_resolution(&mut self, unresolved: Unresolved) -> Idx<Unresolved> {
         let current_scope = self.get_current_scope_mut();
         current_scope.to_resolve.alloc(unresolved)
+    }
+    pub fn needs_resolution(&self, expr: &Expr) -> bool {
+        match expr {
+            Expr::Block(block) => todo!(),
+            Expr::Class(t) => does_type_need_resolution(t),
+            Expr::FnCall(reference) => todo!(),
+            Expr::LitCall(call) => todo!(),
+            Expr::Indexing(indexing) => todo!(),
+            Expr::Infix(binary_infix) => todo!(),
+            Expr::Literal(literal) => todo!(),
+            Expr::Missing => todo!(),
+            Expr::Mut(_) => todo!(),
+            Expr::Paren(paren) => todo!(),
+            Expr::SelfRef(self_ref) => todo!(),
+            Expr::Tuple(tuple) => todo!(),
+            Expr::Unary(unary) => todo!(),
+            Expr::Unit => todo!(),
+            Expr::VarRef(reference) => todo!(),
+        }
+    }
+
+    pub fn resolve_all(&mut self) -> HIRResult<()> {
+        let relocation_of_indices = HashMap::<ExprIdx, ExprIdx>::new();
+        for scope in self.scopes.values_mut() {
+            for stmt in scope.statements.values_mut() {
+                match stmt {
+                    Stmt::ControlFlow(control_flow) => {}
+                    Stmt::Expr(idx) => todo!(),
+                    Stmt::FnDef(idx) => todo!(),
+                    Stmt::Impl(_) => todo!(),
+                    Stmt::Jump(jump) => todo!(),
+                    Stmt::Loop(_) => todo!(),
+                    Stmt::Return(_) => todo!(),
+                    Stmt::Semi(semi) => todo!(),
+                    Stmt::StructDef(idx) => todo!(),
+                    Stmt::LetBinding(thin_vec) => todo!(),
+                }
+            }
+        }
+
+        Ok(())
+    }
+    pub fn resolve_control_flow(
+        &mut self,
+        mut c_flow: ControlFlow,
+        relocation_indices: &mut HashMap<ExprIdx, ExprIdx>,
+    ) -> HIRResult<ControlFlow> {
+        for conditional in c_flow.0.iter_mut() {
+            match conditional {
+                Conditional::If(condition, block) => {
+                    let condition_expr = self.get_expr(&condition.0);
+                }
+                Conditional::Elif(condition, block) => todo!(),
+                Conditional::Else(block) => todo!(),
+            }
+        }
+        Ok(c_flow)
     }
 }
 
@@ -232,6 +327,8 @@ fn guess<'caller, T>(
         .unwrap_or(empty);
     String::from_utf8_lossy(guesstimate)
 }
+
+// ! TODO: check if can be used or delete
 pub fn resolve_with_err<T>(trie: &NameToIndexTrie<T>, key: &SmolStr) -> ResolutionResult<Idx<T>> {
     if let Some(idx) = trie.get(key) {
         Ok(*idx)
