@@ -17,6 +17,7 @@ use super::layout::Layout;
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum LazyInit {
     FromLiteral(LazyCollection),
+    /// buffer/tensor of given shape filled with the given expression [expr, <shape>]
     WithAll(Expr, Shape),
     /// from a file
     FromStream(SmolStr),
