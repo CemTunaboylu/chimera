@@ -9,16 +9,14 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     clone_from_iter_with_err,
-    collection::{ScopedCanonicalLiteralIdx, storage::ScopedStorageIdx},
-    literal::Value,
+    collection::ScopedCanonicalLiteralIdx,
     metadata::Common,
     purity::Purity,
-    scope::{ExprIdx, Scoped},
+    scope::ExprIdx,
     typing::hindley_milner::types::{Maybe, Type},
 };
 
 use super::{
-    CanonicalLiteralIdx,
     layout::Layout,
     meta::{CollectionExamination, CollectionMeta},
     shape::{Shape, ShapeFormer},
@@ -138,75 +136,4 @@ impl HIRBuilder {
         let scope = &self.scopes[idx.scope_idx];
         Some(&scope.tensor_literals[idx.elm])
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::ops::Range;
-
-    use parameterized_test::create;
-    use thin_vec::ThinVec;
-
-    use super::*;
-    use ast::{ast_root_from_assert_no_err, cast_node_into_type, literal::Literal as ASTLiteral};
-
-    use crate::{collection::Shape, metadata::Common};
-    use crate::{literal::Value, scope::into_idx};
-
-    fn get_tensor_literal_for(program: &str) -> CanonicalBuffer {
-        let ast_root = ast_root_from_assert_no_err(program);
-        let literal_node = ast_root.get_root().first_child().unwrap();
-        let ast_literal = cast_node_into_type::<ASTLiteral>(&literal_node);
-        let mut hir_builder = HIRBuilder::new(ast_root);
-        _ = hir_builder
-            .lower_literal(&ast_literal)
-            .expect("should have been ok");
-        let idx = into_idx::<CanonicalBuffer>(0);
-        hir_builder.get_current_scope().tensor_literals[idx].clone()
-    }
-
-    create! {
-        tensor_literal_happy_path_test,
-        (program, exp_shape, exp_metadata, exp_data), {
-            let tensor_literal = get_tensor_literal_for(program);
-            assert_eq!(exp_shape, tensor_literal.shape);
-            assert_eq!(exp_metadata, tensor_literal.metadata);
-            assert_eq!(exp_data, tensor_literal.data);
-        }
-    }
-
-    fn test_metadata(max: Value, is_sparse: bool) -> CollectionMeta {
-        let dtype: Type = Type::from(&max);
-        let shape = Shape::Buffer(thin_vec![3, 3, 3]);
-        CollectionMeta {
-            common: Common {
-                purity: Purity::Pure,
-                refs_as_stmt_indices: thin_vec![],
-            },
-            sparse: is_sparse,
-            layout: Layout::row_major(&shape),
-            shape,
-            is_allocated: true,
-            group_id: 0,
-        }
-    }
-
-    fn i_val(i: i32) -> Value {
-        Value::Int(i)
-    }
-
-    #[test]
-    fn test_canonical_equality() {
-        let square_tensor_2d = "[[1,0,0],[0,1,0],[0,0,1]]";
-        let non_square_tensor_2d = "[[1,0],[0],[0],[1],[0],[0,0,1]]";
-        let square_tensor_literal = get_tensor_literal_for(square_tensor_2d);
-        let non_square_tensor_literal = get_tensor_literal_for(non_square_tensor_2d);
-        assert_eq!(square_tensor_literal.data, non_square_tensor_literal.data);
-    }
-
-    // tensor_literal_happy_path_test! {
-    //     tensor_2d_literal: ("[[1,0,0],[0,1,0],[0,0,1]]", Shape::Buffer(thin_vec![3,3]), test_metadata(Value::Int(1), true), thin_vec![into_idx(1), into_idx(2),into_idx(2), into_idx(2),into_idx(1), into_idx(2), into_idx(2), into_idx(2), into_idx(1)]),
-    //     tensor_3d_literal: ("[[[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,2]] ]", Shape::Buffer(thin_vec![3,3,3]), test_metadata(Value::Int(2), true), thin_vec![into_idx(1), into_idx(2),into_idx(2), into_idx(2),into_idx(1), into_idx(2), into_idx(2), into_idx(2), into_idx(1),into_idx(1), into_idx(2),into_idx(2), into_idx(2),into_idx(1), into_idx(2), into_idx(2), into_idx(2), into_idx(1),into_idx(1), into_idx(2),into_idx(2), into_idx(2),into_idx(1), into_idx(2), into_idx(2), into_idx(2), into_idx(3)]),
-    //     tensor_3d_literal_non_square: ("[[[1,0],[1,1],[0,1]], [[1,0],[1,1],[0,1]], [[1,0],[1,1],[0,1]] ]", Shape::Buffer(thin_vec![3,3,2]), test_metadata(Value::Int(1), true), thin_vec![into_idx(1), into_idx(2),into_idx(1), into_idx(1), into_idx(2), into_idx(1),into_idx(1), into_idx(2), into_idx(1),into_idx(1), into_idx(2), into_idx(1),into_idx(1), into_idx(2),into_idx(1), into_idx(1),into_idx(2), into_idx(1)]),
-    // }
 }

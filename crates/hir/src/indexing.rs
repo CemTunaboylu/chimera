@@ -98,7 +98,7 @@ mod tests {
     use crate::{
         collection::{shape::Shape, storage::Storage},
         expression::Expr,
-        literal::{Literal, Value},
+        literal::{LazyCollection, Literal, Value},
         resolution::{Reference, Unresolved},
         scope::into_idx,
         typing::hindley_milner::types::{Maybe, Type},
@@ -169,30 +169,10 @@ mod tests {
         let expr_idx = indexing.reference.index;
         let literal = hir.get_expr(&crate::scope::Scoped::new(indexing.scope_idx, expr_idx));
 
-        if let Expr::Literal(Literal(Value::Buffer {
-            idx,
-            shape,
-            data_type,
-        })) = literal
-        {
-            assert_eq!(idx.scope_idx, into_idx(0));
-            assert_eq!(idx.elm, into_idx(0));
-            let expected_shape = Shape::Buffer(thin_vec![3, 1]);
-            assert_eq!(*shape, expected_shape);
-            assert_eq!(*data_type, Maybe::Checked(Box::new(Type::I32)));
-
-            let canonical_collection = hir
-                .get_canonical_collection_with(idx)
-                .expect("should have a canonical collection at that index");
-            assert_eq!(
-                canonical_collection.data,
-                Storage::Indexed(thin_vec![into_idx(3), into_idx(4), into_idx(5)]) // first the indices will be inserted, thus values are of later indices
-            );
-            assert_eq!(canonical_collection.shape, expected_shape);
-        } else {
-            panic!("should have been buffer literal")
-        }
-
+        assert!(matches!(
+            literal,
+            Expr::Literal(Literal(Value::LazyInit(LazyCollection::Buffer(_))))
+        ));
         assert_eq!(indexing.indices.len(), 2);
         for ix in indexing.indices {
             let idx = ix.index;

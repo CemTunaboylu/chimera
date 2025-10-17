@@ -7,9 +7,9 @@ use thin_vec::ThinVec;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    collection::{canonical::CanonicalBuffer, layout::Layout, shape::Shape},
+    collection::shape::Shape,
     function::Callable,
-    scope::{Scoped, ScopedCollectionLiteralIdx, StrIdx},
+    scope::{ScopedCollectionLiteralIdx, StrIdx},
     structure::StructLiteral,
     typing::hindley_milner::types::{Maybe, Type},
 };
@@ -100,22 +100,15 @@ impl HIRBuilder {
                 let c = self.lower_callable(&lambda.0)?;
                 Value::Lambda(c)
             }
-            // TODO: fix here!
-            ASTValue::Buffer(buffer_tree) => {
-                let (ten_meta, flattened) = Self::flatten_buffer_tree(self, &buffer_tree)?;
-                let canonical_buffer_literal =
-                    CanonicalBuffer::new(flattened, Layout::row_major, &ten_meta);
-                let canonical_buffer_idx = self.allocate_tensor_literal(canonical_buffer_literal);
-                let scope_idx = self.get_current_scope_idx();
-                Value::Buffer {
-                    idx: Scoped::new(scope_idx, canonical_buffer_idx),
-                    shape: ten_meta.shape.clone(),
-                    data_type: Maybe::Checked(Box::new(Type::I32)), // TODO: FIX ME: for now a dyummy default value to make tests pass
-                                                                    // data_type: ten_meta.data_type.clone(),
-                }
+            // to be able to decide the layout and materialize, we lower to a LazyInit with LazyCollection
+            buffer_value if matches!(buffer_value, ASTValue::Buffer(_)) => {
+                let lazy_collection = LazyCollection::Buffer(buffer_value);
+                Value::LazyInit(lazy_collection)
             }
-            ASTValue::Tensor(buffer_tree) => {
-                todo!()
+            // to be able to decide the layout and materialize, we lower to a LazyInit with LazyCollection
+            tensor_value if matches!(tensor_value, ASTValue::Tensor(_)) => {
+                let lazy_collection = LazyCollection::Tensor(tensor_value);
+                Value::LazyInit(lazy_collection)
             }
             primitive => Value::from(&primitive),
         };
@@ -123,6 +116,17 @@ impl HIRBuilder {
     }
 
     pub fn materialize(&mut self, lazy_collection: &LazyCollection) -> HIRResult<Literal> {
+        // let (ten_meta, flattened) = Self::flatten_buffer_tree(self, &buffer_tree)?;
+        // let canonical_buffer_literal =
+        //     CanonicalBuffer::new(flattened, Layout::row_major, &ten_meta);
+        // let canonical_buffer_idx = self.allocate_tensor_literal(canonical_buffer_literal);
+        // let scope_idx = self.get_current_scope_idx();
+        // Value::Buffer {
+        //     idx: Scoped::new(scope_idx, canonical_buffer_idx),
+        //     shape: ten_meta.shape.clone(),
+        //     data_type: Maybe::Checked(Box::new(Type::I32)), // TODO: FIX ME: for now a dummy default value to make tests pass
+        //                                                     // data_type: ten_meta.data_type.clone(),
+        // }
         todo!()
     }
 }
