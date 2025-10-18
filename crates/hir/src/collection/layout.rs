@@ -484,10 +484,4 @@ mod tests {
             test_layout_indexing_on_3d_shape(shape.as_slice(), &layout, &expected_indices);
         }
     }
-
-    // tensor_literal_happy_path_test! {
-    //     tensor_2d_literal: ("[[1,0,0],[0,1,0],[0,0,1]]", Shape::Buffer(thin_vec![3,3]), test_metadata(Value::Int(1), true), thin_vec![into_idx(1), into_idx(2),into_idx(2), into_idx(2),into_idx(1), into_idx(2), into_idx(2), into_idx(2), into_idx(1)]),
-    //     tensor_3d_literal: ("[[[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,1]], [[1,0,0],[0,1,0],[0,0,2]] ]", Shape::Buffer(thin_vec![3,3,3]), test_metadata(Value::Int(2), true), thin_vec![into_idx(1), into_idx(2),into_idx(2), into_idx(2),into_idx(1), into_idx(2), into_idx(2), into_idx(2), into_idx(1),into_idx(1), into_idx(2),into_idx(2), into_idx(2),into_idx(1), into_idx(2), into_idx(2), into_idx(2), into_idx(1),into_idx(1), into_idx(2),into_idx(2), into_idx(2),into_idx(1), into_idx(2), into_idx(2), into_idx(2), into_idx(3)]),
-    //     tensor_3d_literal_non_square: ("[[[1,0],[1,1],[0,1]], [[1,0],[1,1],[0,1]], [[1,0],[1,1],[0,1]] ]", Shape::Buffer(thin_vec![3,3,2]), test_metadata(Value::Int(1), true), thin_vec![into_idx(1), into_idx(2),into_idx(1), into_idx(1), into_idx(2), into_idx(1),into_idx(1), into_idx(2), into_idx(1),into_idx(1), into_idx(2), into_idx(1),into_idx(1), into_idx(2),into_idx(1), into_idx(1),into_idx(2), into_idx(1)]),
-    // }
 }
