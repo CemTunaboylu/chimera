@@ -104,6 +104,7 @@ impl HIRBuilder {
         let current_scope = self.get_current_scope_mut();
         current_scope.allocate_span(name, span.into());
     }
+    // ! do I need this?
     pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
         self.strs.allocate(string)
     }

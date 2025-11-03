@@ -35,6 +35,7 @@ pub struct Usage {
     pub kind: UsageContext,
     pub span: Span,
     pub scope_idx: ScopeIdx,
+    // ! statements are in Scope now, it should be a Scoped index
     pub stmt_idx: usize,
 }
 
