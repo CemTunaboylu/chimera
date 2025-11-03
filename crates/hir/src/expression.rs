@@ -3,6 +3,7 @@ use ast::expression::Expr as ASTExpr;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
+    collection::expr::TensorExpr,
     delimited::{Block, Paren, Tuple},
     function::{Call, FnDef, MayNeedResolution},
     indexing::Indexing,
@@ -31,6 +32,7 @@ pub enum Expr {
     Paren(Paren),
     SelfRef(SelfRef),
     Tuple(Tuple),
+    TensorExpr(TensorExpr),
     Unary(Unary),
     Unit,
     VarRef(Reference<LetBinding>),

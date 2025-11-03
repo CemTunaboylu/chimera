@@ -15,10 +15,13 @@ use ast::collection::Shape as ASTShape;
 use shape::{Dim, Shape};
 
 pub mod block;
+pub mod builtin;
 pub mod canonical;
+pub mod contract;
+pub mod expr;
+pub mod fusion;
 pub mod layout;
 pub mod meta;
-pub mod op;
 pub mod shape;
 pub mod storage;
 pub mod uninit;

@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-use super::{Shape, layout::Layout, op::Op};
+use super::{Shape, builtin::Op, layout::Layout};
 
 /* TODO:
 - max,min while traversing, but the type must impl. Cmp,

@@ -181,8 +181,6 @@ impl HIRBuilder {
                 Ok(HMExpr::Tuple(types))
             }
             Expr::Unit => Ok(HMExpr::Unit),
-            // TODO: will be modified as a literal, delete this after its finished
-            // Expr::StructInit(struct_init) => todo!(),
             Expr::Unary(unary) => {
                 let hm = Box::new(self.try_into_hm_expr(self.get_expr(&unary.operand().0))?);
                 let op = *unary.op();
@@ -194,6 +192,7 @@ impl HIRBuilder {
                 Ok(HMExpr::Var(type_key))
             }
             Expr::LitCall(call) => todo!(),
+            Expr::TensorExpr(tensor_expr) => todo!(),
         }
     }
 }

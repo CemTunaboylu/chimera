@@ -274,6 +274,7 @@ impl HIRBuilder {
             Expr::Unary(unary) => todo!(),
             Expr::Unit => todo!(),
             Expr::VarRef(reference) => todo!(),
+            Expr::TensorExpr(tensor_expr) => todo!(),
         }
     }
 

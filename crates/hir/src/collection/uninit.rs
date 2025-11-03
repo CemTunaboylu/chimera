@@ -4,7 +4,7 @@ use thin_vec::ThinVec;
 
 use crate::{
     builder::HIRBuilder,
-    collection::{op::Op, shape::Shape},
+    collection::{builtin::Op, shape::Shape},
     expression::Expr,
     literal::LazyCollection,
     typing::hindley_milner::types::{Maybe, Type},

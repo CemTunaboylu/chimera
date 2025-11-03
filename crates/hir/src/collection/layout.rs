@@ -33,6 +33,33 @@ pub trait LayoutIndexing {
 //   - [c,d,r],
 //   - [d,r,c],
 //   - [d,c,r],
+/*
+   Since we don't allow the user to pick/change the memory layout, the only concern is the Ops/methods that
+   inherently change the layout or compiler-inserted memory layout change (if we can confidently say that
+   changing the layout beforehand would be better than delegating to LayoutIndexing).
+
+   Layout changing Ops:
+   - t.reshape(new_shape) or reshape(t, new_shape) -> changes the shape thus
+       ? can we not change the shape but just arrange the strides and get away with it?
+   - layout_change(a, to_layout)            -> compiler-inserted
+   - t.transpose() or transpose(t)          -> permutes axes -> implies a layout change
+   - t.broadcast(shape) or broadcast(t)     -> may insert virtual dimensions with new layout
+   - t.pad(...) or pad(t, ...)              -> can lead to offset views or reallocation
+   - gather/scatter                         -> can create arbitrarily disordered layouts
+
+   Tiling-Requiring Ops
+   (don't semantically change the Layout BUT require a certain layout to be fused efficiently e.g. Blocked)
+   - matmul                         -> Blocked improves cache reuse, vectorization
+   - conv2d                         -> strongly prefers NHWC or NCHW layout depending on backend
+   - batch_norm, group_norm         -> reduced axes to be aligned
+   - softmax, argmax                -> need contiguousness across axis of reduction
+
+    Compiler-inserted layout transforms
+    - layout_adapt(t, to_layout)    -> convert into exp. layout of next Op i.e. satisfy the LayoutContract
+    - copy_if_needed(t)             -> prevents incorrect alising of reused memory
+*/
+// ! if tensors share the same layout, I want a method to call with their strides and index vectors once
+// to receive the resulting indexings at once
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Layout {
@@ -146,7 +173,20 @@ impl Layout {
         }
     }
 }
+// ! needs:
+// - inverse layout projection (flat output index -> multidim index -> input layout index)
+// - broadcast/index alignment between tensors with different layouts
+// - index expression synthesis across multiple layouts
+/*
+trait Layout {
+    fn index_to_coords(&self, flat_idx: usize) -> ThinVec<usize>;
+}
 
+let coords = output_layout.index_to_coords(output_idx);
+let lhs_idx = lhs_layout.indexing(&coords);
+let rhs_idx = rhs_layout.indexing(&coords);
+
+ */
 impl LayoutIndexing for Layout {
     /// Converts multi-dimensional indices into the corresponding index of the flattened buffer.
     /// Handles RowMajor, ColumnMajor, and Blocked layouts.
