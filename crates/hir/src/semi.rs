@@ -1,6 +1,6 @@
 use ast::semi::Semi as ASTSemi;
 
-use crate::{HIRResult, builder::HIRBuilder, scope::ScopedExprIdx};
+use crate::{HIRResult, builder::HIRBuilder, index_types::ScopedExprIdx};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Semi(pub ScopedExprIdx);

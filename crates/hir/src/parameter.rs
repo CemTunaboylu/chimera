@@ -80,7 +80,7 @@ impl HIRBuilder {
 mod tests {
     use super::*;
     use crate::{
-        builder::HIRBuilder, scope::placeholder_idx, typing::hindley_milner::types::Status,
+        builder::HIRBuilder, index_types::placeholder_idx, typing::hindley_milner::types::Status,
     };
     use ast::{ast_root_from_assert_no_err, cast_node_into_type};
     use parameterized_test::create;

@@ -13,16 +13,16 @@ use crate::{
     builder::HIRBuilder,
     climbing::climb,
     context::UsageContext,
+    definition_allocator::NameIndexed,
     delimited::Block,
+    index_types::{FnDefIdx, ScopeIdx, ScopedExprIdx, StrIdx, placeholder_idx},
     literal::Literal,
     metadata::{Common, FnMeta, Usage, Usages},
     mut_clone_with_err,
     parameter::Param,
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
-    scope::{
-        FnDefIdx, FnSelector, NameIndexed, ScopeIdx, ScopeKind, ScopedExprIdx, Span, StrIdx,
-        placeholder_idx,
-    },
+    scope::{FnSelector, ScopeKind},
+    span::Span,
     typing::hindley_milner::types::Type,
 };
 
@@ -210,7 +210,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        builder::tests::ast_root_from, literal::Value, scope::into_idx, statement::Stmt,
+        builder::tests::ast_root_from,
+        index_types::{Scoped, into_idx},
+        literal::Value,
+        statement::Stmt,
         typing::hindley_milner::types::Status,
     };
 
@@ -384,11 +387,11 @@ mod tests {
             } = callable.body;
             // note: scopeIdx(2) since lower_fn_params_and_body starts a scope and then Block starts its own
             assert_eq!(into_idx(2), scope_idx);
-            let scoped_return = crate::scope::Scoped::new(scope_idx, into_idx(0));
+            let scoped_return = Scoped::new(scope_idx, into_idx(0));
             assert_eq!(&[scoped_return], returns.as_slice());
             let block_scope = &hir_builder.scopes[scope_idx];
             assert_eq!(1, block_scope.statements.len());
-            let scoped = crate::scope::Scoped::new(scope_idx, into_idx(1));
+            let scoped = Scoped::new(scope_idx, into_idx(1));
             assert_eq!(Stmt::Expr(scoped), block_scope.statements[into_idx(0)]);
         } else {
             unreachable!()
@@ -413,7 +416,7 @@ mod tests {
         };
 
         assert_eq!(SmolStr::from("foo"), unresolved_call.name);
-        let scoped = crate::scope::Scoped::new(into_idx(0), into_idx(1));
+        let scoped = Scoped::new(into_idx(0), into_idx(1));
         assert_eq!(
             Baggage::Arg(thin_vec![FnArg(scoped)]),
             unresolved_call.baggage
@@ -450,16 +453,16 @@ mod tests {
             } = callable.body;
             // note: scopeIdx(2) since lower_fn_params_and_body starts a scope and then Block starts its own
             assert_eq!(into_idx(2), scope_idx);
-            let scoped_return = crate::scope::Scoped::new(scope_idx, into_idx(0));
+            let scoped_return = Scoped::new(scope_idx, into_idx(0));
             assert_eq!(&[scoped_return], returns.as_slice());
             let block_scope = &hir_builder.scopes[scope_idx];
             assert_eq!(1, block_scope.statements.len());
-            let scoped = crate::scope::Scoped::new(scope_idx, into_idx(1));
+            let scoped = Scoped::new(scope_idx, into_idx(1));
             assert_eq!(Stmt::Expr(scoped), block_scope.statements[into_idx(0)]);
         } else {
             unreachable!()
         }
-        let scoped = crate::scope::Scoped::new(into_idx(0), into_idx(1));
+        let scoped = Scoped::new(into_idx(0), into_idx(1));
         assert_eq!(&[FnArg(scoped)], call_lambda_literal.arguments.as_slice());
     }
 }

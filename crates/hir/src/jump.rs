@@ -1,7 +1,7 @@
 use ast::jump::Jump as ASTJump;
 use hir_macro::with_context;
 
-use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ScopedExprIdx};
+use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, index_types::ScopedExprIdx};
 
 // possible types are primitives + custom types i.e. structs
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]

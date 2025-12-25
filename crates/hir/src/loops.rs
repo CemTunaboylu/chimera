@@ -4,7 +4,7 @@ use thin_vec::ThinVec;
 
 use crate::{
     HIRResult, builder::HIRBuilder, context::UsageContext, control_flow::Condition,
-    delimited::Block, scope::ScopedExprIdx,
+    delimited::Block, index_types::ScopedExprIdx,
 };
 
 use ast::loops::{In as ASTIn, Loop as ASTLoop};

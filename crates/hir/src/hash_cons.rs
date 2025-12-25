@@ -11,8 +11,8 @@ use thin_vec::thin_vec;
 use crate::{
     expression::Expr,
     function::On,
+    index_types::ExprIdx,
     resolution::{Baggage, Reference},
-    scope::ExprIdx,
     typing::hindley_milner::types::{Maybe, Status, Type},
 };
 

@@ -9,7 +9,7 @@ use crate::{
     builder::HIRBuilder,
     collection::shape::Shape,
     function::Callable,
-    scope::{ScopedCollectionLiteralIdx, StrIdx},
+    index_types::{ScopedCollectionLiteralIdx, StrIdx},
     structure::StructLiteral,
     typing::hindley_milner::types::{Maybe, Type},
 };
@@ -138,9 +138,10 @@ mod tests {
     use super::*;
     use crate::{
         builder::tests::ast_root_from,
+        index_types::{ExprIdx, into_idx},
         literal::Value,
         resolution::Reference,
-        scope::{ExprIdx, MetaHolder, into_idx},
+        scope::MetaHolder,
         structure::{InternalStructure, StructRef},
     };
 

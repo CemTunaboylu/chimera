@@ -3,6 +3,7 @@ pub mod climbing;
 pub mod collection;
 pub mod context;
 pub mod control_flow;
+pub mod definition_allocator;
 pub mod delimited;
 pub mod errors;
 pub mod expression;
@@ -10,6 +11,7 @@ pub mod function;
 pub mod hash_cons;
 pub mod hir;
 pub mod impl_block;
+pub mod index_types;
 pub mod indexing;
 pub mod jump;
 pub mod let_binding;
@@ -25,6 +27,7 @@ pub mod return_stmt;
 pub mod scope;
 pub mod self_ref;
 pub mod semi;
+pub mod span;
 pub mod statement;
 pub mod structure;
 pub mod types;
@@ -42,10 +45,7 @@ use thin_vec::ThinVec;
 use miette::Report;
 use typing::hindley_milner::inference::TypeKey;
 
-use crate::{
-    hash_cons::FingerPrints,
-    scope::{Span, placeholder_idx},
-};
+use crate::{hash_cons::FingerPrints, index_types::placeholder_idx, span::Span};
 
 #[derive(Debug)]
 pub struct DedupArena<V: Hash> {

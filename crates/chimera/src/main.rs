@@ -1,6 +1,6 @@
 use hir::{
     builder::lower,
-    scope::{ScopeIdx, ScopedStmtIdx, StmtIdx},
+    index_types::{ScopeIdx, ScopedStmtIdx, StmtIdx},
 };
 use miette::{Context, IntoDiagnostic, Result as MietteResult};
 use parser::{cst::ConcreteSyntaxTree, parser::Parser as ChimeraParser};

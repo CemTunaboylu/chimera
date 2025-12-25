@@ -2,8 +2,8 @@ use thin_vec::ThinVec;
 
 use crate::{
     collection::builtin::BuiltinMethod,
+    index_types::ScopedExprIdx,
     operation::{BinaryOp, UnaryOp},
-    scope::ScopedExprIdx,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]

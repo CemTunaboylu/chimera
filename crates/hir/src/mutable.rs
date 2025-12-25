@@ -1,7 +1,7 @@
 use ast::mutable::Mut as ASTMut;
 use hir_macro::with_context;
 
-use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, scope::ScopedExprIdx};
+use crate::{HIRResult, builder::HIRBuilder, context::UsageContext, index_types::ScopedExprIdx};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Mut(pub ScopedExprIdx);

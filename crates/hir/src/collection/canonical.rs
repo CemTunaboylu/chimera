@@ -10,9 +10,9 @@ use crate::{
     builder::HIRBuilder,
     clone_from_iter_with_err,
     collection::ScopedCanonicalLiteralIdx,
+    index_types::ExprIdx,
     metadata::Common,
     purity::Purity,
-    scope::ExprIdx,
     typing::hindley_milner::types::{Maybe, Type},
 };
 

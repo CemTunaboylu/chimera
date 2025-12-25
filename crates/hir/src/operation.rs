@@ -4,7 +4,7 @@ use syntax::syntax_kind::SyntaxKind;
 
 use crate::{
     HIRResult, builder::HIRBuilder, context::UsageContext, err_if_none, errors::HIRError,
-    scope::ScopedExprIdx,
+    index_types::ScopedExprIdx,
 };
 
 use ast::{

@@ -1,10 +1,16 @@
 use crate::{
     HIRResult,
+    builder::HIRBuilder,
     climbing::EnumeratedScope,
     control_flow::{Conditional, ControlFlow},
+    definition_allocator::{NameIndexed, NameToIndexTrie},
     expression::Expr,
+    function::FnArg,
+    index_types::{ExprIdx, ScopeIdx, placeholder_idx},
     indexing::Indexing,
-    scope::{ExprIdx, NameIndexed, Selector, Span, placeholder_idx},
+    scope::Scope,
+    scope::Selector,
+    span::Span,
     statement::Stmt,
     typing::hindley_milner::types::{Maybe, Status, Type},
     unwrap_or_err,
@@ -18,12 +24,6 @@ use thiserror::Error;
 use core::hash::Hash;
 
 use std::{borrow::Cow, collections::HashMap, fmt::Debug};
-
-use crate::{
-    builder::HIRBuilder,
-    function::FnArg,
-    scope::{NameToIndexTrie, Scope, ScopeIdx},
-};
 
 pub type ResolutionResult<T> = Result<T, Report>;
 

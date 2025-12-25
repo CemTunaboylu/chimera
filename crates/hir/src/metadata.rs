@@ -9,9 +9,10 @@ use crate::{
     control_flow::Conditional,
     expression::Expr,
     function::Callable,
+    index_types::{ExprIdx, ScopeIdx, StrIdx},
     literal::Value,
     purity::Purity,
-    scope::{ExprIdx, ScopeIdx, Span, StrIdx},
+    span::Span,
     statement::Stmt,
     typing::hindley_milner::types::Type,
 };

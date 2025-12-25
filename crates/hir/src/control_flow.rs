@@ -6,7 +6,8 @@ use ast::control_flow::{
 };
 
 use crate::{
-    HIRResult, builder::HIRBuilder, context::UsageContext, delimited::Block, scope::ScopedExprIdx,
+    HIRResult, builder::HIRBuilder, context::UsageContext, delimited::Block,
+    index_types::ScopedExprIdx,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]

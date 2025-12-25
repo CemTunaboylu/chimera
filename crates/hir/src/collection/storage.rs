@@ -2,8 +2,8 @@ use la_arena::Idx;
 use thin_vec::ThinVec;
 
 use crate::{
+    index_types::{ExprIdx, Scoped},
     literal::Value,
-    scope::{ExprIdx, Scoped},
 };
 
 use super::layout::Layout;

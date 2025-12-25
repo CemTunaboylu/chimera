@@ -7,10 +7,10 @@ use crate::{
     control_flow::ControlFlow,
     expression::Expr,
     impl_block::Impl,
+    index_types::{FnDefIdx, LetBindingIdx, Scoped, ScopedExprIdx, ScopedStmtIdx, StructDefIdx},
     jump::Jump,
     loops::Loop,
     return_stmt::Return,
-    scope::{FnDefIdx, LetBindingIdx, Scoped, ScopedExprIdx, ScopedStmtIdx, StructDefIdx},
     semi::Semi,
 };
 

@@ -1,4 +1,4 @@
-use crate::scope::ScopeIdx;
+use crate::index_types::ScopeIdx;
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
 pub enum UsageContext {

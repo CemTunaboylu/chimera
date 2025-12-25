@@ -10,11 +10,11 @@ use crate::{
     expect_non_baggage,
     expression::Expr,
     function::FnArg,
+    index_types::{Scoped, ScopedExprIdx},
     indexing::Indexing,
     literal::Value,
     operation::{BinaryOp, UnaryOp},
     resolution::{Baggage, Reference},
-    scope::{Scoped, ScopedExprIdx},
     self_ref::SelfRef,
 };
 

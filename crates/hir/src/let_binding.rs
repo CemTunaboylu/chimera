@@ -16,15 +16,15 @@ use crate::{
     builder::HIRBuilder,
     climbing::climb,
     context::UsageContext,
+    definition_allocator::NameIndexed,
     expression::Expr,
+    index_types::{ExprIdx, LetBindingIdx, ScopeIdx, ScopedExprIdx, StrIdx, placeholder_idx},
     indexing::Indexing,
     literal::{Literal, Value},
     metadata::{Usage, Usages, VarMeta},
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
-    scope::{
-        ExprIdx, LetBindingIdx, NameIndexed, ScopeIdx, ScopedExprIdx, Span, StrIdx, VarSelector,
-        placeholder_idx,
-    },
+    scope::VarSelector,
+    span::Span,
     typing::hindley_milner::types::Type,
 };
 
@@ -364,7 +364,10 @@ mod tests {
     use parameterized_test::create;
 
     use super::*;
-    use crate::{expression::Expr, scope::into_idx};
+    use crate::{
+        expression::Expr,
+        index_types::{Scoped, into_idx},
+    };
 
     use ast::{ast_root_from_assert_no_err, cast_node_into_type};
 
@@ -382,7 +385,7 @@ mod tests {
                 let let_binding = &current_scope.variable_allocator.definitions[idx];
                 assert!(matches!(&let_binding.identifier, ident));
                 let expr_idx = let_binding.spanned_expr_idx.index;
-                let scoped = crate::scope::Scoped::new(let_binding.scope_idx, expr_idx);
+                let scoped = Scoped::new(let_binding.scope_idx, expr_idx);
                 let expr = hir.get_expr(&scoped);
                 assert!(matches!(expr, Expr::Indexing(Indexing{indices, ..}) if indices.len() == 1));
             }
@@ -453,13 +456,13 @@ mod tests {
             assert_eq!(Into::<Span>::into(exp_span.clone()), span);
 
             let expr_idx = let_binding.spanned_expr_idx.index;
-            let scoped = crate::scope::Scoped::new(let_binding.scope_idx, expr_idx);
+            let scoped = Scoped::new(let_binding.scope_idx, expr_idx);
             let expr = hir.get_expr(&scoped);
             assert!(matches!(expr, Expr::Indexing(Indexing{indices, ..}) if indices.len() == 1));
 
             if let Expr::Indexing(indexing) = expr {
                 let reference_idx = indexing.reference.index;
-                let scoped = crate::scope::Scoped::new(indexing.scope_idx, expr_idx);
+                let scoped = Scoped::new(indexing.scope_idx, expr_idx);
                 let reference = hir.get_expr(&scoped);
                 if let Expr::VarRef(Reference::Resolved {
                     at,

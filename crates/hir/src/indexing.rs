@@ -10,7 +10,8 @@ use crate::{
     context::UsageContext,
     errors::HIRError,
     expression::Expr,
-    scope::{ScopeIdx, Scoped, ScopedExprIdx, Span},
+    index_types::{ScopeIdx, Scoped, ScopedExprIdx},
+    span::Span,
 };
 
 use ast::{expression::Expr as ASTExpr, indexing::Indexing as ASTIndexing};
@@ -96,12 +97,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        collection::{shape::Shape, storage::Storage},
         expression::Expr,
         literal::{LazyCollection, Literal, Value},
         resolution::{Reference, Unresolved},
-        scope::into_idx,
-        typing::hindley_milner::types::{Maybe, Type},
     };
 
     use ast::{
@@ -127,7 +125,7 @@ mod tests {
             let indexing = hir.lower_indexing(&ast_indexing).expect("should have been lowered");
 
             let expr_idx = indexing.reference.index;
-            let expr = hir.get_expr(&crate::scope::Scoped::new(indexing.scope_idx, expr_idx));
+            let expr = hir.get_expr(&Scoped::new(indexing.scope_idx, expr_idx));
 
             match expr {
                 Expr::VarRef(Reference::Unresolved(unresolved_idx)) => {
@@ -167,7 +165,7 @@ mod tests {
             .expect("should have been lowered");
 
         let expr_idx = indexing.reference.index;
-        let literal = hir.get_expr(&crate::scope::Scoped::new(indexing.scope_idx, expr_idx));
+        let literal = hir.get_expr(&Scoped::new(indexing.scope_idx, expr_idx));
 
         assert!(matches!(
             literal,
@@ -176,7 +174,7 @@ mod tests {
         assert_eq!(indexing.indices.len(), 2);
         for ix in indexing.indices {
             let idx = ix.index;
-            let expr = hir.get_expr(&crate::scope::Scoped::new(indexing.scope_idx, idx));
+            let expr = hir.get_expr(&Scoped::new(indexing.scope_idx, idx));
             assert_eq!(expr, &Expr::Literal(Literal(Value::Int(0))));
         }
     }

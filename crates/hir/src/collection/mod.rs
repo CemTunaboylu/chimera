@@ -8,8 +8,8 @@ use crate::{
     collection::uninit::{LazyInit, Uninitialized},
     errors::HIRError,
     expression::Expr,
+    index_types::Scoped,
     literal::{LazyCollection, Literal, Value},
-    scope::Scoped,
 };
 use ast::collection::Shape as ASTShape;
 use shape::{Dim, Shape};

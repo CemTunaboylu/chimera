@@ -11,9 +11,9 @@ use crate::{
     HIRResult,
     errors::HIRError,
     expression::Expr,
+    index_types::{ExprIdx, ScopeIdx, placeholder_idx},
     literal::Value,
     metadata::Common,
-    scope::{ExprIdx, ScopeIdx, placeholder_idx},
     typing::hindley_milner::{
         expression::HMExpr,
         types::{Maybe, Type},

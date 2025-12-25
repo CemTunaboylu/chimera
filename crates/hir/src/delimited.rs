@@ -11,8 +11,9 @@ use crate::{
     builder::HIRBuilder,
     errors::HIRError,
     expression::Expr,
+    index_types::{ExprIdx, ScopeIdx, ScopedExprIdx, ScopedStmtIdx, placeholder_idx},
     mut_clone_with_err,
-    scope::{ExprIdx, ScopeIdx, ScopeKind, ScopedExprIdx, ScopedStmtIdx, placeholder_idx},
+    scope::ScopeKind,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
@@ -79,7 +80,10 @@ impl HIRBuilder {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{builder::HIRBuilder, scope::into_idx};
+    use crate::{
+        builder::HIRBuilder,
+        index_types::{Scoped, into_idx},
+    };
     use ast::{
         ast_root_from_assert_no_err, cast_node_into_type, delimited::Tuple as ASTTuple,
         expression::Expr as ASTExpr,
@@ -119,7 +123,7 @@ mod test {
         |ht: &Tuple, _| {assert_eq!(ht.1.len(), 2)},
         |ht: &Tuple, hir: &HIRBuilder| {
             for expr_idx in ht.1.iter() {
-                let scoped = crate::scope::Scoped::new(ht.0,*expr_idx);
+                let scoped = Scoped::new(ht.0,*expr_idx);
                 let expr = hir.get_expr(&scoped);
                 assert!(matches!(expr, crate::expression::Expr::Infix(_)));
             }

@@ -6,12 +6,15 @@ use crate::{
         storage::{Storage, StorageIdx},
         uninit::LazyInit,
     },
+    definition_allocator::{DefAllocator, NameIndexed, NameToIndexTrie},
     errors::HIRError,
     expression::Expr,
     function::FnDef,
+    index_types::*,
     let_binding::LetBinding,
     metadata::{FnMeta, StructMeta, VarMeta},
     resolution::Unresolved,
+    span::Span,
     statement::Stmt,
     structure::StructDef,
 };
@@ -20,84 +23,11 @@ use patricia_tree::PatriciaMap;
 use smol_str::SmolStr;
 
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Scoped<A> {
-    pub scope_idx: ScopeIdx,
-    pub elm: A,
-}
-
-impl<A> Scoped<A> {
-    pub fn new(scope_idx: ScopeIdx, elm: A) -> Self {
-        Self { scope_idx, elm }
-    }
-}
-
-pub type ExprIdx = Idx<Expr>;
-pub type FnDefIdx = Idx<FnDef>;
-pub type ScopeIdx = Idx<Scope>;
-pub type ScopedExprIdx = Scoped<ExprIdx>;
-pub type ScopedStmtIdx = Scoped<StmtIdx>;
-pub type StrIdx = Idx<SmolStr>;
-pub type StmtIdx = Idx<Stmt>;
-pub type StructDefIdx = Idx<StructDef>;
-pub type LazyInitIdx = Idx<LazyInit>;
-pub type CollectionLiteralIdx = Idx<CanonicalBuffer>;
-pub type ScopedCollectionLiteralIdx = Scoped<CollectionLiteralIdx>;
-pub type LetBindingIdx = Idx<LetBinding>;
-
-pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
-
-#[derive(Clone, Copy, Default, Eq, Hash, PartialEq)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl Debug for Span {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}..{}", self.start, self.end))
-    }
-}
-
-impl PartialOrd for Span {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if let Some(result) = self.start.partial_cmp(&other.end) {
-            match result {
-                Ordering::Greater | Ordering::Less => Some(result),
-                Ordering::Equal => self.end.partial_cmp(&other.start),
-            }
-        } else {
-            self.end.partial_cmp(&other.start)
-        }
-    }
-}
-
-impl From<Range<usize>> for Span {
-    fn from(value: Range<usize>) -> Self {
-        Self {
-            start: value.start,
-            end: value.end,
-        }
-    }
-}
-
-pub(crate) fn into_idx<T>(from: u32) -> Idx<T> {
-    Idx::from_raw(RawIdx::from_u32(from))
-}
-
-pub(crate) fn placeholder_idx<FOR>() -> Idx<FOR> {
-    Idx::from_raw(RawIdx::from_u32(0))
-}
 
 fn expr_arena_with_missing() -> Arena<Expr> {
     let mut arena = Arena::new();
     _ = arena.alloc(Expr::Missing);
     arena
-}
-
-pub trait NameIndexed {
-    fn set_name_index(&mut self, ix: StrIdx);
-    fn get_name_index(&self) -> StrIdx;
 }
 
 #[derive(Debug)]
@@ -107,31 +37,6 @@ pub enum ScopeKind {
     Impl,
     Master,
     Struct,
-}
-
-#[derive(Debug, Default)]
-pub struct DefAllocator<D: NameIndexed> {
-    pub names: Arena<SmolStr>,
-    pub definitions: Arena<D>,
-    pub name_to_idx_trie: NameToIndexTrie<D>,
-}
-
-impl<D: NameIndexed> DefAllocator<D> {
-    pub fn alloc(&mut self, name: &SmolStr, mut d: D) -> HIRResult<Idx<D>> {
-        if self.name_to_idx_trie.get(name).is_some() {
-            return Err(HIRError::with_msg(format!(
-                "shadowing is not allowed, {:?} is already defined",
-                name
-            ))
-            .into());
-        }
-        let name_index = self.names.alloc(name.clone());
-        d.set_name_index(name_index);
-
-        let ix = self.definitions.alloc(d);
-        self.name_to_idx_trie.insert(&name, ix);
-        Ok(ix)
-    }
 }
 
 pub type MetaHolder<L, M> = HashMap<Idx<L>, M>;

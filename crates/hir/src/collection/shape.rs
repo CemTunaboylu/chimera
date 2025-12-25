@@ -1,6 +1,6 @@
 use thin_vec::{ThinVec, thin_vec};
 
-use crate::scope::ScopedExprIdx;
+use crate::index_types::ScopedExprIdx;
 
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Dim {

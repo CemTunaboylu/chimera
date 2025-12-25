@@ -4,9 +4,9 @@ use std::{
 };
 
 use crate::{
+    index_types::StrIdx,
     metadata::VarMeta,
     operation::{BinaryOp, UnaryOp},
-    scope::StrIdx,
 };
 
 use super::{
@@ -586,7 +586,7 @@ pub fn infer_stmt(
 #[cfg(test)]
 mod tests {
 
-    use crate::scope::into_idx;
+    use crate::index_types::into_idx;
     use thin_vec::thin_vec;
 
     use super::super::types::Maybe;

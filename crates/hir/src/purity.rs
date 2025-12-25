@@ -6,6 +6,7 @@ use crate::{
     delimited::Block,
     function::{Call, FnDef, On},
     impl_block::Impl,
+    index_types::{ExprIdx, ScopeIdx, Scoped, ScopedExprIdx, ScopedStmtIdx},
     indexing::Indexing,
     jump::Jump,
     let_binding::LetBinding,
@@ -13,10 +14,7 @@ use crate::{
     loops::Loop,
     operation::{BinaryInfix, BinaryOp, Unary, UnaryOp},
     parameter::Param,
-    scope::{
-        ExprIdx, FnSelector, ScopeIdx, Scoped, ScopedExprIdx, ScopedStmtIdx, Selector, StmtIdx,
-        VarSelector,
-    },
+    scope::{Selector, VarSelector},
     statement::Stmt,
     typing::hindley_milner::types::{Maybe, Status, Type},
 };
@@ -240,7 +238,6 @@ impl HIRBuilder {
             Stmt::LetBinding(thin_vec) => self.is_let_binding_pure(thin_vec.as_slice()),
         }
     }
-
     pub fn is_stmt_of_idx_pure(&self, stmt_idx: &ScopedStmtIdx) -> bool {
         let scope = &self.scopes[stmt_idx.scope_idx];
         let stmt = &scope.statements[stmt_idx.elm];

@@ -15,14 +15,13 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     climbing::climb,
+    definition_allocator::NameIndexed,
     errors::HIRError,
+    index_types::{ExprIdx, ScopeIdx, StrIdx, StructDefIdx, placeholder_idx},
     let_binding::LetBinding,
     metadata::VarMeta,
     resolution::{Reference, ResolutionType, Unresolved, resolve},
-    scope::{
-        ExprIdx, MetaHolder, NameIndexed, ScopeIdx, StrIdx, StructDefIdx, StructSelector,
-        placeholder_idx,
-    },
+    scope::{MetaHolder, StructSelector},
     typing::hindley_milner::types::Type,
 };
 
@@ -219,7 +218,7 @@ mod tests {
 
     use ast::{cast_node_into_type, structure::StructDef as ASTStructDef};
 
-    use crate::{builder::tests::ast_root_from, scope::into_idx};
+    use crate::{builder::tests::ast_root_from, index_types::into_idx};
 
     use super::*;
 

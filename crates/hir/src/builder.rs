@@ -13,11 +13,11 @@ use crate::{
     DedupArena, HIRResult,
     collection::canonical::CanonicalBuffer,
     context::{LoweringContext, UsageContext},
+    definition_allocator::NameIndexed,
     hash_cons::FingerPrints,
-    scope::{
-        CollectionLiteralIdx, ExprIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, ScopedExprIdx,
-        ScopedStmtIdx, Selector, Span, StmtIdx, StrIdx, into_idx,
-    },
+    index_types::{CollectionLiteralIdx, ScopeIdx, ScopedExprIdx, ScopedStmtIdx, StrIdx, into_idx},
+    scope::{Scope, ScopeKind, Selector},
+    span::Span,
     statement::Stmt,
 };
 

@@ -1,6 +1,6 @@
 use la_arena::Arena;
 
-use crate::scope::{Scope, ScopeIdx};
+use crate::{index_types::ScopeIdx, scope::Scope};
 
 pub type EnumeratedScope<'c> = (ScopeIdx, &'c Scope);
 

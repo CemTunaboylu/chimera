@@ -2,7 +2,7 @@ use thin_vec::ThinVec;
 
 use crate::{
     collection::{builtin::Op, contract::LayoutContract, expr::TensorExpr},
-    scope::ScopedExprIdx,
+    index_types::ScopedExprIdx,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
@@ -18,6 +18,7 @@ pub struct FusedOp {
 /// - x and y have the same layouts
 /// - x and y is NOT shared elsewhere
 /// - produced by previous Ops
+///
 /// `let z = x.matmul(y).add(relu(x))` requires 2 reads from x, multiple temporaries and forked subgraphs.
 /// To be able to fuse Ops operating on different layouts, fused kernel has to be able to handle layout transform internally.
 pub struct FusionGroup {
