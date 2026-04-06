@@ -14,7 +14,7 @@ pub fn unit_type() -> Type {
     Type::Tuple(thin_vec![])
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd)]
 // TODO: fix this
 pub enum Status {
     Pending(Idx<Unresolved>),
@@ -28,7 +28,7 @@ pub enum Maybe<T: Hash + Eq> {
     Unchecked(ThinVec<T>),
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Type {
     Bool,
     Buffer {
@@ -88,13 +88,8 @@ impl From<&Value> for Type {
                 data_type: data_type.clone(),
             },
             Value::Lambda(callable) => todo!(),
-            Value::Struct(struct_literal) => todo!(), // {
-                                                      // Reference::Unresolved(idx) => todo!(),
-                                                      // Reference::Resolved { name_idx, .. } => Type::Struct {
-                                                      //     key: name_idx,
-                                                      //     fields: struct_literal.internal_with_field_values.data.iter().map(|(_idx, expr_idx)| ).collect::<ThinVec<_>>(),
-                                                      // },
-                                                      // },
+            Value::Struct(struct_literal) => todo!(),
+            Value::LazyInit(lazy_collection) => todo!(),
         }
     }
 }

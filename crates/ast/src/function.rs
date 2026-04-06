@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use smol_str::{SmolStr, ToSmolStr};
 use syntax::{language::SyntaxNode, syntax_kind::SyntaxKind};
 use thin_vec::ThinVec;
@@ -103,6 +105,7 @@ impl TryFrom<&SyntaxNode> for Lambda {
 pub struct FnDef {
     name: SmolStr,
     pub callable: Callable,
+    pub span: Range<usize>,
 }
 
 impl FnDef {
@@ -118,10 +121,11 @@ impl TryFrom<&SyntaxNode> for FnDef {
         let name = get_token_of_errs(fn_def_node, SyntaxKind::Ident)?
             .text()
             .to_smolstr();
-
+        let span: Range<usize> = fn_def_node.text_range().into();
         Ok(Self {
             name,
             callable: Callable::try_from(fn_def_node)?,
+            span,
         })
     }
 }
@@ -197,7 +201,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        ast_root_from, cast_node_into_type,
+        ast_root_from_assert_no_err, cast_node_into_type,
         delimited::Block,
         function::Lambda,
         literal::{Literal, Value},
@@ -211,7 +215,7 @@ mod tests {
     create! {
         happy_path_func_def_test,
         (program, exp_name, ret_type_some, params_count), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let fn_def_node = ast_root.get_root().first_child().unwrap();
             let fn_def = cast_node_into_type::<FnDef>(&fn_def_node);
             assert_eq!(exp_name, fn_def.name());
@@ -272,7 +276,7 @@ mod tests {
     create! {
         happy_path_lambda_test,
         (program, ret_type_some, params_count), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let literal_node = ast_root.get_root().first_child().unwrap();
             let lambda_node = literal_node.first_child().unwrap();
             let lambda= cast_node_into_type::<Lambda>(&lambda_node);
@@ -303,7 +307,7 @@ mod tests {
     create! {
         happy_path_func_call_test,
         (program, exp_name, exp_arg_len), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let call_node = ast_root.get_root().first_child().unwrap();
             let call = cast_node_into_type::<Call>(&call_node);
             assert_eq!(On::Binding(exp_name.into()), call.on);
@@ -323,7 +327,7 @@ mod tests {
     #[test]
     fn detailed_testing_of_complex_call() {
         let program = "foo(me.expectation().as_tensor() - reality.variable_tensor)";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let call_node = ast_root.get_root().first_child().unwrap();
         let call: Call = cast_node_into_type::<Call>(&call_node);
         assert_eq!(call.on, On::Binding("foo".into()));
@@ -347,7 +351,7 @@ mod tests {
     #[test]
     fn detailed_testing_of_lambda_returning_lambda() {
         let program = "|mut a: &mut i32, b: i32| { |f| {a += b*f;} }";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let literal_node = ast_root.get_root().first_child().unwrap();
         let lambda_node = literal_node.first_child().unwrap();
         let lambda: Lambda = cast_node_into_type::<Lambda>(&lambda_node);
@@ -395,7 +399,7 @@ mod tests {
     #[test]
     fn detailed_testing_of_direct_call_on_lambda_literal() {
         let program = "let two = |a| {2*a}(1);";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
         let eq_infix_node = let_binding_node.first_child().unwrap();
         let call_node = eq_infix_node.last_child().unwrap();

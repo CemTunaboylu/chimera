@@ -157,18 +157,9 @@ mod test {
     use crate::syntax_kind::SyntaxKind;
     #[test]
     fn into_thin_vec_for_bitset() {
+        use SyntaxKind::*;
         let mut kinds = thin_vec![
-            SyntaxKind::Literal,
-            SyntaxKind::Plus,
-            SyntaxKind::TyBool,
-            SyntaxKind::RBrace,
-            SyntaxKind::LParen,
-            SyntaxKind::Int,
-            SyntaxKind::Ident,
-            SyntaxKind::AndAnd,
-            SyntaxKind::Semi,
-            SyntaxKind::ColonColon,
-            SyntaxKind::Xor,
+            Literal, Plus, TyBool, RBrace, LParen, Int, Ident, AndAnd, Semi, ColonColon, Xor,
         ];
         kinds.sort();
         let mut expectations = SyntaxKindBitSet::empty();
@@ -182,25 +173,10 @@ mod test {
 
     #[test]
     fn into_thin_vec_deduplicates() {
+        use SyntaxKind::*;
         let mut kinds = thin_vec![
-            SyntaxKind::Literal,
-            SyntaxKind::Plus,
-            SyntaxKind::Semi,
-            SyntaxKind::RBrace,
-            SyntaxKind::LParen,
-            SyntaxKind::Int,
-            SyntaxKind::Ident,
-            SyntaxKind::AndAnd,
-            SyntaxKind::Semi,
-            SyntaxKind::ColonColon,
-            SyntaxKind::RBrace,
-            SyntaxKind::LParen,
-            SyntaxKind::Int,
-            SyntaxKind::Ident,
-            SyntaxKind::AndAnd,
-            SyntaxKind::Semi,
-            SyntaxKind::ColonColon,
-            SyntaxKind::Xor,
+            Literal, Plus, Semi, RBrace, LParen, Int, Ident, AndAnd, Semi, ColonColon, RBrace,
+            LParen, Int, Ident, AndAnd, Semi, ColonColon, Xor,
         ];
         kinds.sort();
         let mut expectations = SyntaxKindBitSet::empty();
@@ -215,16 +191,9 @@ mod test {
 
     #[test]
     fn arithmetic_holds() {
+        use SyntaxKind::*;
         let kinds = thin_vec![
-            SyntaxKind::AndAnd,
-            SyntaxKind::ColonColon,
-            SyntaxKind::Ident,
-            SyntaxKind::Int,
-            SyntaxKind::LParen,
-            SyntaxKind::Literal,
-            SyntaxKind::Plus,
-            SyntaxKind::RBrace,
-            SyntaxKind::Semi,
+            AndAnd, ColonColon, Ident, Int, LParen, Literal, Plus, RBrace, Semi,
         ];
         let all_exp: SyntaxKindBitSet = kinds.clone().as_ref().into();
         let chunked_exp = kinds.chunks(2).fold(SyntaxKindBitSet::empty(), |acc, x| {

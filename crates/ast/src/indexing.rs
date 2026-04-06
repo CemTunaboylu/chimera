@@ -57,7 +57,7 @@ mod tests {
 
     use super::Indexing;
     use crate::{
-        ast_root_from, cast_node_into_type,
+        ast_root_from_assert_no_err, cast_node_into_type,
         expression::Expr,
         literal::{Literal, Value},
         operation::Binary,
@@ -67,7 +67,7 @@ mod tests {
     create! {
         happy_path_indexing_test,
         (program, exp_indexed_text, exp_index_text), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let indexing_node = ast_root.get_root().first_child().unwrap();
             let indexing = cast_node_into_type::<Indexing>(&indexing_node);
             assert_eq!(exp_indexed_text, indexing.indexed.text());
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn detailed_testing_of_complex_call() {
         let program = "matrix[matrix[0].len() -1][0]";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let indexing_node = ast_root.get_root().first_child().unwrap();
         let indexing: Indexing = cast_node_into_type::<Indexing>(&indexing_node);
         assert!(matches!(
@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn happy_path_for_indexing() {
         let program = "random3D()[0][0][0]";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let node = ast_root.get_root().first_child().unwrap();
         let indexing = cast_node_into_type::<Indexing>(&node);
 

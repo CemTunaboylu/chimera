@@ -1,10 +1,8 @@
-use std::ops::Sub;
-
 use lazy_static::lazy_static;
 use lexer::token_kind::TokenKind;
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
-use thin_vec::{ThinVec, thin_vec};
+use thin_vec::ThinVec;
 
 use crate::{RestrictionType, bitset::SyntaxKindBitSet};
 

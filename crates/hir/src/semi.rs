@@ -1,9 +1,9 @@
 use ast::semi::Semi as ASTSemi;
 
-use crate::{HIRResult, builder::HIRBuilder, scope::ExprIdx};
+use crate::{HIRResult, builder::HIRBuilder, index_types::ScopedExprIdx};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Semi(ExprIdx);
+pub struct Semi(pub ScopedExprIdx);
 
 impl HIRBuilder {
     pub fn lower_semi(&mut self, semi: &ASTSemi) -> HIRResult<Semi> {

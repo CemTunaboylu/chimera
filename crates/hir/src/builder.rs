@@ -1,4 +1,6 @@
-use std::fmt::Debug;
+use std::{collections::HashSet, fmt::Debug};
+
+use rustc_hash::{FxBuildHasher, FxHashSet};
 
 use la_arena::{Arena, Idx};
 use miette::Report;
@@ -8,13 +10,14 @@ use thin_vec::ThinVec;
 use ast::{ast::Root as ASTRoot, statement::Stmt as ASTStmt};
 
 use crate::{
-    HIRResult,
-    container::canonical::CanonicalBuffer,
+    DedupArena, HIRResult,
+    collection::canonical::CanonicalBuffer,
     context::{LoweringContext, UsageContext},
-    scope::{
-        ContainerLiteralIdx, NameIndexed, Scope, ScopeIdx, ScopeKind, Selector, Span, StrIdx,
-        into_idx,
-    },
+    definition_allocator::NameIndexed,
+    hash_cons::FingerPrints,
+    index_types::{CollectionLiteralIdx, ScopeIdx, ScopedExprIdx, ScopedStmtIdx, StrIdx, into_idx},
+    scope::{Scope, ScopeKind, Selector},
+    span::Span,
     statement::Stmt,
 };
 
@@ -25,8 +28,9 @@ pub struct HIRBuilder {
     pub(crate) contexts: ThinVec<LoweringContext>,
     pub(crate) current_scope_cursor: ScopeIdx,
     pub(crate) errors: ThinVec<Report>,
-    pub(crate) lowered: ThinVec<Stmt>,
+    pub(crate) expr_purity: HashSet<ScopedExprIdx, FxBuildHasher>,
     pub(crate) scopes: Arena<Scope>,
+    pub(crate) strs: DedupArena<SmolStr>,
     stmts: ThinVec<ASTStmt>,
 }
 
@@ -42,19 +46,22 @@ impl HIRBuilder {
         let master_scope = Scope::new(current_scope_cursor, ScopeKind::Master);
         assert_eq!(current_scope_cursor, scopes.alloc(master_scope));
 
-        let lowered = ThinVec::<Stmt>::new();
-
         let mut stmts = ast_root.statements().collect::<ThinVec<_>>();
         stmts.reverse();
+
+        let expr_purity = FxHashSet::default();
+
+        let strs = DedupArena::new();
 
         Self {
             ast_root,
             contexts,
             current_scope_cursor,
+            expr_purity,
             errors,
-            lowered,
             scopes,
             stmts,
+            strs,
         }
     }
     pub fn start_new_scope(&mut self, with: ScopeKind) -> ScopeIdx {
@@ -67,9 +74,10 @@ impl HIRBuilder {
         self.current_scope_cursor = current_scope.parent;
     }
     pub fn push_usage_context(&mut self, usage: UsageContext) {
+        let statement_idx = self.get_current_scope().statements.len();
         let lowering_ctx = LoweringContext {
             usage,
-            statement_idx: self.lowered.len(),
+            statement_idx,
             scope_idx: self.current_scope_cursor,
         };
         self.contexts.push(lowering_ctx);
@@ -78,7 +86,7 @@ impl HIRBuilder {
         self.contexts.last()
     }
     pub fn get_current_stmt_idx(&self) -> usize {
-        self.lowered.len()
+        self.get_current_scope().statements.len()
     }
     pub fn pop_usage_context(&mut self) {
         self.contexts.pop();
@@ -89,23 +97,26 @@ impl HIRBuilder {
     pub fn get_current_scope(&self) -> &Scope {
         &self.scopes[self.current_scope_cursor]
     }
-    pub fn allocate_span(&mut self, name: &SmolStr, span: Span) {
-        let current_scope = self.get_current_scope_mut();
-        current_scope.allocate_span(name, span);
+    pub fn get_current_scope_idx(&self) -> ScopeIdx {
+        self.current_scope_cursor
     }
-    pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
+    pub fn allocate_span(&mut self, name: &SmolStr, span: impl Into<Span>) {
         let current_scope = self.get_current_scope_mut();
-        current_scope.allocate_string(string)
+        current_scope.allocate_span(name, span.into());
+    }
+    // ! do I need this?
+    pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
+        self.strs.allocate(string)
     }
     pub fn allocate_tensor_literal(
         &mut self,
         tensor_literal: CanonicalBuffer,
-    ) -> ContainerLiteralIdx {
+    ) -> CollectionLiteralIdx {
         let current_scope = self.get_current_scope_mut();
         current_scope.allocate_tensor_literal(tensor_literal)
     }
     // TODO: use context for metadata population
-    pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, elm: E) -> HIRResult<Idx<E>>
+    pub fn allocate<E, S: Selector<E>>(&mut self, name: &SmolStr, elm: E) -> HIRResult<Idx<E>>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
     {
@@ -115,16 +126,13 @@ impl HIRBuilder {
 }
 
 impl Iterator for &mut HIRBuilder {
-    type Item = Stmt;
+    type Item = ScopedStmtIdx;
 
     fn next(&mut self) -> Option<Self::Item> {
         let stmt = self.stmts.pop()?;
-        let stmt = self.lower_statement(&stmt);
-        match stmt {
-            Ok(lowered) => {
-                self.lowered.push(lowered.clone());
-                Some(lowered)
-            }
+        let stmt_id = self.lower_statement_as_idx(&stmt);
+        match stmt_id {
+            Ok(scoped_idx) => Some(scoped_idx),
             Err(err) => {
                 self.errors.push(err);
                 self.next()

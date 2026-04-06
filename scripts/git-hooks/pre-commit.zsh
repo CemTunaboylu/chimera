@@ -32,5 +32,5 @@ fi
 # Run tests for each changed crate
 for crate in "${(k)changed_crates[@]}"; do
     echo "Running tests for crate: $crate"
-    cargo test -p "$crate" || exit 1
+    RUSTFLAGS=-Awarnings cargo test -p "$crate" || exit 1
 done

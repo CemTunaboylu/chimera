@@ -38,13 +38,13 @@ mod tests {
     use smol_str::SmolStr;
 
     use super::*;
-    use crate::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from_assert_no_err, cast_node_into_type};
 
     #[test]
     fn impl_block_for_struct() {
         let program = "impl Point { fn translate(&mut self, by: Point) { self.x += by.x; self.y += by.y; } fn rotate(&mut self, by: Point) { self.rotate_around(&by);} \n}";
         let fn_names = ["translate", "rotate"];
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let impl_block =
             cast_node_into_type::<Impl>(ast_root.get_root().first_child().as_ref().unwrap());
         assert_eq!(Type::Struct(SmolStr::from("Point")), impl_block.of,);

@@ -5,18 +5,19 @@ use crate::{
     HIRResult,
     builder::HIRBuilder,
     control_flow::ControlFlow,
+    expression::Expr,
     impl_block::Impl,
+    index_types::{FnDefIdx, LetBindingIdx, Scoped, ScopedExprIdx, ScopedStmtIdx, StructDefIdx},
     jump::Jump,
     loops::Loop,
     return_stmt::Return,
-    scope::{ExprIdx, FnDefIdx, LetBindingIdx, StructDefIdx},
     semi::Semi,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Stmt {
     ControlFlow(ControlFlow),
-    Expr(ExprIdx),
+    Expr(ScopedExprIdx),
     // Expr(Expr),
     FnDef(FnDefIdx),
     // FnDef(FnDef),
@@ -30,6 +31,25 @@ pub enum Stmt {
 }
 
 impl HIRBuilder {
+    pub fn get_statement(&self, idx: &ScopedStmtIdx) -> &Stmt {
+        let scope = &self.scopes[idx.scope_idx];
+        &scope.statements[idx.elm]
+    }
+    pub fn lower_statement_as_idx(&mut self, stmt: &ASTStmt) -> HIRResult<ScopedStmtIdx> {
+        let lowered_stmt = self.lower_statement(stmt)?;
+        let scope = self.get_current_scope_mut();
+        let idx = scope.allocate_stmt(lowered_stmt);
+        let scoped = Scoped::new(self.get_current_scope_idx(), idx);
+        Ok(scoped)
+    }
+    pub fn does_statement_of_idx_return(&self, stmt_idx: &ScopedStmtIdx) -> bool {
+        let stmt = self.get_statement(stmt_idx);
+        match stmt {
+            Stmt::Return(_) => true,
+            Stmt::Expr(idx) if !matches!(self.get_expr(idx), Expr::Missing) => true,
+            _ => false,
+        }
+    }
     pub fn lower_statement(&mut self, stmt: &ASTStmt) -> HIRResult<Stmt> {
         let lowered = match stmt {
             ASTStmt::ControlFlow(c_flow) => {

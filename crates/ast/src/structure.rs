@@ -127,7 +127,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        ast_root_from, cast_node_into_type,
+        ast_root_from_assert_no_err, cast_node_into_type,
         literal::{Literal, Value},
         types::Type,
     };
@@ -143,7 +143,7 @@ mod tests {
             Type::Struct(SmolStr::new("Item")),
         ];
         let program = "struct Tester { coordinates: tensor<f32><3>, item: Item }";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let struct_def =
             cast_node_into_type::<StructDef>(ast_root.get_root().first_child().as_ref().unwrap());
         assert_eq!("Tester", struct_def.name);
@@ -157,7 +157,7 @@ mod tests {
     fn struct_init() {
         let field_names = ["coordinates", "item"];
         let program = "Tester{ coordinates: origin_tensor, item: origin_item}";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let struct_literal = cast_node_into_type::<StructLiteral>(
             ast_root.get_root().first_child().as_ref().unwrap(),
         );
