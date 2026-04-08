@@ -99,8 +99,8 @@ pub struct Scope {
     pub(crate) statements: Arena<Stmt>,
 }
 
-/// Scope is responsible for structural representation i.e. syntactic structure of programs/sub-porgrams.
-/// It manages visibility, names, lifetimes, let-binding trees, definitions, and enable structural
+/// Scope is responsible for structural representation i.e. syntactic structure of programs/sub-programs.
+/// It manages visibility, names, lifetimes, let-binding trees, definitions, and enables structural
 /// traversal of the source. It is the source of truth for name bindings, original HIR tree, and control flow boundaries
 impl Scope {
     pub fn new(parent: ScopeIdx, kind: ScopeKind) -> Self {
