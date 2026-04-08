@@ -38,12 +38,12 @@ pub struct CollectionMeta {
 
 impl CollectionMeta {
     pub fn with(
-        _common: Common,
+        common: Common,
         collection_examination: CollectionExamination,
         shape: Shape,
     ) -> Self {
         Self {
-            common: Common::default(),
+            common,
             sparse: collection_examination.sparsity.is_sparse(),
             // data_type: collection_examination.unchecked_types(),
             shape: shape.clone(),
