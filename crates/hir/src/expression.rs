@@ -156,7 +156,7 @@ impl HIRBuilder {
             ASTExpr::Unary(unary) => {
                 let lowered_unary = self.lower_unary_operation(unary)?;
                 is_pure = self.is_unary_op_pure(&lowered_unary);
-                Expr::Unary(self.lower_unary_operation(unary)?)
+                Expr::Unary(lowered_unary)
             }
             ASTExpr::VarRef(var_ref) => {
                 // * Note: since we did't resolve it yet, we let user of the ref to assign
