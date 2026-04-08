@@ -5,22 +5,14 @@ use std::{
 
 use core::hash::Hash;
 
-use thin_vec::ThinVec;
-
 use crate::{
     HIRResult,
-    errors::HIRError,
     expression::Expr,
     index_types::{ExprIdx, ScopeIdx, placeholder_idx},
-    literal::Value,
     metadata::Common,
-    typing::hindley_milner::{
-        expression::HMExpr,
-        types::{Maybe, Type},
-    },
 };
 
-use super::{Shape, builtin::Op, layout::Layout};
+use super::{Shape, layout::Layout};
 
 /* TODO:
 - max,min while traversing, but the type must impl. Cmp,
@@ -46,7 +38,7 @@ pub struct CollectionMeta {
 
 impl CollectionMeta {
     pub fn with(
-        common: Common,
+        _common: Common,
         collection_examination: CollectionExamination,
         shape: Shape,
     ) -> Self {

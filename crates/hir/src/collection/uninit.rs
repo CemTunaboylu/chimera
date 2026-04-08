@@ -3,8 +3,7 @@ use std::hash::Hash;
 use thin_vec::ThinVec;
 
 use crate::{
-    builder::HIRBuilder,
-    collection::{builtin::Op, shape::Shape},
+    collection::shape::Shape,
     expression::Expr,
     literal::LazyCollection,
     typing::hindley_milner::types::{Maybe, Type},
@@ -19,8 +18,6 @@ pub enum LazyInit {
     WithAll(Expr, Shape),
     /// from a file
     FromStream(SmolStr),
-    /// from op
-    FromOp(Op),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
