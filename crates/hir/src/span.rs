@@ -14,13 +14,13 @@ impl Debug for Span {
 
 impl PartialOrd for Span {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if let Some(result) = self.start.partial_cmp(&other.end) {
+        if let Some(result) = self.start.partial_cmp(&other.start) {
             match result {
                 Ordering::Greater | Ordering::Less => Some(result),
-                Ordering::Equal => self.end.partial_cmp(&other.start),
+                Ordering::Equal => self.end.partial_cmp(&other.end),
             }
         } else {
-            self.end.partial_cmp(&other.start)
+            self.end.partial_cmp(&other.end)
         }
     }
 }
