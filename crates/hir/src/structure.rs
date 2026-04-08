@@ -9,30 +9,32 @@ use ast::{
     structure::{StructDef as ASTStructDef, StructLiteral as ASTStructLiteral},
     types::Type as ASTType,
 };
+use thin_vec::ThinVec;
 
 use crate::{
     HIRResult,
     builder::HIRBuilder,
     climbing::climb,
+    definition_allocator::NameIndexed,
     errors::HIRError,
+    index_types::{ExprIdx, ScopeIdx, StrIdx, StructDefIdx, placeholder_idx},
     let_binding::LetBinding,
     metadata::VarMeta,
     resolution::{Reference, ResolutionType, Unresolved, resolve},
-    scope::{
-        ExprIdx, MetaHolder, NameIndexed, ScopeIdx, StrIdx, StructDefIdx, StructSelector,
-        placeholder_idx,
-    },
+    scope::{MetaHolder, StructSelector},
     typing::hindley_milner::types::Type,
 };
 
 #[derive(Clone, Debug)]
-pub struct InternalStructure<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> {
+pub struct InternalStructure<TorV: Clone + Debug + Eq + Hash + PartialEq + PartialOrd> {
     pub field_name_to_index: PatriciaMap<u32>,
     pub field_names: Arena<SmolStr>,
     pub data: Arena<TorV>,
     pub scope_idx: ScopeIdx,
 }
-impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> PartialEq for InternalStructure<TorV> {
+impl<TorV: Clone + Debug + Eq + Hash + PartialEq + PartialOrd> PartialEq
+    for InternalStructure<TorV>
+{
     fn eq(&self, other: &Self) -> bool {
         self.scope_idx == other.scope_idx
             && self.data == other.data
@@ -44,8 +46,29 @@ impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> PartialEq for Internal
     }
 }
 
-impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> Eq for InternalStructure<TorV> {}
-impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> Default for InternalStructure<TorV> {
+impl<TorV: Clone + Debug + Eq + Hash + PartialEq + PartialOrd> Eq for InternalStructure<TorV> {}
+
+impl<TorV: Clone + Debug + Eq + Hash + PartialEq + PartialOrd> PartialOrd
+    for InternalStructure<TorV>
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.scope_idx.partial_cmp(&other.scope_idx)
+    }
+}
+
+impl<TorV: Clone + Debug + Eq + Hash + PartialEq + PartialOrd> Hash for InternalStructure<TorV> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.field_name_to_index
+            .iter()
+            .collect::<ThinVec<_>>()
+            .hash(state);
+        self.field_names.hash(state);
+        self.data.hash(state);
+        self.scope_idx.hash(state);
+    }
+}
+
+impl<TorV: Clone + Debug + Eq + Hash + PartialEq + PartialOrd> Default for InternalStructure<TorV> {
     fn default() -> Self {
         Self {
             field_name_to_index: Default::default(),
@@ -56,24 +79,7 @@ impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> Default for InternalSt
     }
 }
 
-impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> Hash for InternalStructure<TorV> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.field_name_to_index
-            .iter()
-            .for_each(|tuple| tuple.hash(state));
-        self.field_names.hash(state);
-        self.data.iter().for_each(|d| d.hash(state));
-        self.scope_idx.hash(state);
-    }
-}
-
-impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> PartialOrd for InternalStructure<TorV> {
-    fn partial_cmp(&self, _other: &Self) -> Option<std::cmp::Ordering> {
-        None
-    }
-}
-
-impl<TorV: Clone + Debug + Hash + PartialEq + PartialOrd> InternalStructure<TorV> {
+impl<TorV: Clone + Debug + Eq + Hash + PartialEq + PartialOrd> InternalStructure<TorV> {
     pub fn new(scope_idx: ScopeIdx) -> Self {
         Self {
             scope_idx,
@@ -167,7 +173,8 @@ impl HIRBuilder {
             internal_with_field_types: internal,
         };
 
-        self.allocate::<StructDef, StructSelector>(name, struct_def)
+        self.allocate::<StructDef, StructSelector>(&name, struct_def)
+            .map(|(_, idx)| idx)
     }
     pub fn lower_struct_ref(&mut self, struct_as_type: &ASTType) -> HIRResult<Unresolved> {
         if let ASTType::Struct(name) = struct_as_type {
@@ -196,7 +203,7 @@ impl HIRBuilder {
         for field in struct_literal.fields.iter() {
             let name = field.name.clone();
             let expr_idx = self.lower_expr_as_idx(&field.value)?;
-            internal.add(name, expr_idx)?;
+            internal.add(name, expr_idx.elm)?;
         }
 
         let struct_literal = StructLiteral {
@@ -212,7 +219,7 @@ mod tests {
 
     use ast::{cast_node_into_type, structure::StructDef as ASTStructDef};
 
-    use crate::{builder::tests::ast_root_from, scope::into_idx};
+    use crate::{builder::tests::ast_root_from, index_types::into_idx};
 
     use super::*;
 

@@ -6,11 +6,12 @@ use ast::control_flow::{
 };
 
 use crate::{
-    HIRResult, builder::HIRBuilder, context::UsageContext, delimited::Block, scope::ExprIdx,
+    HIRResult, builder::HIRBuilder, context::UsageContext, delimited::Block,
+    index_types::ScopedExprIdx,
 };
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Condition(pub ExprIdx);
+pub struct Condition(pub ScopedExprIdx);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Conditional {

@@ -2,3 +2,24 @@
 resolver = "3"
 # members = ["crates/*", "fuzz"]
 members = ["crates/*"]
+
+[workspace.dependencies]
+clap = { version = "4.5.30", features = ["derive"] }
+drop_bomb = "0.1.5"
+la-arena = "0.3.1"
+lazy_static = "1.5.0"
+logos = "0.15.0"
+miette = { version = "7.5.0", features = ["fancy"] }
+num-derive = "0.4.2"
+num-traits = "0.2.19"
+patricia_tree = "0.9.0"
+proc-macro2 = "1"
+quote = "1"
+rowan = "0.16.1"
+rust_decimal = "1.37"
+rustc-hash = "2.1.1"
+smallvec = "1.14.0"
+smol_str = "0.3.2"
+syn = { version = "2", features = ["full"] }
+thin-vec = "0.2.13"
+thiserror = "2.0.11"

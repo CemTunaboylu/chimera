@@ -1,5 +1,5 @@
 use hir_macro::{scoped, with_context};
-use thin_vec::ThinVec;
+use thin_vec::{ThinVec, thin_vec};
 
 use ast::{
     function::{
@@ -13,14 +13,16 @@ use crate::{
     builder::HIRBuilder,
     climbing::climb,
     context::UsageContext,
+    definition_allocator::NameIndexed,
     delimited::Block,
+    index_types::{FnDefIdx, ScopeIdx, ScopedExprIdx, StrIdx, placeholder_idx},
     literal::Literal,
+    metadata::{Common, FnMeta, Usage, Usages},
     mut_clone_with_err,
     parameter::Param,
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
-    scope::{
-        ExprIdx, FnDefIdx, FnSelector, NameIndexed, ScopeIdx, ScopeKind, StrIdx, placeholder_idx,
-    },
+    scope::{FnSelector, ScopeKind},
+    span::Span,
     typing::hindley_milner::types::Type,
 };
 
@@ -39,6 +41,7 @@ pub struct Callable {
 pub struct FnDef {
     pub name_index: StrIdx,
     pub callable: Callable,
+    pub span: Span,
     pub scope_idx: ScopeIdx,
 }
 
@@ -56,13 +59,14 @@ impl Default for FnDef {
         Self {
             name_index: placeholder_idx(),
             callable: Default::default(),
+            span: Default::default(),
             scope_idx: placeholder_idx(),
         }
     }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct FnArg(pub ExprIdx);
+pub struct FnArg(pub ScopedExprIdx);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum On {
@@ -83,6 +87,11 @@ pub enum MayNeedResolution {
 }
 
 impl HIRBuilder {
+    #[with_context(UsageContext::FnArg)]
+    pub fn lower_fn_arg(&mut self, fn_arg: &ASTFnArg) -> HIRResult<FnArg> {
+        let expr_id = self.lower_expr_as_idx(&fn_arg.0)?;
+        Ok(FnArg(expr_id))
+    }
     pub fn lower_fn_args(&mut self, fn_args: &[ASTFnArg]) -> HIRResult<ThinVec<FnArg>> {
         let mut arguments = ThinVec::with_capacity(fn_args.len());
 
@@ -117,11 +126,11 @@ impl HIRBuilder {
     #[with_context(UsageContext::Return)]
     pub fn lower_return_type(&mut self, callable: &ASTCallable) -> HIRResult<Option<RetType>> {
         let mut return_type = None;
-        if let Some(ret_type) = callable.return_type() {
-            if let Some(t) = ret_type.return_type() {
-                let low_type = self.lower_type(&t)?;
-                return_type = Some(RetType(low_type));
-            }
+        if let Some(ret_type) = callable.return_type()
+            && let Some(t) = ret_type.return_type()
+        {
+            let low_type = self.lower_type(&t)?;
+            return_type = Some(RetType(low_type));
         }
         Ok(return_type)
     }
@@ -150,22 +159,48 @@ impl HIRBuilder {
 
     pub fn lower_fn_def(&mut self, fn_def: &ASTFnDef) -> HIRResult<FnDefIdx> {
         let name = fn_def.name().clone();
+        let span = fn_def.span.clone();
+        self.allocate_span(&name, span.clone());
         let scope_idx = self.current_scope_cursor;
 
         let callable = self.lower_callable(&fn_def.callable)?;
 
-        let low_fn_def = FnDef {
+        let mut low_fn_def = FnDef {
             callable,
             name_index: placeholder_idx(),
+            span: span.clone().into(),
             scope_idx,
         };
 
-        self.allocate::<FnDef, FnSelector>(name, low_fn_def)
+        let (true_name_idx, fn_def_idx) =
+            self.allocate::<FnDef, FnSelector>(&name, low_fn_def.clone())?;
+        low_fn_def.name_index = true_name_idx;
+
+        self.allocate_fn_meta(&low_fn_def, fn_def_idx)?;
+        Ok(fn_def_idx)
     }
-    #[with_context(UsageContext::FnArg)]
-    pub fn lower_fn_arg(&mut self, fn_arg: &ASTFnArg) -> HIRResult<FnArg> {
-        let expr_id = self.lower_expr_as_idx(&fn_arg.0)?;
-        Ok(FnArg(expr_id))
+    pub fn allocate_fn_meta(&mut self, fn_def: &FnDef, fn_def_idx: FnDefIdx) -> HIRResult<()> {
+        let def = Usage {
+            kind: UsageContext::Def,
+            span: fn_def.span,
+            scope_idx: fn_def.scope_idx,
+            stmt_idx: self.get_current_stmt_idx(),
+        };
+        let common = Common {
+            purity: self.fn_def_purity(fn_def),
+            refs_as_stmt_indices: thin_vec![],
+        };
+        let fn_meta = FnMeta {
+            common,
+            def,
+            usages: Usages::new(),
+            inline_hint: false,
+            is_recursive: self.is_recursive(&fn_def.callable, &fn_def.name_index),
+            is_cyclic: false,
+        };
+        let scope = self.get_current_scope_mut();
+        scope.metadata.fns.insert(fn_def_idx, fn_meta);
+        Ok(())
     }
 }
 
@@ -178,7 +213,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        builder::tests::ast_root_from, literal::Value, scope::into_idx, statement::Stmt,
+        builder::tests::ast_root_from,
+        index_types::{Scoped, into_idx},
+        literal::Value,
+        statement::Stmt,
         typing::hindley_milner::types::Status,
     };
 
@@ -308,7 +346,7 @@ mod tests {
         ] = &params
         {
             assert_eq!(&SmolStr::from("i"), name);
-            assert_eq!(false, *is_mut);
+            assert!(!is_mut);
             assert_eq!(
                 Type::Ptr {
                     of: Box::new(Type::StructAsType(Status::Pending(placeholder_idx())),),
@@ -342,21 +380,22 @@ mod tests {
         if let Literal(Value::Lambda(callable)) = lambda_literal {
             if let &[Param::Generic { name, is_mut }] = &callable.parameters.as_slice() {
                 assert_eq!(&SmolStr::from("i"), name);
-                assert_eq!(false, *is_mut);
+                assert!(!is_mut);
             } else {
                 unreachable!()
             }
             assert_eq!(&RetType(Type::Bool), callable.return_type.as_ref().unwrap());
             let Block {
-                scope_idx,
-                returns,
-                statements,
-                ..
+                scope_idx, returns, ..
             } = callable.body;
             // note: scopeIdx(2) since lower_fn_params_and_body starts a scope and then Block starts its own
             assert_eq!(into_idx(2), scope_idx);
-            assert_eq!(&[0], returns.as_slice());
-            assert_eq!(&[Stmt::Expr(into_idx(1))], statements.as_slice());
+            let scoped_return = Scoped::new(scope_idx, into_idx(0));
+            assert_eq!(&[scoped_return], returns.as_slice());
+            let block_scope = &hir_builder.scopes[scope_idx];
+            assert_eq!(1, block_scope.statements.len());
+            let scoped = Scoped::new(scope_idx, into_idx(1));
+            assert_eq!(Stmt::Expr(scoped), block_scope.statements[into_idx(0)]);
         } else {
             unreachable!()
         }
@@ -380,8 +419,9 @@ mod tests {
         };
 
         assert_eq!(SmolStr::from("foo"), unresolved_call.name);
+        let scoped = Scoped::new(into_idx(0), into_idx(1));
         assert_eq!(
-            Baggage::Arg(thin_vec![FnArg(into_idx(1))]),
+            Baggage::Arg(thin_vec![FnArg(scoped)]),
             unresolved_call.baggage
         );
         assert_eq!(ResolutionType::Fn, unresolved_call.for_type);
@@ -406,27 +446,26 @@ mod tests {
         if let On::Literal(Literal(Value::Lambda(callable))) = call_lambda_literal.on {
             if let &[Param::Generic { name, is_mut }] = &callable.parameters.as_slice() {
                 assert_eq!(&SmolStr::from("i"), name);
-                assert_eq!(false, *is_mut);
+                assert!(!is_mut);
             } else {
                 unreachable!()
             }
             assert_eq!(&RetType(Type::Bool), callable.return_type.as_ref().unwrap());
             let Block {
-                scope_idx,
-                returns,
-                statements,
-                ..
+                scope_idx, returns, ..
             } = callable.body;
             // note: scopeIdx(2) since lower_fn_params_and_body starts a scope and then Block starts its own
             assert_eq!(into_idx(2), scope_idx);
-            assert_eq!(&[0], returns.as_slice());
-            assert_eq!(&[Stmt::Expr(into_idx(1))], statements.as_slice());
+            let scoped_return = Scoped::new(scope_idx, into_idx(0));
+            assert_eq!(&[scoped_return], returns.as_slice());
+            let block_scope = &hir_builder.scopes[scope_idx];
+            assert_eq!(1, block_scope.statements.len());
+            let scoped = Scoped::new(scope_idx, into_idx(1));
+            assert_eq!(Stmt::Expr(scoped), block_scope.statements[into_idx(0)]);
         } else {
             unreachable!()
         }
-        assert_eq!(
-            &[FnArg(into_idx(1))],
-            call_lambda_literal.arguments.as_slice()
-        );
+        let scoped = Scoped::new(into_idx(0), into_idx(1));
+        assert_eq!(&[FnArg(scoped)], call_lambda_literal.arguments.as_slice());
     }
 }

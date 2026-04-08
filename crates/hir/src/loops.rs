@@ -4,7 +4,7 @@ use thin_vec::ThinVec;
 
 use crate::{
     HIRResult, builder::HIRBuilder, context::UsageContext, control_flow::Condition,
-    delimited::Block, scope::ExprIdx,
+    delimited::Block, index_types::ScopedExprIdx,
 };
 
 use ast::loops::{In as ASTIn, Loop as ASTLoop};
@@ -14,7 +14,7 @@ use ast::loops::{In as ASTIn, Loop as ASTLoop};
 pub struct Identifiers(pub ThinVec<SmolStr>);
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct In(ExprIdx);
+pub struct In(pub ScopedExprIdx);
 
 // TODO: lower loops into a single structure
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]

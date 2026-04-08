@@ -80,19 +80,19 @@ impl TryFrom<SyntaxNode> for Stmt {
 mod tests {
 
     use super::*;
-    use crate::{ast_root_from, cast_node_into_type};
+    use crate::{ast_root_from_assert_no_err, cast_node_into_type};
     use parameterized_test::create;
 
     create! {
         create_stmt_test,
         (program), {
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let stmt_node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Stmt>(&stmt_node);
         }
     }
     create_stmt_test! {
-        control_flow_just_if: "if is_ok { return self.block() }",
+        control_flow_just_if: "if is_ok { return self.block(); }",
         control_flow_just_if_else: "if is_ok { return self.block(); } else { return self.alternative(); }",
         control_flow_just_if_elif_else: "if is_red { RED } elif is_blue { BLUE } else { GREEN }",
         expr: "weights[0][0][0]",
@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn let_binding() {
         let program = "let diff_norm = (point_1.locus() - point_2.locus()).normalize();";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let let_binding_node = ast_root.get_root().first_child().unwrap();
         cast_node_into_type::<Stmt>(&let_binding_node);
     }

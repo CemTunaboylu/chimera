@@ -6,7 +6,8 @@ use ast::impl_block::Impl as ASTImpl;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    scope::{FnDefIdx, ScopeIdx, ScopeKind},
+    index_types::{FnDefIdx, ScopeIdx},
+    scope::ScopeKind,
     typing::hindley_milner::types::Type,
 };
 
@@ -41,7 +42,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        builder::tests::ast_root_from, scope::into_idx, typing::hindley_milner::types::Status,
+        builder::tests::ast_root_from, index_types::into_idx, typing::hindley_milner::types::Status,
     };
 
     #[test]

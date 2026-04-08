@@ -5,20 +5,28 @@ use syntax::language::SyntaxNode;
 use thin_vec::{ThinVec, thin_vec};
 
 use crate::{
-    HIRResult, Spanned,
+    HIRResult, SpannedIdx,
     builder::HIRBuilder,
     context::UsageContext,
     errors::HIRError,
-    scope::{ExprIdx, Span},
+    expression::Expr,
+    index_types::{ScopeIdx, Scoped, ScopedExprIdx},
+    span::Span,
 };
 
 use ast::{expression::Expr as ASTExpr, indexing::Indexing as ASTIndexing};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct Indexing {
-    pub reference: Spanned<ExprIdx>,
-    pub indices: ThinVec<Spanned<ExprIdx>>,
+    pub scope_idx: ScopeIdx,
+    pub reference: SpannedIdx<Expr>,
+    pub indices: ThinVec<SpannedIdx<Expr>>,
     pub span: Span,
+}
+impl Indexing {
+    pub fn scoped_reference(&self) -> ScopedExprIdx {
+        Scoped::new(self.scope_idx, self.reference.index)
+    }
 }
 
 impl HIRBuilder {
@@ -38,8 +46,9 @@ impl HIRBuilder {
         let mut ast_expr_as_index = ast_indexing.index().map_err(HIRError::from_err)?;
 
         let mut expr_as_index_idx = self.try_lowering_expr_as_idx(Some(ast_expr_as_index))?;
-        let mut indices = thin_vec![Spanned::new(
-            expr_as_index_idx,
+        let mut indices = thin_vec![SpannedIdx::new(
+            // by deduction, we know that they belong to the same scope
+            expr_as_index_idx.elm,
             get_span(&ast_indexing.index)
         )];
 
@@ -50,7 +59,11 @@ impl HIRBuilder {
 
                 ast_expr_as_index = indexing.index().map_err(HIRError::from_err)?;
                 expr_as_index_idx = self.lower_expr_as_idx(&ast_expr_as_index)?;
-                indices.push(Spanned::new(expr_as_index_idx, get_span(&indexing.index)));
+                indices.push(SpannedIdx::new(
+                    // by deduction, we know that they belong to the same scope
+                    expr_as_index_idx.elm,
+                    get_span(&indexing.index),
+                ));
                 continue;
             }
             break;
@@ -61,14 +74,15 @@ impl HIRBuilder {
 
         // ! reference is not resolved yet
         let reference_idx = self.lower_expr_as_idx(&ast_expr_being_indexed)?;
-        let reference = Spanned::new(reference_idx, span_of_indexed);
+        let reference = SpannedIdx::new(reference_idx.elm, span_of_indexed);
         // Ok(Unresolved::baggaged(
         //     name,
         //     Baggage::Index(lowered_indices),
         //     ResolutionType::Container(span),
         // ))
-
+        let scope_idx = self.get_current_scope_idx();
         Ok(Indexing {
+            scope_idx,
             reference,
             indices,
             span,
@@ -83,15 +97,14 @@ mod tests {
 
     use super::*;
     use crate::{
-        container::Shape,
         expression::Expr,
-        literal::{Literal, Value},
+        literal::{LazyCollection, Literal, Value},
         resolution::{Reference, Unresolved},
-        scope::into_idx,
-        typing::hindley_milner::types::{Maybe, Type},
     };
 
-    use ast::{ast_root_from, cast_node_into_type, indexing::Indexing as ASTIndexing};
+    use ast::{
+        ast_root_from_assert_no_err, cast_node_into_type, indexing::Indexing as ASTIndexing,
+    };
 
     fn unresolved_for_var_ref(name: &str) -> Unresolved {
         let span: Span = (0..name.len()).into();
@@ -104,7 +117,7 @@ mod tests {
     create! {
         happy_path_var_ref_indexing_test,
         (program, unresolved_for_reference, exp_indice_len), {
-            let ast_root = ast_root_from(program);
+            let ast_root = ast_root_from_assert_no_err(program);
             let indexing_node = ast_root.get_root().first_child().unwrap();
             let ast_indexing = cast_node_into_type::<ASTIndexing>(&indexing_node);
             let mut hir = HIRBuilder::new(ast_root);
@@ -112,7 +125,7 @@ mod tests {
             let indexing = hir.lower_indexing(&ast_indexing).expect("should have been lowered");
 
             let expr_idx = indexing.reference.index;
-            let expr = hir.get_expr(expr_idx);
+            let expr = hir.get_expr(&Scoped::new(indexing.scope_idx, expr_idx));
 
             match expr {
                 Expr::VarRef(Reference::Unresolved(unresolved_idx)) => {
@@ -142,7 +155,7 @@ mod tests {
     #[test]
     fn detailed_testing_of_buffer_literal_indexing() {
         let program = "[ [0],[0],[1] ][0][0]";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let indexing_node = ast_root.get_root().first_child().unwrap();
         let ast_indexing = cast_node_into_type::<ASTIndexing>(&indexing_node);
         let mut hir = HIRBuilder::new(ast_root);
@@ -152,34 +165,16 @@ mod tests {
             .expect("should have been lowered");
 
         let expr_idx = indexing.reference.index;
-        let literal = hir.get_expr(expr_idx);
-        if let Expr::Literal(Literal(Value::Buffer {
-            idx,
-            shape,
-            data_type,
-        })) = literal
-        {
-            assert_eq!(*idx, into_idx(0));
-            let expected_shape = Shape::Buffer(thin_vec![3, 1]);
-            assert_eq!(*shape, expected_shape);
-            assert_eq!(*data_type, Maybe::Checked(Box::new(Type::I32)));
+        let literal = hir.get_expr(&Scoped::new(indexing.scope_idx, expr_idx));
 
-            let canonical_container = hir
-                .get_canonical_container_with(*idx)
-                .expect("should have a canonical container at that index");
-            assert_eq!(
-                canonical_container.data,
-                thin_vec![into_idx(3), into_idx(4), into_idx(5)] // first the indices will be inserted, thus values are of later indices
-            );
-            assert_eq!(canonical_container.shape, expected_shape);
-        } else {
-            panic!("should have been buffer literal")
-        }
-
+        assert!(matches!(
+            literal,
+            Expr::Literal(Literal(Value::LazyInit(LazyCollection::Buffer(_))))
+        ));
         assert_eq!(indexing.indices.len(), 2);
         for ix in indexing.indices {
             let idx = ix.index;
-            let expr = hir.get_expr(idx);
+            let expr = hir.get_expr(&Scoped::new(indexing.scope_idx, idx));
             assert_eq!(expr, &Expr::Literal(Literal(Value::Int(0))));
         }
     }

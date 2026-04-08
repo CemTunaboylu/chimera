@@ -5,7 +5,7 @@ The goal is to learn **compiler engineering**, **type systems**, and **optimizat
 
 ---
 
-## ✨ Current Features
+## Current Features
 - **Concrete Syntax Tree (CST)** using [Rowan] for lossless parsing.
 - **Pseudo-Abstract Syntax Tree (AST)**: partially abstracted, lazy structure built atop CST.
 - **High-Level Intermediate Representation (HIR)**: abstraction layer for analysis and optimizations.
@@ -20,7 +20,7 @@ The goal is to learn **compiler engineering**, **type systems**, and **optimizat
 
 ---
 
-## 📚 Technical Highlights
+## Technical Highlights
 - **Rowan-based CST**: fast, lossless syntax tree for initial parsing.
 - **Lazy AST Construction**: avoids building redundant subtrees; prepares for fast HIR generation.
 - **Tensor Memory Handling**:  
@@ -31,7 +31,7 @@ The goal is to learn **compiler engineering**, **type systems**, and **optimizat
 
 ---
 
-## 🛠️ Current Focus
+## Current Focus
 - **Complete HIR Construction**: clean AST-to-HIR transformation.
 - **Finish Hindley-Milner Typing**:  
   - Support for lambdas, tensor literals, struct literals.
@@ -44,7 +44,7 @@ The goal is to learn **compiler engineering**, **type systems**, and **optimizat
 
 ---
 
-## 📋 Quick BNF Preview
+## Quick BNF Preview
 Example snippet of Chimera’s syntax rules:
 
 ```
@@ -60,7 +60,7 @@ Atom ::= Number | '(' Expr ')'
 
 ```
 
-## 📋 Binding example for Pratt parsing 
+## Binding example for Pratt parsing 
     Pratt parsing 
     1 + 2 * 3 - var.to_int()
 
@@ -68,7 +68,7 @@ Atom ::= Number | '(' Expr ')'
        10    10.1    11     11.1   10     10.1    13    13.1
 
 
-## 📋 A quick example for CST -> AST -> HIR 
+## A quick example for CST -> AST -> HIR 
 → `let p = i + 314`
 ```
 CST: 
@@ -136,7 +136,7 @@ VarDef(
 ),
 ```
 
-## 🧩 Longer-Term Ideas
+## Longer-Term Ideas
 	•	Lifetime analysis
 	•	Borrow checker logic (inspired by Rust)
 	•	Escape analysis and move semantics
@@ -144,7 +144,7 @@ VarDef(
 	•	Automatic layout optimizations for tensors/buffers 
 	•	Sparse tensor handling 
 
-## 🚀 Why This Project Matters (to me)
+## Why This Project Matters (to me)
 
 Chimera is not just about writing a language —
 it’s about learning real-world compiler techniques:
@@ -152,7 +152,7 @@ it’s about learning real-world compiler techniques:
 	•	Thinking about memory layouts and optimizations.
 	•	Building infrastructure that can evolve into a JIT or MLIR lowering.
 
-## 🛤️ Near-Term TODOs
+## Near-Term TODOs
 	•	Finalize lazy buffer/tensor AST handling.
 	•	HIR preparation for types and scopes.
 	•	Full Hindley-Milner type inference pass.
@@ -160,7 +160,7 @@ it’s about learning real-world compiler techniques:
 	•	Tests for type unification and scope resolution.
 
 
-## ⚡ Acknowledgments
+## Acknowledgments
 
 Built with heavy inspiration from Rust, Swift, and other modern programming languages.
 Core parsing powered by the fantastic Rowan syntax tree library.

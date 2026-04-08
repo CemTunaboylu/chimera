@@ -1,4 +1,5 @@
 use ast::literal::{Literal as ASTLiteral, Value as ASTValue};
+use std::hash::Hash;
 
 use rust_decimal::Decimal;
 use thin_vec::ThinVec;
@@ -6,29 +7,60 @@ use thin_vec::ThinVec;
 use crate::{
     HIRResult,
     builder::HIRBuilder,
-    container::{Shape, canonical::CanonicalBuffer, layout::Layout},
+    collection::shape::Shape,
     function::Callable,
-    scope::{ContainerLiteralIdx, StrIdx},
+    index_types::{ScopedCollectionLiteralIdx, StrIdx},
     structure::StructLiteral,
     typing::hindley_milner::types::{Maybe, Type},
 };
+
+#[derive(Clone, Debug)]
+pub enum LazyCollection {
+    Buffer(ASTValue),
+    Tensor(ASTValue),
+}
+
+impl Eq for LazyCollection {}
+
+impl PartialEq for LazyCollection {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Buffer(l0), Self::Buffer(r0)) => l0 == r0,
+            (Self::Tensor(l0), Self::Tensor(r0)) => l0 == r0,
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd for LazyCollection {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        todo!()
+    }
+}
+
+impl Hash for LazyCollection {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        core::mem::discriminant(self).hash(state);
+    }
+}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Value {
     Bool(bool),
     Buffer {
-        idx: ContainerLiteralIdx,
+        idx: ScopedCollectionLiteralIdx,
         shape: Shape,
         data_type: Maybe<Type>,
     },
     Char(char),
     Float(Decimal),
     Lambda(Callable),
+    LazyInit(LazyCollection),
     Int(i32),
     Str(StrIdx),
     Struct(StructLiteral),
     Tensor {
-        idx: ContainerLiteralIdx,
+        idx: ScopedCollectionLiteralIdx,
         shape: ThinVec<Option<usize>>,
         data_type: Maybe<Type>,
     },
@@ -68,25 +100,34 @@ impl HIRBuilder {
                 let c = self.lower_callable(&lambda.0)?;
                 Value::Lambda(c)
             }
-            // TODO: fix here!
-            ASTValue::Buffer(buffer_tree) => {
-                let (ten_meta, flattened) = Self::flatten_buffer_tree(self, &buffer_tree)?;
-                let canonical_buffer_literal =
-                    CanonicalBuffer::new(flattened, Layout::row_major, &ten_meta);
-                let canonical_buffer_idx = self.allocate_tensor_literal(canonical_buffer_literal);
-                Value::Buffer {
-                    idx: canonical_buffer_idx,
-                    shape: ten_meta.shape.clone(),
-                    data_type: Maybe::Checked(Box::new(Type::I32)), // TODO: FIX ME: for now a dyummy default value to make tests pass
-                                                                    // data_type: ten_meta.data_type.clone(),
-                }
+            // to be able to decide the layout and materialize, we lower to a LazyInit with LazyCollection
+            buffer_value if matches!(buffer_value, ASTValue::Buffer(_)) => {
+                let lazy_collection = LazyCollection::Buffer(buffer_value);
+                Value::LazyInit(lazy_collection)
             }
-            ASTValue::Tensor(buffer_tree) => {
-                todo!()
+            // to be able to decide the layout and materialize, we lower to a LazyInit with LazyCollection
+            tensor_value if matches!(tensor_value, ASTValue::Tensor(_)) => {
+                let lazy_collection = LazyCollection::Tensor(tensor_value);
+                Value::LazyInit(lazy_collection)
             }
             primitive => Value::from(&primitive),
         };
         Ok(Literal(value))
+    }
+
+    pub fn materialize(&mut self, lazy_collection: &LazyCollection) -> HIRResult<Literal> {
+        // let (ten_meta, flattened) = Self::flatten_buffer_tree(self, &buffer_tree)?;
+        // let canonical_buffer_literal =
+        //     CanonicalBuffer::new(flattened, Layout::row_major, &ten_meta);
+        // let canonical_buffer_idx = self.allocate_tensor_literal(canonical_buffer_literal);
+        // let scope_idx = self.get_current_scope_idx();
+        // Value::Buffer {
+        //     idx: Scoped::new(scope_idx, canonical_buffer_idx),
+        //     shape: ten_meta.shape.clone(),
+        //     data_type: Maybe::Checked(Box::new(Type::I32)), // TODO: FIX ME: for now a dummy default value to make tests pass
+        //                                                     // data_type: ten_meta.data_type.clone(),
+        // }
+        todo!()
     }
 }
 
@@ -97,9 +138,10 @@ mod tests {
     use super::*;
     use crate::{
         builder::tests::ast_root_from,
+        index_types::{ExprIdx, into_idx},
         literal::Value,
         resolution::Reference,
-        scope::{ExprIdx, MetaHolder, into_idx},
+        scope::MetaHolder,
         structure::{InternalStructure, StructRef},
     };
 

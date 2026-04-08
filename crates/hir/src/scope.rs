@@ -1,81 +1,27 @@
 use crate::{
     HIRResult,
-    container::canonical::CanonicalBuffer,
-    errors::HIRError,
+    collection::{canonical::CanonicalBuffer, meta::CollectionMeta, uninit::LazyInit},
+    definition_allocator::{DefAllocator, NameIndexed},
     expression::Expr,
     function::FnDef,
+    index_types::*,
     let_binding::LetBinding,
     metadata::{FnMeta, StructMeta, VarMeta},
     resolution::Unresolved,
+    span::Span,
+    statement::Stmt,
     structure::StructDef,
 };
-use la_arena::{Arena, Idx, RawIdx};
+use la_arena::{Arena, Idx};
 use patricia_tree::PatriciaMap;
 use smol_str::SmolStr;
 
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
-
-pub type ExprIdx = Idx<Expr>;
-pub type FnDefIdx = Idx<FnDef>;
-pub type ScopeIdx = Idx<Scope>;
-pub type StrIdx = Idx<SmolStr>;
-pub type StructDefIdx = Idx<StructDef>;
-pub type ContainerLiteralIdx = Idx<CanonicalBuffer>;
-pub type LetBindingIdx = Idx<LetBinding>;
-
-pub type NameToIndexTrie<T> = PatriciaMap<Idx<T>>;
-
-#[derive(Clone, Copy, Default, Eq, Hash, PartialEq)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl Debug for Span {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}..{}", self.start, self.end))
-    }
-}
-
-impl PartialOrd for Span {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        if let Some(result) = self.start.partial_cmp(&other.end) {
-            match result {
-                Ordering::Greater | Ordering::Less => Some(result),
-                Ordering::Equal => self.end.partial_cmp(&other.start),
-            }
-        } else {
-            self.end.partial_cmp(&other.start)
-        }
-    }
-}
-
-impl From<Range<usize>> for Span {
-    fn from(value: Range<usize>) -> Self {
-        Self {
-            start: value.start,
-            end: value.end,
-        }
-    }
-}
-
-pub(crate) fn into_idx<T>(from: u32) -> Idx<T> {
-    Idx::from_raw(RawIdx::from_u32(from))
-}
-
-pub(crate) fn placeholder_idx<FOR>() -> Idx<FOR> {
-    Idx::from_raw(RawIdx::from_u32(0))
-}
+use std::{collections::HashMap, fmt::Debug};
 
 fn expr_arena_with_missing() -> Arena<Expr> {
     let mut arena = Arena::new();
     _ = arena.alloc(Expr::Missing);
     arena
-}
-
-pub trait NameIndexed {
-    fn set_name_index(&mut self, ix: StrIdx);
-    fn get_name_index(&self) -> StrIdx;
 }
 
 #[derive(Debug)]
@@ -87,32 +33,6 @@ pub enum ScopeKind {
     Struct,
 }
 
-#[derive(Debug, Default)]
-pub struct DefAllocator<D: NameIndexed> {
-    pub names: Arena<SmolStr>,
-    pub name_to_name_idx: HashMap<SmolStr, StrIdx>,
-    pub definitions: Arena<D>,
-    pub name_to_idx_trie: NameToIndexTrie<D>,
-}
-
-impl<D: NameIndexed> DefAllocator<D> {
-    pub fn alloc(&mut self, name: SmolStr, mut d: D) -> HIRResult<Idx<D>> {
-        if self.name_to_idx_trie.get(&name).is_some() {
-            return Err(HIRError::with_msg(format!(
-                "shadowing is not allowed, {:?} is already defined",
-                name
-            ))
-            .into());
-        }
-        let name_index = self.names.alloc(name.clone());
-        d.set_name_index(name_index);
-
-        let ix = self.definitions.alloc(d);
-        self.name_to_idx_trie.insert(&name, ix);
-        Ok(ix)
-    }
-}
-
 pub type MetaHolder<L, M> = HashMap<Idx<L>, M>;
 
 #[derive(Debug, Default)]
@@ -120,12 +40,13 @@ pub struct MetadataStore {
     pub vars: MetaHolder<LetBinding, VarMeta>,
     pub fns: MetaHolder<FnDef, FnMeta>,
     pub structs: MetaHolder<StructDef, StructMeta>,
+    pub buffers: MetaHolder<CanonicalBuffer, CollectionMeta>,
 }
 pub trait Selector<E: Clone + Debug + PartialEq + NameIndexed> {
     fn select_alloc(scope: &Scope) -> &DefAllocator<E>;
     fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<E>;
 }
-// note: container refs are also variable refs.
+// Note: Collection refs are also variable refs.
 pub struct VarSelector {}
 impl Selector<LetBinding> for VarSelector {
     fn select_alloc(scope: &Scope) -> &DefAllocator<LetBinding> {
@@ -167,14 +88,20 @@ pub struct Scope {
 
     pub(crate) metadata: MetadataStore,
 
-    pub(crate) strs: Arena<SmolStr>,
-    pub(crate) tensor_literals: Arena<CanonicalBuffer>,
+    // ! TODO: have literals in a separate arena
     pub(crate) buffer_literals: Arena<CanonicalBuffer>,
+    pub(crate) lazy_inits: Arena<LazyInit>,
+    pub(crate) tensor_literals: Arena<CanonicalBuffer>,
 
     pub(crate) to_resolve: Arena<Unresolved>,
     pub(crate) name_to_spans: PatriciaMap<Span>,
+
+    pub(crate) statements: Arena<Stmt>,
 }
 
+/// Scope is responsible for structural representation i.e. syntactic structure of programs/sub-programs.
+/// It manages visibility, names, lifetimes, let-binding trees, definitions, and enables structural
+/// traversal of the source. It is the source of truth for name bindings, original HIR tree, and control flow boundaries
 impl Scope {
     pub fn new(parent: ScopeIdx, kind: ScopeKind) -> Self {
         let exprs = expr_arena_with_missing();
@@ -185,12 +112,14 @@ impl Scope {
 
         let metadata = MetadataStore::default();
 
-        let strs = Arena::<SmolStr>::new();
-        let tensor_literals = Arena::<CanonicalBuffer>::new();
         let buffer_literals = Arena::<CanonicalBuffer>::new();
+        let lazy_inits = Arena::<LazyInit>::new();
+        let tensor_literals = Arena::<CanonicalBuffer>::new();
 
         let to_resolve = Arena::<Unresolved>::new();
         let name_to_spans = PatriciaMap::<Span>::new();
+
+        let statements = Arena::new();
 
         Self {
             kind,
@@ -200,11 +129,12 @@ impl Scope {
             struct_allocator,
             variable_allocator,
             metadata,
-            strs,
-            tensor_literals,
             buffer_literals,
+            lazy_inits,
+            tensor_literals,
             to_resolve,
             name_to_spans,
+            statements,
         }
     }
 
@@ -222,27 +152,33 @@ impl Scope {
             (name_idx, *idx)
         })
     }
-    pub fn allocate<E, S: Selector<E>>(&mut self, name: SmolStr, elm: E) -> HIRResult<Idx<E>>
+    pub fn allocate<E, S: Selector<E>>(
+        &mut self,
+        name: &SmolStr,
+        elm: E,
+    ) -> HIRResult<(StrIdx, Idx<E>)>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
     {
         let allocator = S::select_alloc_mut(self);
-        allocator.alloc(name, elm)
+        allocator.alloc(&name, elm)
     }
-
     pub fn allocate_expr(&mut self, expr: Expr) -> ExprIdx {
         self.exprs.alloc(expr)
+    }
+    pub fn allocate_stmt(&mut self, stmt: Stmt) -> StmtIdx {
+        self.statements.alloc(stmt)
     }
     pub fn allocate_span(&mut self, name: &SmolStr, span: Span) {
         self.name_to_spans.insert(name, span);
     }
-    pub fn allocate_string(&mut self, string: SmolStr) -> StrIdx {
-        self.strs.alloc(string)
-    }
     pub fn allocate_tensor_literal(
         &mut self,
         tensor_literal: CanonicalBuffer,
-    ) -> ContainerLiteralIdx {
+    ) -> CollectionLiteralIdx {
         self.tensor_literals.alloc(tensor_literal)
+    }
+    pub fn allocate_lazy_init(&mut self, lazy_init: LazyInit) -> LazyInitIdx {
+        self.lazy_inits.alloc(lazy_init)
     }
 }

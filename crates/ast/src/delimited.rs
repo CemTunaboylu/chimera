@@ -78,7 +78,7 @@ mod test {
     use super::*;
     use crate::{
         ast::Root,
-        ast_root_from,
+        ast_root_from_assert_no_err,
         literal::{Literal, Value},
         operation::{Binary, test::assert_infix_bin_op_with},
     };
@@ -94,7 +94,7 @@ mod test {
     #[test]
     fn happy_path_for_paren() {
         let program = "(3+14)";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let paren = get_paren_from(&ast_root);
         let infix_bin_op = paren.expr().expect("shoud have been ok ");
         assert!(matches!(infix_bin_op, Expr::Infix(Binary::Infix(_))));
@@ -111,7 +111,7 @@ mod test {
     #[test]
     fn happy_path_for_nested_paren() {
         let program = "((3+14)-4)";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let paren = get_paren_from(&ast_root);
         let infix_bin_op = paren.expr().expect("shoud have been ok ");
         assert!(matches!(infix_bin_op, Expr::Infix(Binary::Infix(_))));
@@ -135,7 +135,7 @@ mod test {
     #[test]
     fn happy_path_for_nested_tuples() {
         let program = "((3,14),5)";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let tuple_node = ast_root.get_root().first_child().unwrap();
         let tuple = Tuple(tuple_node);
         let elements = tuple.elements().expect("should have been ok");
@@ -163,7 +163,7 @@ mod test {
     #[test]
     fn happy_path_for_unit_tuple() {
         let program = "()";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let unit_node = ast_root.get_root().first_child().unwrap();
         let unit = Expr::try_from(unit_node).expect("should have been ok");
         assert_eq!(unit, Expr::Unit);
@@ -172,7 +172,7 @@ mod test {
     #[test]
     fn happy_path_for_returning_block() {
         let program = "{let a = 3; let b =14; a+b}";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let block = get_block_from(&ast_root);
         assert!(matches!(block, Block::Returning(_)));
         if let Block::Returning(stmts) = block {
@@ -189,7 +189,7 @@ mod test {
     #[test]
     fn happy_path_for_semi_block() {
         let program = "{a += 3; b += 14; }";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let block = get_block_from(&ast_root);
         assert!(matches!(block, Block::Semi(_)));
         if let Block::Returning(stmts) = block {
@@ -208,7 +208,7 @@ mod test {
     #[test]
     fn happy_path_for_nested_block() {
         let program = "{{3+14}-4}";
-        let ast_root = ast_root_from(program);
+        let ast_root = ast_root_from_assert_no_err(program);
         let block = get_block_from(&ast_root);
 
         assert!(matches!(block, Block::Returning(_)));

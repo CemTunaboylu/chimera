@@ -1,14 +1,17 @@
 pub mod builder;
 pub mod climbing;
-pub mod container;
+pub mod collection;
 pub mod context;
 pub mod control_flow;
+pub mod definition_allocator;
 pub mod delimited;
 pub mod errors;
 pub mod expression;
 pub mod function;
+pub mod hash_cons;
 pub mod hir;
 pub mod impl_block;
+pub mod index_types;
 pub mod indexing;
 pub mod jump;
 pub mod let_binding;
@@ -18,34 +21,73 @@ pub mod metadata;
 pub mod mutable;
 pub mod operation;
 pub mod parameter;
+pub mod purity;
 pub mod resolution;
 pub mod return_stmt;
 pub mod scope;
 pub mod self_ref;
 pub mod semi;
+pub mod span;
 pub mod statement;
 pub mod structure;
 pub mod types;
 pub mod typing;
 
+use std::hash::Hash;
+
 use builder::HIRBuilder;
 use errors::HIRError;
-use la_arena::Idx;
+use la_arena::{Arena, Idx};
 use resolution::Baggage;
+use rustc_hash::FxHasher;
 use thin_vec::ThinVec;
 
 use miette::Report;
 use typing::hindley_milner::inference::TypeKey;
 
-use crate::scope::{Span, placeholder_idx};
+use crate::{hash_cons::FingerPrints, index_types::placeholder_idx, span::Span};
 
+#[derive(Debug)]
+pub struct DedupArena<V: Hash + Eq> {
+    arena: Arena<V>,
+    fingerprints: FingerPrints<Idx<V>, FxHasher>,
+}
+
+impl<V: Hash + Eq> Default for DedupArena<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<V: Hash + Eq> DedupArena<V> {
+    pub fn new() -> Self {
+        Self {
+            arena: Arena::new(),
+            fingerprints: FingerPrints::new(),
+        }
+    }
+    pub fn allocate(&mut self, value: V) -> Idx<V> {
+        let fingerprint = FingerPrints::<Idx<V>, FxHasher>::fingerprint(&value);
+        if let Some(idx) = self.fingerprints.get(fingerprint) {
+            // TODO: Even though it is rare, let's handle this case gracefully.
+            if self.arena[*idx] != value {
+                unimplemented!();
+            }
+            *idx
+        } else {
+            let idx = self.arena.alloc(value);
+            _ = self.fingerprints.insert(idx, fingerprint);
+            idx
+        }
+    }
+}
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub struct Spanned<I> {
-    pub index: I,
+pub struct SpannedIdx<I> {
+    pub index: Idx<I>,
     pub span: Span,
 }
 
-impl<I> Default for Spanned<Idx<I>> {
+impl<I> Default for SpannedIdx<I> {
     fn default() -> Self {
         Self {
             index: placeholder_idx(),
@@ -54,7 +96,7 @@ impl<I> Default for Spanned<Idx<I>> {
     }
 }
 
-impl<I> Spanned<Idx<I>> {
+impl<I: Default> SpannedIdx<I> {
     fn new(index: Idx<I>, span: impl Into<Span>) -> Self {
         Self {
             span: span.into(),
@@ -64,7 +106,7 @@ impl<I> Spanned<Idx<I>> {
     fn spanned(span: impl Into<Span>) -> Self {
         Self {
             span: span.into(),
-            ..Default::default()
+            index: placeholder_idx(),
         }
     }
 }
@@ -132,4 +174,19 @@ pub fn mut_clone_with_err<Any: Clone, Post>(
         clone.push(put);
     }
     Ok(clone)
+}
+
+#[cfg(test)]
+pub mod test {
+    use crate::builder::HIRBuilder;
+
+    use ast::ast_root_from_assert_no_err;
+    use syntax::language::SyntaxNode;
+
+    pub fn program_into_hir_and_node(program: &str) -> (SyntaxNode, HIRBuilder) {
+        let ast_root = ast_root_from_assert_no_err(program);
+        let node = ast_root.get_root().clone_subtree();
+        let hir = HIRBuilder::new(ast_root);
+        (node, hir)
+    }
 }

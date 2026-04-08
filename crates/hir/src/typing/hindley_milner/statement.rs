@@ -87,7 +87,7 @@ impl HIRBuilder {
                         HIRConditional::Elif(condition, block) => (condition, block),
                         HIRConditional::Else(_block) => unreachable!(), // sliced it
                     };
-                    let expr = hir.get_expr(condition.0);
+                    let expr = hir.get_expr(&condition.0);
                     let hm_condition = hir.try_into_hm_expr(expr)?;
                     let hm_block = hir.try_into_hm_block(block)?;
                     Ok(Conditional {
@@ -109,7 +109,7 @@ impl HIRBuilder {
                 })
             }
             Stmt::Expr(idx) => {
-                let expr = self.get_expr(*idx);
+                let expr = self.get_expr(idx);
                 self.try_into_hm_expr(expr).map(HMStmt::Expr)
             }
             Stmt::FnDef(idx) => todo!(), // TODO: does not have getter yet
@@ -117,13 +117,13 @@ impl HIRBuilder {
             Stmt::Jump(jump) => match jump {
                 Jump::Continue | Jump::Break(None) => Ok(HMStmt::Jump(None)),
                 Jump::Break(Some(idx)) => {
-                    let hm_expr = self.try_into_hm_expr(self.get_expr(*idx))?;
+                    let hm_expr = self.try_into_hm_expr(self.get_expr(idx))?;
                     Ok(HMStmt::Jump(Some(Box::new(hm_expr))))
                 }
             },
             Stmt::Loop(lp) => match lp {
                 HIRLoop::While(condition, block) => {
-                    let c = self.try_into_hm_expr(self.get_expr(condition.0))?;
+                    let c = self.try_into_hm_expr(self.get_expr(&condition.0))?;
                     let b = self.try_into_hm_block(block)?;
                     Ok(HMStmt::Loop(Loop::While {
                         condition: c,
