@@ -1,13 +1,7 @@
 use crate::{
     HIRResult,
-    collection::{
-        canonical::CanonicalBuffer,
-        meta::CollectionMeta,
-        storage::{Storage, StorageIdx},
-        uninit::LazyInit,
-    },
-    definition_allocator::{DefAllocator, NameIndexed, NameToIndexTrie},
-    errors::HIRError,
+    collection::{canonical::CanonicalBuffer, meta::CollectionMeta, uninit::LazyInit},
+    definition_allocator::{DefAllocator, NameIndexed},
     expression::Expr,
     function::FnDef,
     index_types::*,
@@ -18,11 +12,11 @@ use crate::{
     statement::Stmt,
     structure::StructDef,
 };
-use la_arena::{Arena, Idx, RawIdx};
+use la_arena::{Arena, Idx};
 use patricia_tree::PatriciaMap;
 use smol_str::SmolStr;
 
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, ops::Range};
+use std::{collections::HashMap, fmt::Debug};
 
 fn expr_arena_with_missing() -> Arena<Expr> {
     let mut arena = Arena::new();
@@ -52,7 +46,7 @@ pub trait Selector<E: Clone + Debug + PartialEq + NameIndexed> {
     fn select_alloc(scope: &Scope) -> &DefAllocator<E>;
     fn select_alloc_mut(scope: &mut Scope) -> &mut DefAllocator<E>;
 }
-// note: container refs are also variable refs.
+// Note: Collection refs are also variable refs.
 pub struct VarSelector {}
 impl Selector<LetBinding> for VarSelector {
     fn select_alloc(scope: &Scope) -> &DefAllocator<LetBinding> {
@@ -158,7 +152,11 @@ impl Scope {
             (name_idx, *idx)
         })
     }
-    pub fn allocate<E, S: Selector<E>>(&mut self, name: &SmolStr, elm: E) -> HIRResult<Idx<E>>
+    pub fn allocate<E, S: Selector<E>>(
+        &mut self,
+        name: &SmolStr,
+        elm: E,
+    ) -> HIRResult<(StrIdx, Idx<E>)>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
     {

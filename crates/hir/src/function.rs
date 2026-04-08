@@ -126,11 +126,11 @@ impl HIRBuilder {
     #[with_context(UsageContext::Return)]
     pub fn lower_return_type(&mut self, callable: &ASTCallable) -> HIRResult<Option<RetType>> {
         let mut return_type = None;
-        if let Some(ret_type) = callable.return_type() {
-            if let Some(t) = ret_type.return_type() {
-                let low_type = self.lower_type(&t)?;
-                return_type = Some(RetType(low_type));
-            }
+        if let Some(ret_type) = callable.return_type()
+            && let Some(t) = ret_type.return_type()
+        {
+            let low_type = self.lower_type(&t)?;
+            return_type = Some(RetType(low_type));
         }
         Ok(return_type)
     }
@@ -165,14 +165,17 @@ impl HIRBuilder {
 
         let callable = self.lower_callable(&fn_def.callable)?;
 
-        let low_fn_def = FnDef {
+        let mut low_fn_def = FnDef {
             callable,
             name_index: placeholder_idx(),
             span: span.clone().into(),
             scope_idx,
         };
 
-        let fn_def_idx = self.allocate::<FnDef, FnSelector>(&name, low_fn_def.clone())?;
+        let (true_name_idx, fn_def_idx) =
+            self.allocate::<FnDef, FnSelector>(&name, low_fn_def.clone())?;
+        low_fn_def.name_index = true_name_idx;
+
         self.allocate_fn_meta(&low_fn_def, fn_def_idx)?;
         Ok(fn_def_idx)
     }
@@ -343,7 +346,7 @@ mod tests {
         ] = &params
         {
             assert_eq!(&SmolStr::from("i"), name);
-            assert_eq!(false, *is_mut);
+            assert!(!is_mut);
             assert_eq!(
                 Type::Ptr {
                     of: Box::new(Type::StructAsType(Status::Pending(placeholder_idx())),),
@@ -377,7 +380,7 @@ mod tests {
         if let Literal(Value::Lambda(callable)) = lambda_literal {
             if let &[Param::Generic { name, is_mut }] = &callable.parameters.as_slice() {
                 assert_eq!(&SmolStr::from("i"), name);
-                assert_eq!(false, *is_mut);
+                assert!(!is_mut);
             } else {
                 unreachable!()
             }
@@ -443,7 +446,7 @@ mod tests {
         if let On::Literal(Literal(Value::Lambda(callable))) = call_lambda_literal.on {
             if let &[Param::Generic { name, is_mut }] = &callable.parameters.as_slice() {
                 assert_eq!(&SmolStr::from("i"), name);
-                assert_eq!(false, *is_mut);
+                assert!(!is_mut);
             } else {
                 unreachable!()
             }

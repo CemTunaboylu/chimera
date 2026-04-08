@@ -19,7 +19,7 @@ pub struct DefAllocator<D: NameIndexed> {
 }
 
 impl<D: NameIndexed> DefAllocator<D> {
-    pub fn alloc(&mut self, name: &SmolStr, mut d: D) -> HIRResult<Idx<D>> {
+    pub fn alloc(&mut self, name: &SmolStr, mut d: D) -> HIRResult<(StrIdx, Idx<D>)> {
         if self.name_to_idx_trie.get(name).is_some() {
             return Err(HIRError::with_msg(format!(
                 "shadowing is not allowed, {:?} is already defined",
@@ -31,7 +31,7 @@ impl<D: NameIndexed> DefAllocator<D> {
         d.set_name_index(name_index);
 
         let ix = self.definitions.alloc(d);
-        self.name_to_idx_trie.insert(&name, ix);
-        Ok(ix)
+        self.name_to_idx_trie.insert(name, ix);
+        Ok((name_index, ix))
     }
 }

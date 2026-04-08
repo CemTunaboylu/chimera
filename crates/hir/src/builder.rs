@@ -116,7 +116,11 @@ impl HIRBuilder {
         current_scope.allocate_tensor_literal(tensor_literal)
     }
     // TODO: use context for metadata population
-    pub fn allocate<E, S: Selector<E>>(&mut self, name: &SmolStr, elm: E) -> HIRResult<Idx<E>>
+    pub fn allocate<E, S: Selector<E>>(
+        &mut self,
+        name: &SmolStr,
+        elm: E,
+    ) -> HIRResult<(StrIdx, Idx<E>)>
     where
         E: Clone + Debug + PartialEq + NameIndexed,
     {

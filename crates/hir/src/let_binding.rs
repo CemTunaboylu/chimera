@@ -21,7 +21,6 @@ use crate::{
     index_types::{ExprIdx, LetBindingIdx, ScopeIdx, ScopedExprIdx, StrIdx, placeholder_idx},
     indexing::Indexing,
     literal::{Literal, Value},
-    metadata::{Usage, Usages, VarMeta},
     resolution::{Baggage, Reference, ResolutionType, Unresolved, resolve},
     scope::VarSelector,
     span::Span,
@@ -188,13 +187,12 @@ impl HIRBuilder {
             spanned_expr_idx,
             span,
         };
-        let tmp_idx = self.allocate::<LetBinding, VarSelector>(&tmp_name, tmp_binding)?;
-        let tmp_binding_name_idx =
-            self.get_current_scope().variable_allocator.definitions[tmp_idx].get_name_index();
+        let (binding_name_idx, tmp_idx) =
+            self.allocate::<LetBinding, VarSelector>(&tmp_name, tmp_binding)?;
         let tmp_expr = Expr::VarRef(Reference::Resolved {
             at: self.current_scope_cursor,
             baggage: Baggage::None,
-            name_idx: tmp_binding_name_idx,
+            name_idx: binding_name_idx,
             obj_idx: tmp_idx,
         });
         Ok(self.as_expr_idx(tmp_expr))
@@ -250,7 +248,7 @@ impl HIRBuilder {
                 span,
             };
             self.allocate_span(&name, span);
-            let idx = self.allocate::<LetBinding, VarSelector>(&name, let_binding)?;
+            let (_, idx) = self.allocate::<LetBinding, VarSelector>(&name, let_binding)?;
             return Ok(thin_vec![idx]);
         }
         // * Note: if we are binding multiple identifiers (say n), we destructure the binding into n+1 separate bindings
@@ -320,7 +318,7 @@ impl HIRBuilder {
                 spanned_expr_idx: SpannedIdx::new(ith_indexing_expr_idx, current.span),
                 span: current.span,
             };
-            let binding_idx =
+            let (_, binding_idx) =
                 self.allocate::<LetBinding, VarSelector>(&name_of_the_binding, binding)?;
 
             binding_indices.push(binding_idx);
@@ -461,7 +459,7 @@ mod tests {
             assert!(matches!(expr, Expr::Indexing(Indexing{indices, ..}) if indices.len() == 1));
 
             if let Expr::Indexing(indexing) = expr {
-                let reference_idx = indexing.reference.index;
+                let _reference_idx = indexing.reference.index;
                 let scoped = Scoped::new(indexing.scope_idx, expr_idx);
                 let reference = hir.get_expr(&scoped);
                 if let Expr::VarRef(Reference::Resolved {
