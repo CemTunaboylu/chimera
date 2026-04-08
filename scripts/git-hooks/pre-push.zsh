@@ -37,10 +37,10 @@ fi
 # Run clippy and tests for each changed crate
 for crate in "${(k)changed_crates[@]}"; do
     echo "Running clippy for crate: $crate"
-    RUSTFLAGS=-Awarnings cargo clippy -p "$crate" -- || exit 1
+    cargo clippy -p "$crate" -- || exit 1
     
     echo "Running tests for crate: $crate"
-    RUSTFLAGS=-Awarnings cargo test -p "$crate" || exit 1
+    cargo test -p "$crate" || exit 1
 done
 
 # Check for changes in .github/workflows between tracking branch and HEAD
