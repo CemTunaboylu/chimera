@@ -33,7 +33,7 @@ pub mod structure;
 pub mod types;
 pub mod typing;
 
-use std::{default, hash::Hash};
+use std::hash::Hash;
 
 use builder::HIRBuilder;
 use errors::HIRError;
@@ -48,12 +48,18 @@ use typing::hindley_milner::inference::TypeKey;
 use crate::{hash_cons::FingerPrints, index_types::placeholder_idx, span::Span};
 
 #[derive(Debug)]
-pub struct DedupArena<V: Hash> {
+pub struct DedupArena<V: Hash + Eq> {
     arena: Arena<V>,
     fingerprints: FingerPrints<Idx<V>, FxHasher>,
 }
 
-impl<V: Hash> DedupArena<V> {
+impl<V: Hash + Eq> Default for DedupArena<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<V: Hash + Eq> DedupArena<V> {
     pub fn new() -> Self {
         Self {
             arena: Arena::new(),
@@ -63,6 +69,10 @@ impl<V: Hash> DedupArena<V> {
     pub fn allocate(&mut self, value: V) -> Idx<V> {
         let fingerprint = FingerPrints::<Idx<V>, FxHasher>::fingerprint(&value);
         if let Some(idx) = self.fingerprints.get(fingerprint) {
+            // TODO: Even though it is rare, let's handle this case gracefully.
+            if self.arena[*idx] != value {
+                unimplemented!();
+            }
             *idx
         } else {
             let idx = self.arena.alloc(value);
@@ -90,7 +100,7 @@ impl<I: Default> SpannedIdx<I> {
     fn new(index: Idx<I>, span: impl Into<Span>) -> Self {
         Self {
             span: span.into(),
-            index: index,
+            index,
         }
     }
     fn spanned(span: impl Into<Span>) -> Self {
